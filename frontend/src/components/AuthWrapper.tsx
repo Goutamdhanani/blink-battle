@@ -13,6 +13,11 @@ interface AuthWrapperProps {
 
 // Helper to generate UUID v4 for request ID
 const generateRequestId = (): string => {
+  // Use native crypto.randomUUID if available, fallback to polyfill
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
+  // Fallback for environments without crypto.randomUUID
   return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
     const r = (Math.random() * 16) | 0;
     const v = c === 'x' ? r : (r & 0x3) | 0x8;
@@ -49,10 +54,15 @@ export interface AuthDebugData {
   };
 }
 
-// Global debug data store (accessible from debug panel)
-(window as any).__authDebugData = {
-  apiUrl: API_URL,
-} as AuthDebugData;
+// Initialize global debug data store (accessible from debug panel)
+// Only in development or when debug mode is enabled
+const initDebugData = (): void => {
+  if (!((window as any).__authDebugData)) {
+    (window as any).__authDebugData = {
+      apiUrl: API_URL,
+    } as AuthDebugData;
+  }
+};
 
 const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
   const { state, setUser, setToken } = useGameContext();
@@ -78,6 +88,9 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
     setLoading(true);
     setError(null);
     setAuthStarted(true);
+
+    // Initialize debug data if not already done
+    initDebugData();
 
     // Set up timeout using a ref to track if request is still pending
     let timedOut = false;

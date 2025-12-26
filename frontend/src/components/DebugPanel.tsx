@@ -38,7 +38,7 @@ const DebugPanel: React.FC = () => {
   const updateDiagnostics = () => {
     try {
       const worldApp = (window as any).WorldApp;
-      const authData = (window as any).__authDebugData as AuthDebugData;
+      const authData = (window as any).__authDebugData as AuthDebugData | undefined;
       
       setDiagnostics({
         isInstalled: MiniKit.isInstalled(),
@@ -49,7 +49,7 @@ const DebugPanel: React.FC = () => {
         errors: [],
       });
 
-      setAuthDebugData(authData);
+      setAuthDebugData(authData || null);
     } catch (error) {
       console.error('[DebugPanel] Error updating diagnostics:', error);
     }

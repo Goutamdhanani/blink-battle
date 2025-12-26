@@ -92,6 +92,8 @@ export class AuthController {
       }
 
       // Check if nonce exists and is valid BEFORE verifying signature
+      // This prevents DoS attacks from invalid signatures and is the recommended order
+      // because signature verification is computationally expensive
       const storedNonce = nonceStore.get(payload.nonce);
       if (!storedNonce) {
         const errorMsg = 'Invalid or expired nonce - nonce not found in store';
