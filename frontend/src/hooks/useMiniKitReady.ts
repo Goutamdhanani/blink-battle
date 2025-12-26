@@ -20,9 +20,11 @@ export const useMiniKitReady = () => {
         const installed = MiniKit.isInstalled();
         setIsInstalled(installed);
         
-        // Step 3: Mark as ready if installed
+        // Step 3: Mark as ready regardless of installation status
+        // This allows the app to show appropriate UI (either auth or "open in World App")
+        setIsReady(true);
+        
         if (installed) {
-          setIsReady(true);
           console.log('[MiniKit] Initialized successfully');
         } else {
           setError('Not running in World App');
@@ -31,6 +33,7 @@ export const useMiniKitReady = () => {
       } catch (err) {
         console.error('[MiniKit] Installation error:', err);
         setError('Failed to initialize MiniKit');
+        setIsReady(true); // Still mark as ready to show error UI
       }
     };
 

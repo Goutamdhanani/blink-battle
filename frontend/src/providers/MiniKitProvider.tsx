@@ -11,8 +11,6 @@ interface MiniKitProviderProps {
  * This prevents race conditions per World Mini Apps docs
  */
 export const MiniKitProvider: React.FC<MiniKitProviderProps> = ({ children }) => {
-  const [isInstalling, setIsInstalling] = React.useState(true);
-
   React.useEffect(() => {
     const initMiniKit = async () => {
       if (typeof window === 'undefined') return;
@@ -34,18 +32,11 @@ export const MiniKitProvider: React.FC<MiniKitProviderProps> = ({ children }) =>
         }
       } catch (error) {
         console.error('[MiniKitProvider] Installation failed:', error);
-      } finally {
-        setIsInstalling(false);
       }
     };
 
     initMiniKit();
   }, []);
-
-  // Show nothing while installing to prevent race conditions
-  if (isInstalling) {
-    return null;
-  }
 
   return <>{children}</>;
 };
