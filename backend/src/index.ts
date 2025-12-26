@@ -9,6 +9,7 @@ import { LeaderboardController } from './controllers/leaderboardController';
 import { PaymentController } from './controllers/paymentController';
 import { VerificationController } from './controllers/verificationController';
 import { authenticate } from './middleware/auth';
+import { requestIdMiddleware } from './middleware/requestId';
 import { GameSocketHandler } from './websocket/gameHandler';
 import { connectRedis } from './config/redis';
 import pool from './config/database';
@@ -27,6 +28,7 @@ const io = new Server(httpServer, {
 // Middleware
 app.use(cors());
 app.use(express.json());
+app.use(requestIdMiddleware); // Add request ID to all requests
 
 // Health check
 app.get('/health', (_req, res) => {
