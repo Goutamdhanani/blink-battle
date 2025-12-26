@@ -14,48 +14,51 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
   const [error, setError] = useState<string | null>(null);
   const [isInWorldApp, setIsInWorldApp] = useState(false);
 
-  useEffect(() => {
-    const initAuth = async () => {
-      // Check if running in World App
-      const installed = MiniKit.isInstalled();
-      setIsInWorldApp(installed);
+  const attemptAuth = async () => {
+    setLoading(true);
+    setError(null);
+    
+    // Check if running in World App
+    const installed = MiniKit.isInstalled();
+    setIsInWorldApp(installed);
 
-      if (!installed) {
-        // Not in World App - show fallback
-        setLoading(false);
-        return;
-      }
+    if (!installed) {
+      // Not in World App - show fallback
+      setLoading(false);
+      return;
+    }
 
-      // Already authenticated
-      if (state.token && state.user) {
-        setLoading(false);
-        return;
-      }
+    // Already authenticated
+    if (state.token && state.user) {
+      setLoading(false);
+      return;
+    }
 
-      // Auto-authenticate via MiniKit
-      try {
-        const result = await minikit.signInWithWallet();
-        
-        if (result.success && result.token && result.user) {
-          setToken(result.token);
-          setUser(result.user);
-          minikit.sendHaptic('success');
-        } else {
-          setError('Authentication failed');
-          minikit.sendHaptic('error');
-        }
-      } catch (err: unknown) {
-        console.error('Auto-auth error:', err);
-        const errorMessage = err instanceof Error ? err.message : 'Failed to authenticate';
-        setError(errorMessage);
+    // Auto-authenticate via MiniKit
+    try {
+      const result = await minikit.signInWithWallet();
+      
+      if (result.success && result.token && result.user) {
+        setToken(result.token);
+        setUser(result.user);
+        minikit.sendHaptic('success');
+      } else {
+        setError('Authentication failed');
         minikit.sendHaptic('error');
-      } finally {
-        setLoading(false);
       }
-    };
+    } catch (err: unknown) {
+      console.error('Auto-auth error:', err);
+      const errorMessage = err instanceof Error ? err.message : 'Failed to authenticate';
+      setError(errorMessage);
+      minikit.sendHaptic('error');
+    } finally {
+      setLoading(false);
+    }
+  };
 
-    initAuth();
-  }, [state.token, state.user, setToken, setUser]);
+  useEffect(() => {
+    attemptAuth();
+  }, []);
 
   // Loading state while authenticating
   if (loading) {
@@ -84,7 +87,7 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
       <div className="auth-error">
         <h1>Authentication Failed</h1>
         <p>{error}</p>
-        <button onClick={() => window.location.reload()}>Try Again</button>
+        <button onClick={attemptAuth}>Try Again</button>
       </div>
     );
   }
@@ -94,7 +97,7 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
     return (
       <div className="auth-error">
         <h1>Not Authenticated</h1>
-        <button onClick={() => window.location.reload()}>Retry</button>
+        <button onClick={attemptAuth}>Retry</button>
       </div>
     );
   }
