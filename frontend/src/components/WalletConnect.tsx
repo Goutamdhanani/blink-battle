@@ -66,7 +66,6 @@ const WalletConnect: React.FC = () => {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             walletAddress: demoWallet,
-            region: Intl.DateTimeFormat().resolvedOptions().timeZone,
           }),
         }
       );
@@ -99,9 +98,11 @@ const WalletConnect: React.FC = () => {
             <>
               <h2>🌍 Running in World App</h2>
               <p className="info-text">
-                {walletAddress 
+                {walletAddress && walletAddress.length >= 38
                   ? `Connected: ${walletAddress.substring(0, 6)}...${walletAddress.substring(38)}`
-                  : 'Connecting to your wallet...'}
+                  : walletAddress 
+                    ? `Connected: ${walletAddress}`
+                    : 'Connecting to your wallet...'}
               </p>
               <button
                 onClick={handleMiniKitAuth}

@@ -1,21 +1,29 @@
 import { Request, Response } from 'express';
-import { UserModel } from '../models/User';
-import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
+import jwt from 'jsonwebtoken';
 import { verifySiweMessage } from '@worldcoin/minikit-js';
+import { UserModel } from '../models/User';
 
-// Store nonces temporarily (in production, use Redis)
+// Store nonces temporarily (in production, use Redis with TTL)
 const nonceStore = new Map<string, { nonce: string; timestamp: number }>();
 
-// Clean up old nonces every 5 minutes
-setInterval(() => {
-  const fiveMinutesAgo = Date.now() - 5 * 60 * 1000;
+// Clean up old nonces every 5 minutes to prevent memory leaks
+const NONCE_CLEANUP_INTERVAL = 5 * 60 * 1000;
+const NONCE_MAX_AGE = 5 * 60 * 1000;
+
+const nonceCleanupInterval = setInterval(() => {
+  const now = Date.now();
   for (const [key, value] of nonceStore.entries()) {
-    if (value.timestamp < fiveMinutesAgo) {
+    if (now - value.timestamp > NONCE_MAX_AGE) {
       nonceStore.delete(key);
     }
   }
-}, 5 * 60 * 1000);
+}, NONCE_CLEANUP_INTERVAL);
+
+// Ensure interval is cleaned up on process exit
+process.on('beforeExit', () => {
+  clearInterval(nonceCleanupInterval);
+});
 
 export class AuthController {
   /**

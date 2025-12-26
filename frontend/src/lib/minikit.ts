@@ -23,7 +23,9 @@ export const minikit = {
 
   /**
    * Get wallet address from MiniKit context
-   * Note: This may not be directly accessible; use SIWE authentication instead
+   * Note: Wallet address is obtained through SIWE authentication, not directly from MiniKit
+   * This method is kept for API consistency but always returns null
+   * Use the SIWE authentication flow to get the wallet address
    */
   getWalletAddress: () => {
     // Wallet address is obtained through SIWE authentication
@@ -32,6 +34,9 @@ export const minikit = {
 
   /**
    * Get user info from MiniKit context
+   * Note: User info is obtained through SIWE authentication, not directly from MiniKit
+   * This method is kept for API consistency but always returns null
+   * Use the SIWE authentication flow to get user information
    */
   getUser: () => {
     return null;
