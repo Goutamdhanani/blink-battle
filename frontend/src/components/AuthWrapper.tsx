@@ -44,9 +44,10 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
           setError('Authentication failed');
           minikit.sendHaptic('error');
         }
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.error('Auto-auth error:', err);
-        setError(err.message || 'Failed to authenticate');
+        const errorMessage = err instanceof Error ? err.message : 'Failed to authenticate';
+        setError(errorMessage);
         minikit.sendHaptic('error');
       } finally {
         setLoading(false);

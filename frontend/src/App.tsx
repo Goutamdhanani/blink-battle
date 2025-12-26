@@ -1,4 +1,4 @@
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { MiniKitProvider } from './providers/MiniKitProvider';
 import { GameProvider } from './context/GameContext';
 import AuthWrapper from './components/AuthWrapper';
@@ -23,6 +23,7 @@ function App() {
               <Route path="/result" element={<ResultScreen />} />
               <Route path="/history" element={<MatchHistory />} />
               <Route path="/leaderboard" element={<Leaderboard />} />
+              <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </Router>
         </AuthWrapper>
