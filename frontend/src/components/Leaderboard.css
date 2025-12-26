@@ -1,0 +1,220 @@
+.leaderboard {
+  min-height: 100vh;
+  padding: 20px;
+  background: linear-gradient(135deg, #0a0a0f 0%, #1a1a2e 100%);
+}
+
+.leaderboard-container {
+  max-width: 1000px;
+  margin: 0 auto;
+}
+
+.back-btn {
+  background: var(--surface);
+  color: var(--text);
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-size: 1rem;
+  margin-bottom: 30px;
+  border: 2px solid transparent;
+  transition: all 0.3s ease;
+}
+
+.back-btn:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.title {
+  text-align: center;
+  font-size: 2.5rem;
+  margin-bottom: 30px;
+}
+
+.user-rank-card {
+  background: linear-gradient(135deg, rgba(0, 255, 136, 0.2), rgba(0, 255, 136, 0.05));
+  border: 2px solid var(--primary);
+  padding: 20px;
+  border-radius: 15px;
+  text-align: center;
+  margin-bottom: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+}
+
+.rank-label {
+  font-size: 1.2rem;
+  color: var(--text-dim);
+}
+
+.rank-value {
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--primary);
+}
+
+.loading {
+  text-align: center;
+  padding: 60px 20px;
+}
+
+.spinner {
+  width: 50px;
+  height: 50px;
+  margin: 0 auto 20px;
+  border: 4px solid var(--surface);
+  border-top-color: var(--primary);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.empty-state {
+  text-align: center;
+  padding: 60px 20px;
+  background: var(--surface);
+  border-radius: 20px;
+}
+
+.empty-state p {
+  font-size: 1.3rem;
+  color: var(--text-dim);
+  margin-bottom: 10px;
+}
+
+.leaderboard-table {
+  background: var(--surface);
+  border-radius: 15px;
+  overflow: hidden;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+}
+
+.table-header {
+  display: grid;
+  grid-template-columns: 80px 1fr 100px 120px 120px;
+  gap: 15px;
+  padding: 20px 25px;
+  background: var(--background);
+  font-weight: 600;
+  text-transform: uppercase;
+  font-size: 0.85rem;
+  letter-spacing: 1px;
+  color: var(--text-dim);
+}
+
+.table-body {
+  max-height: 600px;
+  overflow-y: auto;
+}
+
+.table-row {
+  display: grid;
+  grid-template-columns: 80px 1fr 100px 120px 120px;
+  gap: 15px;
+  padding: 20px 25px;
+  border-bottom: 1px solid var(--background);
+  transition: all 0.3s ease;
+  align-items: center;
+}
+
+.table-row:hover {
+  background: rgba(0, 255, 136, 0.05);
+}
+
+.table-row.current-user {
+  background: rgba(0, 255, 136, 0.1);
+  border-left: 4px solid var(--primary);
+}
+
+.col-rank .rank {
+  font-size: 1.3rem;
+  font-weight: 700;
+}
+
+.col-rank .rank.top-three {
+  font-size: 1.8rem;
+}
+
+.col-player {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.wallet {
+  font-family: monospace;
+  font-size: 0.95rem;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.you-badge {
+  background: var(--primary);
+  color: var(--background);
+  padding: 2px 8px;
+  border-radius: 5px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  font-family: sans-serif;
+}
+
+.col-stats {
+  display: flex;
+  gap: 5px;
+  align-items: center;
+}
+
+.wins {
+  color: var(--success);
+  font-weight: 600;
+}
+
+.losses {
+  color: var(--error);
+  font-weight: 600;
+}
+
+.separator {
+  color: var(--text-dim);
+}
+
+.winrate {
+  font-weight: 600;
+}
+
+.winrate.high {
+  color: var(--primary);
+}
+
+.reaction-time {
+  font-weight: 600;
+  color: var(--primary);
+}
+
+.text-dim {
+  color: var(--text-dim);
+}
+
+@media (max-width: 768px) {
+  .table-header,
+  .table-row {
+    grid-template-columns: 60px 1fr 80px;
+    font-size: 0.85rem;
+  }
+
+  .col-winrate,
+  .col-reaction {
+    display: none;
+  }
+
+  .table-header .col-winrate,
+  .table-header .col-reaction {
+    display: none;
+  }
+}

@@ -1,0 +1,225 @@
+.game-arena {
+  min-height: 100vh;
+  background: linear-gradient(135deg, #0a0a0f 0%, #1a1a2e 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.game-container {
+  max-width: 800px;
+  width: 100%;
+  min-height: 600px;
+  display: flex;
+  flex-direction: column;
+}
+
+.game-header {
+  margin-bottom: 30px;
+}
+
+.match-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: var(--surface);
+  padding: 15px 25px;
+  border-radius: 15px;
+}
+
+.stake-display {
+  font-size: 1.2rem;
+  font-weight: 600;
+  color: var(--primary);
+}
+
+.connection-status {
+  font-size: 0.9rem;
+}
+
+.game-content {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface);
+  border-radius: 20px;
+  padding: 40px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+}
+
+.phase-content {
+  width: 100%;
+  text-align: center;
+}
+
+.phase-title {
+  font-size: 2.5rem;
+  margin-bottom: 40px;
+  color: var(--primary);
+}
+
+.countdown-number {
+  font-size: 10rem;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.waiting-text {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+}
+
+.waiting-text p {
+  font-size: 1.5rem;
+  color: var(--text-dim);
+}
+
+.spinner {
+  width: 50px;
+  height: 50px;
+  border: 4px solid var(--surface);
+  border-top-color: var(--primary);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.waiting-for-signal {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 30px;
+}
+
+.focus-circle {
+  width: 200px;
+  height: 200px;
+  border: 4px solid var(--text-dim);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.focus-text {
+  font-size: 1.5rem;
+  color: var(--text-dim);
+}
+
+.tap-button {
+  width: 300px;
+  height: 300px;
+  margin: 0 auto;
+  cursor: pointer;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.tap-button.tapped {
+  cursor: default;
+}
+
+.tap-button-inner {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  background: var(--primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2.5rem;
+  font-weight: 800;
+  color: var(--background);
+  transition: all 0.2s ease;
+  box-shadow: 0 0 30px var(--primary), 0 0 60px var(--primary);
+}
+
+.tap-button:not(.tapped) .tap-button-inner:hover {
+  transform: scale(1.05);
+}
+
+.tap-button:not(.tapped) .tap-button-inner:active {
+  transform: scale(0.95);
+}
+
+.tap-button.tapped .tap-button-inner {
+  background: var(--success);
+  box-shadow: 0 0 30px var(--success), 0 0 60px var(--success);
+}
+
+.tap-text {
+  animation: pulse-scale 0.8s ease-in-out infinite;
+}
+
+@keyframes pulse-scale {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.1);
+  }
+}
+
+.tapped-text {
+  font-size: 2rem;
+}
+
+.reaction-time {
+  margin-top: 30px;
+  font-size: 1.8rem;
+  font-weight: 600;
+  color: var(--primary);
+}
+
+.game-footer {
+  margin-top: 30px;
+  text-align: center;
+}
+
+.opponent-info {
+  font-size: 1.2rem;
+  color: var(--text-dim);
+  background: var(--surface);
+  padding: 15px;
+  border-radius: 10px;
+}
+
+@media (max-width: 768px) {
+  .countdown-number {
+    font-size: 6rem;
+  }
+
+  .tap-button {
+    width: 250px;
+    height: 250px;
+  }
+
+  .tap-button-inner {
+    font-size: 2rem;
+  }
+
+  .focus-circle {
+    width: 150px;
+    height: 150px;
+  }
+}
+
+@media (max-width: 480px) {
+  .tap-button {
+    width: 200px;
+    height: 200px;
+  }
+
+  .tap-button-inner {
+    font-size: 1.5rem;
+  }
+}
