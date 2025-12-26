@@ -36,12 +36,12 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
     setError(null);
     setAuthStarted(true);
 
-    // Set up timeout
+    // Set up timeout using a ref to track if request is still pending
+    let timedOut = false;
     const timeoutId = setTimeout(() => {
-      if (loading) {
-        setError('Authentication timed out. Please try again.');
-        setLoading(false);
-      }
+      timedOut = true;
+      setError('Authentication timed out. Please try again.');
+      setLoading(false);
     }, AUTH_TIMEOUT_MS);
 
     try {
@@ -52,6 +52,8 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
       }
       const { nonce } = await nonceRes.json();
 
+      if (timedOut) return; // Exit if already timed out
+
       // Step 2: Call MiniKit.walletAuth() - only after MiniKit is ready
       const { finalPayload } = await MiniKit.commandsAsync.walletAuth({
         nonce: nonce,
@@ -61,6 +63,8 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
 
       // Clear timeout on response
       clearTimeout(timeoutId);
+      
+      if (timedOut) return; // Exit if already timed out
 
       // Check for errors in payload
       if (finalPayload.status === 'error') {
@@ -94,12 +98,16 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
         throw new Error(verifyData.error || 'Backend verification failed');
       }
     } catch (err: any) {
-      console.error('[Auth] Authentication error:', err);
-      setError(err.message || 'Authentication failed');
-      sendHaptic('error');
-      clearTimeout(timeoutId);
+      if (!timedOut) {
+        console.error('[Auth] Authentication error:', err);
+        setError(err.message || 'Authentication failed');
+        sendHaptic('error');
+        clearTimeout(timeoutId);
+      }
     } finally {
-      setLoading(false);
+      if (!timedOut) {
+        setLoading(false);
+      }
     }
   };
 
