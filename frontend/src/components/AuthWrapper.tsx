@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { MiniKit } from '@worldcoin/minikit-js';
 import { minikit } from '../lib/minikit';
 import { useGameContext } from '../context/GameContext';
@@ -14,7 +14,7 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
   const [error, setError] = useState<string | null>(null);
   const [isInWorldApp, setIsInWorldApp] = useState(false);
 
-  const attemptAuth = async () => {
+  const attemptAuth = useCallback(async () => {
     setLoading(true);
     setError(null);
     
@@ -54,11 +54,11 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [state.token, state.user, setToken, setUser]);
 
   useEffect(() => {
     attemptAuth();
-  }, []);
+  }, [attemptAuth]);
 
   // Loading state while authenticating
   if (loading) {
