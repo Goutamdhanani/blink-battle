@@ -359,6 +359,72 @@ npm test
 
 For complete API documentation, see **[API_REFERENCE.md](./API_REFERENCE.md)**.
 
+## 🔍 Debugging & Troubleshooting
+
+### Authentication Issues
+
+If you're experiencing authentication failures or SIWE verification errors, this project includes comprehensive debugging tools:
+
+#### Frontend Debug Panel
+
+Enable the debug panel by adding `?debug=1` to the URL or running in development mode:
+
+```
+https://your-app.com/?debug=1
+```
+
+The debug panel shows:
+- API endpoint being used
+- MiniKit installation and readiness status
+- Supported World App commands
+- Complete auth flow tracking (nonce → walletAuth → verify-siwe)
+- Request IDs for correlation with backend logs
+- Redacted sensitive data (addresses, signatures)
+
+#### Backend Debug Logging
+
+Enable detailed authentication logs by setting the environment variable:
+
+```bash
+DEBUG_AUTH=true npm run dev
+```
+
+Debug logs include:
+- Nonce generation and store size
+- Nonce validation (exists, age)
+- SIWE verification attempts and failures
+- Request IDs for correlation
+- Redacted sensitive information
+
+#### Manual Testing
+
+Test backend auth endpoints:
+
+```bash
+./test-auth-debug.sh
+```
+
+#### Common Issues
+
+**"Invalid or expired nonce"**
+- Check if backend has multiple instances (nonces are in-memory)
+- Verify user completed auth within 5 minutes
+- Consider migrating to Redis-based nonce storage
+
+**"SIWE message verification failed"**
+- Verify domain/uri configuration matches
+- Check for clock skew between client and server
+- Review SIWE error details in debug logs
+
+**"Backend verification failed"**
+- Check DEBUG_AUTH logs for specific error
+- Verify database connectivity
+- Ensure JWT_SECRET is configured
+
+For detailed debugging instructions, see:
+- **[AUTH_DEBUGGING.md](./AUTH_DEBUGGING.md)** - Complete debugging guide
+- **[DEBUG_PANEL_REFERENCE.md](./DEBUG_PANEL_REFERENCE.md)** - Visual reference
+
 ## 🤝 Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.
