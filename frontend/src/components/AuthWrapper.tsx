@@ -14,6 +14,17 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const sendHaptic = (style: 'success' | 'error') => {
+    try {
+      MiniKit.commands.sendHapticFeedback({
+        hapticsType: 'notification',
+        style,
+      });
+    } catch (e) {
+      // Ignore haptic errors
+    }
+  };
+
   const authenticate = async () => {
     setLoading(true);
     setError(null);
@@ -23,8 +34,7 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
       const nonceRes = await fetch(`${API_URL}/api/auth/nonce`);
       const { nonce } = await nonceRes.json();
 
-      // Step 2: Call MiniKit walletAuth - this triggers the native drawer
-      // NO isInstalled() check - just call it directly!
+      // Step 2: Call MiniKit.walletAuth() directly without checking installation status
       const { finalPayload } = await MiniKit.commandsAsync.walletAuth({
         nonce: nonce,
         expirationTime: new Date(new Date().getTime() + 7 * 24 * 60 * 60 * 1000),
@@ -48,28 +58,14 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
       if (verifyData.success) {
         setToken(verifyData.token);
         setUser(verifyData.user);
-        
-        // Send success haptic
-        MiniKit.commands.sendHapticFeedback({
-          hapticsType: 'notification',
-          style: 'success',
-        });
+        sendHaptic('success');
       } else {
         throw new Error('Backend verification failed');
       }
     } catch (err: any) {
       console.error('Auth error:', err);
       setError(err.message || 'Authentication failed');
-      
-      // Send error haptic
-      try {
-        MiniKit.commands.sendHapticFeedback({
-          hapticsType: 'notification',
-          style: 'error',
-        });
-      } catch (e) {
-        // Ignore haptic errors
-      }
+      sendHaptic('error');
     } finally {
       setLoading(false);
     }
@@ -82,7 +78,7 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
       return;
     }
 
-    // Trigger auth immediately - the native drawer IS the World App detection
+    // Initiate authentication immediately; the native drawer appearance confirms World App context
     authenticate();
   }, []);
 
