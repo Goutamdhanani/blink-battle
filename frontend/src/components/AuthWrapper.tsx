@@ -36,16 +36,18 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
       try {
         const result = await minikit.signInWithWallet();
         
-        if (result.success) {
+        if (result.success && result.token && result.user) {
           setToken(result.token);
           setUser(result.user);
           minikit.sendHaptic('success');
         } else {
           setError('Authentication failed');
+          minikit.sendHaptic('error');
         }
       } catch (err: any) {
         console.error('Auto-auth error:', err);
         setError(err.message || 'Failed to authenticate');
+        minikit.sendHaptic('error');
       } finally {
         setLoading(false);
       }
