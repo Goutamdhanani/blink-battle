@@ -1,89 +1,74 @@
-.auth-loading {
+.auth-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  min-height: 100dvh;
+  background: linear-gradient(135deg, #0a0a0f 0%, #1a1a2e 50%, #16213e 100%);
+  color: white;
+  padding: 24px;
+  overflow: hidden;
+}
+
+.auth-content {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
-  height: 100vh;
-  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
-  color: white;
+  text-align: center;
+  gap: 24px;
 }
 
-.auth-loading p {
-  margin-top: 20px;
+.auth-title {
+  font-size: 2.5rem;
+  font-weight: 700;
+  background: linear-gradient(90deg, #00d4ff, #7b2dff);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.auth-text {
   font-size: 1.1rem;
-  color: var(--text-dim);
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.auth-error-text {
+  font-size: 1rem;
+  color: #ff6b6b;
+  max-width: 280px;
 }
 
 .spinner {
-  width: 50px;
-  height: 50px;
-  border: 3px solid rgba(255, 255, 255, 0.3);
+  width: 48px;
+  height: 48px;
+  border: 3px solid rgba(255, 255, 255, 0.1);
   border-radius: 50%;
   border-top-color: #00d4ff;
   animation: spin 1s ease-in-out infinite;
 }
 
 @keyframes spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
-.not-in-world-app,
-.auth-error {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  height: 100vh;
-  padding: 24px;
-  text-align: center;
-  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
-  color: white;
-}
-
-.not-in-world-app h1,
-.auth-error h1 {
-  font-size: 2rem;
-  margin-bottom: 16px;
-}
-
-.not-in-world-app p {
-  margin-bottom: 12px;
-  color: var(--text-dim);
+.auth-retry-btn {
+  padding: 16px 48px;
   font-size: 1.1rem;
-  line-height: 1.6;
-}
-
-.auth-error p {
-  margin-bottom: 24px;
-  color: var(--error);
-  font-size: 1rem;
-}
-
-.auth-error button {
-  margin-top: 24px;
-  padding: 12px 32px;
-  background: #00d4ff;
+  font-weight: 600;
+  background: linear-gradient(90deg, #00d4ff, #7b2dff);
   border: none;
-  border-radius: 8px;
-  color: #1a1a2e;
-  font-weight: bold;
+  border-radius: 12px;
+  color: white;
   cursor: pointer;
-  transition: all 0.3s ease;
+  transition: transform 0.2s, box-shadow 0.2s;
 }
 
-.auth-error button:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 5px 20px rgba(0, 212, 255, 0.5);
+.auth-retry-btn:active {
+  transform: scale(0.98);
 }
 
-@media (max-width: 600px) {
-  .not-in-world-app h1,
-  .auth-error h1 {
-    font-size: 1.5rem;
-  }
-  
-  .not-in-world-app p,
-  .auth-error p {
-    font-size: 0.95rem;
-  }
+.auth-retry-btn:hover {
+  box-shadow: 0 0 20px rgba(0, 212, 255, 0.4);
 }

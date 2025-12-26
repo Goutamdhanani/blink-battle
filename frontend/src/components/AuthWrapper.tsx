@@ -1,8 +1,9 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState } from 'react';
 import { MiniKit } from '@worldcoin/minikit-js';
-import { minikit } from '../lib/minikit';
 import { useGameContext } from '../context/GameContext';
 import './AuthWrapper.css';
+
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 
 interface AuthWrapperProps {
   children: React.ReactNode;
@@ -12,92 +13,114 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
   const { state, setUser, setToken } = useGameContext();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [isInWorldApp, setIsInWorldApp] = useState(false);
 
-  const attemptAuth = useCallback(async () => {
+  const sendHaptic = (style: 'success' | 'error') => {
+    try {
+      MiniKit.commands.sendHapticFeedback({
+        hapticsType: 'notification',
+        style,
+      });
+    } catch (e) {
+      // Ignore haptic errors
+    }
+  };
+
+  const authenticate = async () => {
     setLoading(true);
     setError(null);
-    
-    // Check if running in World App
-    const installed = MiniKit.isInstalled();
-    setIsInWorldApp(installed);
 
-    if (!installed) {
-      // Not in World App - show fallback
+    try {
+      // Step 1: Get nonce from backend
+      const nonceRes = await fetch(`${API_URL}/api/auth/nonce`);
+      const { nonce } = await nonceRes.json();
+
+      // Step 2: Call MiniKit.walletAuth() directly without checking installation status
+      const { finalPayload } = await MiniKit.commandsAsync.walletAuth({
+        nonce: nonce,
+        expirationTime: new Date(new Date().getTime() + 7 * 24 * 60 * 60 * 1000),
+        statement: 'Sign in to Blink Battle',
+      });
+
+      // If we get here with success, user approved the drawer
+      if (finalPayload.status === 'error') {
+        throw new Error(finalPayload.error_code || 'Authentication rejected');
+      }
+
+      // Step 3: Verify SIWE on backend
+      const verifyRes = await fetch(`${API_URL}/api/auth/verify-siwe`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ payload: finalPayload }),
+      });
+
+      const verifyData = await verifyRes.json();
+
+      if (verifyData.success) {
+        setToken(verifyData.token);
+        setUser(verifyData.user);
+        sendHaptic('success');
+      } else {
+        throw new Error('Backend verification failed');
+      }
+    } catch (err: any) {
+      console.error('Auth error:', err);
+      setError(err.message || 'Authentication failed');
+      sendHaptic('error');
+    } finally {
       setLoading(false);
-      return;
     }
+  };
 
-    // Already authenticated
+  useEffect(() => {
+    // If already authenticated, skip
     if (state.token && state.user) {
       setLoading(false);
       return;
     }
 
-    // Auto-authenticate via MiniKit
-    try {
-      const result = await minikit.signInWithWallet();
-      
-      if (result.success && result.token && result.user) {
-        setToken(result.token);
-        setUser(result.user);
-        minikit.sendHaptic('success');
-      } else {
-        setError('Authentication failed');
-        minikit.sendHaptic('error');
-      }
-    } catch (err: unknown) {
-      console.error('Auto-auth error:', err);
-      const errorMessage = err instanceof Error ? err.message : 'Failed to authenticate';
-      setError(errorMessage);
-      minikit.sendHaptic('error');
-    } finally {
-      setLoading(false);
-    }
-  }, [state.token, state.user, setToken, setUser]);
+    // Initiate authentication immediately; the native drawer appearance confirms World App context
+    authenticate();
+  }, []);
 
-  useEffect(() => {
-    attemptAuth();
-  }, [attemptAuth]);
-
-  // Loading state while authenticating
+  // Loading state - shown briefly while drawer appears
   if (loading) {
     return (
-      <div className="auth-loading">
-        <div className="spinner"></div>
-        <p>Connecting to World App...</p>
+      <div className="auth-wrapper auth-loading">
+        <div className="auth-content">
+          <h1 className="auth-title">⚡ Blink Battle</h1>
+          <div className="spinner"></div>
+          <p className="auth-text">Connecting...</p>
+        </div>
       </div>
     );
   }
 
-  // Not in World App
-  if (!isInWorldApp) {
-    return (
-      <div className="not-in-world-app">
-        <h1>⚡ Blink Battle</h1>
-        <p>This is a Worldcoin Mini-App.</p>
-        <p>Please open it inside the World App to play.</p>
-      </div>
-    );
-  }
-
-  // Error state
+  // Error state - auth failed or user rejected
   if (error) {
     return (
-      <div className="auth-error">
-        <h1>Authentication Failed</h1>
-        <p>{error}</p>
-        <button onClick={attemptAuth}>Try Again</button>
+      <div className="auth-wrapper auth-error">
+        <div className="auth-content">
+          <h1 className="auth-title">⚡ Blink Battle</h1>
+          <p className="auth-error-text">{error}</p>
+          <button className="auth-retry-btn" onClick={authenticate}>
+            Try Again
+          </button>
+        </div>
       </div>
     );
   }
 
-  // Not authenticated (shouldn't happen if walletAuth succeeded)
+  // Not authenticated after attempt
   if (!state.token || !state.user) {
     return (
-      <div className="auth-error">
-        <h1>Not Authenticated</h1>
-        <button onClick={attemptAuth}>Retry</button>
+      <div className="auth-wrapper auth-error">
+        <div className="auth-content">
+          <h1 className="auth-title">⚡ Blink Battle</h1>
+          <p className="auth-error-text">Please approve the sign-in request</p>
+          <button className="auth-retry-btn" onClick={authenticate}>
+            Sign In
+          </button>
+        </div>
       </div>
     );
   }
