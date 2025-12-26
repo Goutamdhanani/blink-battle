@@ -1,0 +1,162 @@
+.wallet-connect {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: linear-gradient(135deg, #0a0a0f 0%, #1a1a2e 100%);
+}
+
+.wallet-connect-container {
+  max-width: 500px;
+  width: 100%;
+}
+
+.title {
+  font-size: 3rem;
+  text-align: center;
+  margin-bottom: 10px;
+  font-weight: 800;
+}
+
+.subtitle {
+  text-align: center;
+  color: var(--text-dim);
+  font-size: 1.2rem;
+  margin-bottom: 40px;
+}
+
+.connect-box {
+  background: var(--surface);
+  border-radius: 20px;
+  padding: 40px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+}
+
+.connect-box h2 {
+  font-size: 1.5rem;
+  margin-bottom: 30px;
+  text-align: center;
+}
+
+.input-group {
+  margin-bottom: 20px;
+}
+
+.wallet-input {
+  width: 100%;
+  padding: 15px;
+  background: var(--background);
+  border: 2px solid transparent;
+  border-radius: 10px;
+  color: var(--text);
+  font-size: 1rem;
+  transition: all 0.3s ease;
+}
+
+.wallet-input:focus {
+  border-color: var(--primary);
+  outline: none;
+}
+
+.wallet-input:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn {
+  width: 100%;
+  padding: 15px 30px;
+  font-size: 1.1rem;
+  font-weight: 600;
+  border-radius: 10px;
+  transition: all 0.3s ease;
+  margin-bottom: 15px;
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-primary {
+  background: var(--primary);
+  color: var(--background);
+}
+
+.btn-primary:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 5px 20px var(--primary);
+}
+
+.btn-secondary {
+  background: var(--surface);
+  color: var(--text);
+  border: 2px solid var(--text-dim);
+}
+
+.btn-secondary:hover:not(:disabled) {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.divider {
+  display: flex;
+  align-items: center;
+  margin: 20px 0;
+  color: var(--text-dim);
+}
+
+.divider::before,
+.divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--text-dim);
+}
+
+.divider span {
+  padding: 0 15px;
+  font-size: 0.9rem;
+}
+
+.error-message {
+  margin-top: 15px;
+  padding: 10px;
+  background: rgba(255, 0, 68, 0.1);
+  border: 1px solid var(--error);
+  border-radius: 5px;
+  color: var(--error);
+  text-align: center;
+}
+
+.features {
+  display: flex;
+  justify-content: space-around;
+  margin-top: 40px;
+  flex-wrap: wrap;
+  gap: 20px;
+}
+
+.feature {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  color: var(--text-dim);
+  font-size: 0.9rem;
+}
+
+.feature-icon {
+  font-size: 2rem;
+}
+
+@media (max-width: 600px) {
+  .title {
+    font-size: 2rem;
+  }
+
+  .connect-box {
+    padding: 25px;
+  }
+}

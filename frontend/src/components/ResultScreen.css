@@ -1,0 +1,221 @@
+.result-screen {
+  min-height: 100vh;
+  background: linear-gradient(135deg, #0a0a0f 0%, #1a1a2e 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.result-container {
+  max-width: 700px;
+  width: 100%;
+}
+
+.result-header {
+  text-align: center;
+  padding: 40px;
+  border-radius: 20px 20px 0 0;
+  background: var(--surface);
+}
+
+.result-header.winner {
+  background: linear-gradient(135deg, rgba(0, 255, 136, 0.2), rgba(0, 255, 136, 0.05));
+  border: 2px solid var(--success);
+}
+
+.result-header.loser {
+  background: linear-gradient(135deg, rgba(255, 0, 68, 0.2), rgba(255, 0, 68, 0.05));
+  border: 2px solid var(--error);
+}
+
+.result-header.tie {
+  background: linear-gradient(135deg, rgba(255, 170, 0, 0.2), rgba(255, 170, 0, 0.05));
+  border: 2px solid var(--warning);
+}
+
+.result-title {
+  font-size: 3rem;
+  margin-bottom: 15px;
+  font-weight: 800;
+}
+
+.result-header.winner .result-title {
+  color: var(--success);
+  text-shadow: 0 0 20px var(--success);
+}
+
+.result-header.loser .result-title {
+  color: var(--error);
+}
+
+.result-header.tie .result-title {
+  color: var(--warning);
+}
+
+.result-description {
+  font-size: 1.2rem;
+  color: var(--text-dim);
+  line-height: 1.5;
+}
+
+.result-stats {
+  background: var(--surface);
+  padding: 40px;
+}
+
+.stat-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  margin-bottom: 30px;
+}
+
+.stat-box {
+  flex: 1;
+  background: var(--background);
+  padding: 25px;
+  border-radius: 15px;
+  text-align: center;
+  border: 2px solid transparent;
+}
+
+.stat-box.your-stat {
+  border-color: var(--primary);
+}
+
+.stat-label {
+  color: var(--text-dim);
+  font-size: 0.9rem;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 10px;
+}
+
+.stat-value {
+  font-size: 2.5rem;
+  font-weight: 700;
+}
+
+.stat-value.better {
+  color: var(--success);
+  text-shadow: 0 0 10px var(--success);
+}
+
+.vs {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--text-dim);
+}
+
+.winnings-box {
+  background: var(--background);
+  padding: 25px;
+  border-radius: 15px;
+  text-align: center;
+}
+
+.winnings-label {
+  color: var(--text-dim);
+  font-size: 1rem;
+  margin-bottom: 10px;
+}
+
+.winnings-amount {
+  font-size: 2.5rem;
+  font-weight: 700;
+}
+
+.winnings-amount.positive {
+  color: var(--success);
+}
+
+.winnings-amount.negative {
+  color: var(--error);
+}
+
+.result-actions {
+  background: var(--surface);
+  padding: 30px 40px 40px;
+  border-radius: 0 0 20px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.btn {
+  width: 100%;
+  padding: 18px;
+  font-size: 1.1rem;
+  font-weight: 600;
+  border-radius: 12px;
+  transition: all 0.3s ease;
+}
+
+.btn-primary {
+  background: var(--primary);
+  color: var(--background);
+}
+
+.btn-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 5px 20px var(--primary);
+}
+
+.btn-secondary {
+  background: var(--surface);
+  color: var(--text);
+  border: 2px solid var(--text-dim);
+}
+
+.btn-secondary:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.btn-outline {
+  background: transparent;
+  color: var(--text);
+  border: 2px solid var(--surface);
+}
+
+.btn-outline:hover {
+  background: var(--surface);
+}
+
+.encouragement {
+  margin-top: 20px;
+  text-align: center;
+  padding: 20px;
+  background: var(--surface);
+  border-radius: 15px;
+}
+
+.encouragement p {
+  color: var(--text-dim);
+  font-size: 1rem;
+  font-style: italic;
+}
+
+@media (max-width: 768px) {
+  .result-title {
+    font-size: 2rem;
+  }
+
+  .stat-row {
+    flex-direction: column;
+  }
+
+  .vs {
+    transform: rotate(90deg);
+  }
+
+  .result-stats {
+    padding: 25px;
+  }
+
+  .result-actions {
+    padding: 20px 25px 25px;
+  }
+}
