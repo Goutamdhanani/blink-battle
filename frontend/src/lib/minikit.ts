@@ -44,8 +44,13 @@ export const minikit = {
 
   /**
    * Sign in with wallet using SIWE
+   * Only call this after ensuring MiniKit is installed
    */
   signInWithWallet: async () => {
+    if (!MiniKit.isInstalled()) {
+      throw new Error('MiniKit not installed. Please open in World App.');
+    }
+
     try {
       // Get nonce from backend
       const res = await axios.get(`${API_URL}/api/auth/nonce`);
@@ -59,7 +64,7 @@ export const minikit = {
       });
 
       if (finalPayload.status === 'error') {
-        throw new Error('Wallet authentication failed');
+        throw new Error(finalPayload.error_code || 'Wallet authentication failed');
       }
 
       // Verify SIWE message on backend
@@ -69,15 +74,20 @@ export const minikit = {
 
       return verifyRes.data;
     } catch (error) {
-      console.error('Sign in error:', error);
+      console.error('[MiniKit] Sign in error:', error);
       throw error;
     }
   },
 
   /**
    * Initiate a payment for staking
+   * Only call this after ensuring MiniKit is installed
    */
   initiatePayment: async (amount: number) => {
+    if (!MiniKit.isInstalled()) {
+      throw new Error('MiniKit not installed. Please open in World App.');
+    }
+
     try {
       // First, initiate payment on backend to get reference ID
       const res = await axios.post(`${API_URL}/api/initiate-payment`, {
@@ -116,18 +126,23 @@ export const minikit = {
 
       return {
         success: false,
-        error: 'Payment failed',
+        error: finalPayload.error_code || 'Payment failed',
       };
     } catch (error) {
-      console.error('Payment error:', error);
+      console.error('[MiniKit] Payment error:', error);
       throw error;
     }
   },
 
   /**
    * Verify World ID (for anti-cheat)
+   * Only call this after ensuring MiniKit is installed
    */
   verifyWorldID: async (action: string) => {
+    if (!MiniKit.isInstalled()) {
+      throw new Error('MiniKit not installed. Please open in World App.');
+    }
+
     try {
       const verifyPayload: VerifyCommandInput = {
         action: action,
@@ -148,10 +163,10 @@ export const minikit = {
 
       return {
         success: false,
-        error: 'World ID verification failed',
+        error: finalPayload.error_code || 'World ID verification failed',
       };
     } catch (error) {
-      console.error('World ID verification error:', error);
+      console.error('[MiniKit] World ID verification error:', error);
       throw error;
     }
   },

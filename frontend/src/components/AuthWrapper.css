@@ -16,6 +16,7 @@
   align-items: center;
   text-align: center;
   gap: 24px;
+  max-width: 400px;
 }
 
 .auth-title {
@@ -27,15 +28,72 @@
   background-clip: text;
 }
 
+.auth-subtitle {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.9);
+  margin: 0;
+}
+
 .auth-text {
   font-size: 1.1rem;
   color: rgba(255, 255, 255, 0.7);
+  line-height: 1.5;
+}
+
+.auth-icon,
+.auth-error-icon {
+  font-size: 4rem;
+  animation: pulse 2s ease-in-out infinite;
+}
+
+.auth-error-icon {
+  animation: shake 0.5s ease-in-out;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.1);
+  }
+}
+
+@keyframes shake {
+  0%, 100% {
+    transform: translateX(0);
+  }
+  25% {
+    transform: translateX(-10px);
+  }
+  75% {
+    transform: translateX(10px);
+  }
 }
 
 .auth-error-text {
   font-size: 1rem;
   color: #ff6b6b;
-  max-width: 280px;
+  max-width: 320px;
+  line-height: 1.5;
+}
+
+.auth-instructions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  text-align: left;
+  background: rgba(255, 255, 255, 0.05);
+  padding: 16px;
+  border-radius: 8px;
+  width: 100%;
+}
+
+.auth-instructions p {
+  margin: 0;
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 0.95rem;
 }
 
 .spinner {
@@ -53,7 +111,9 @@
   }
 }
 
-.auth-retry-btn {
+.auth-retry-btn,
+.auth-connect-btn,
+.auth-download-btn {
   padding: 16px 48px;
   font-size: 1.1rem;
   font-weight: 600;
@@ -63,12 +123,36 @@
   color: white;
   cursor: pointer;
   transition: transform 0.2s, box-shadow 0.2s;
+  text-decoration: none;
+  display: inline-block;
 }
 
-.auth-retry-btn:active {
+.auth-retry-btn:active,
+.auth-connect-btn:active,
+.auth-download-btn:active {
   transform: scale(0.98);
 }
 
-.auth-retry-btn:hover {
+.auth-retry-btn:hover,
+.auth-connect-btn:hover,
+.auth-download-btn:hover {
   box-shadow: 0 0 20px rgba(0, 212, 255, 0.4);
+}
+
+.auth-download-btn {
+  background: linear-gradient(90deg, #7b2dff, #00d4ff);
+}
+
+@media (max-width: 480px) {
+  .auth-title {
+    font-size: 2rem;
+  }
+
+  .auth-subtitle {
+    font-size: 1.25rem;
+  }
+
+  .auth-text {
+    font-size: 1rem;
+  }
 }
