@@ -33,7 +33,7 @@ export class AntiCheatService {
    * Validate tap timestamp against server-side signal timestamp
    */
   static validateReaction(
-    clientTapTimestamp: number,
+    _clientTapTimestamp: number, // Kept for API compatibility but not used
     serverTapTimestamp: number,
     signalTimestamp: number
   ): {

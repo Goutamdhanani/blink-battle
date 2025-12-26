@@ -62,6 +62,10 @@ export class AuthController {
       // Extract wallet address from the verified SIWE message
       const walletAddress = validMessage.siweMessageData.address;
 
+      if (!walletAddress) {
+        return res.status(401).json({ error: 'No wallet address in SIWE message' });
+      }
+
       // Check if nonce exists and is valid
       const storedNonce = nonceStore.get(payload.nonce);
       if (!storedNonce) {

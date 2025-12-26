@@ -113,7 +113,7 @@ export class GameSocketHandler {
     socket: Socket,
     player1Request: MatchmakingRequest,
     player2Request: MatchmakingRequest,
-    player1Wallet: string
+    _player1Wallet: string // Kept for API compatibility
   ) {
     try {
       // Get player data
@@ -528,7 +528,6 @@ export class GameSocketHandler {
 
     // Determine which player disconnected
     const isPlayer1 = activeMatch.player1.socketId === socket.id;
-    const disconnectedPlayer = isPlayer1 ? activeMatch.player1 : activeMatch.player2;
     const otherPlayer = isPlayer1 ? activeMatch.player2 : activeMatch.player1;
 
     if (!activeMatch.signalTimestamp) {

@@ -66,7 +66,7 @@ export class MatchController {
       // Get transactions for this match
       const transactions = await TransactionModel.getByMatchId(matchId);
 
-      res.json({
+      return res.json({
         success: true,
         match: {
           matchId: match.match_id,
@@ -83,7 +83,7 @@ export class MatchController {
       });
     } catch (error) {
       console.error('Error fetching match:', error);
-      res.status(500).json({ error: 'Failed to fetch match' });
+      return res.status(500).json({ error: 'Failed to fetch match' });
     }
   }
 }
