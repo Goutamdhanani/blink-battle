@@ -8,6 +8,7 @@ import Matchmaking from './components/Matchmaking';
 import ResultScreen from './components/ResultScreen';
 import MatchHistory from './components/MatchHistory';
 import Leaderboard from './components/Leaderboard';
+import DebugPanel from './components/DebugPanel';
 
 function App() {
   return (
@@ -27,6 +28,7 @@ function App() {
             </Routes>
           </Router>
         </AuthWrapper>
+        <DebugPanel />
       </GameProvider>
     </MiniKitProvider>
   );
