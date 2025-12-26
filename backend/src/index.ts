@@ -6,6 +6,8 @@ import dotenv from 'dotenv';
 import { AuthController } from './controllers/authController';
 import { MatchController } from './controllers/matchController';
 import { LeaderboardController } from './controllers/leaderboardController';
+import { PaymentController } from './controllers/paymentController';
+import { VerificationController } from './controllers/verificationController';
 import { authenticate } from './middleware/auth';
 import { GameSocketHandler } from './websocket/gameHandler';
 import { connectRedis } from './config/redis';
@@ -27,13 +29,23 @@ app.use(cors());
 app.use(express.json());
 
 // Health check
-app.get('/health', (req, res) => {
+app.get('/health', (_req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
 // Auth routes
-app.post('/api/auth/login', AuthController.authenticate);
+app.get('/api/auth/nonce', AuthController.getNonce);
+app.post('/api/auth/verify-siwe', AuthController.verifySiwe);
+app.post('/api/auth/login', AuthController.authenticate); // Legacy for demo/testing
 app.get('/api/auth/me', authenticate, AuthController.getUser);
+
+// Payment routes (MiniKit)
+app.post('/api/initiate-payment', authenticate, PaymentController.initiatePayment);
+app.post('/api/confirm-payment', authenticate, PaymentController.confirmPayment);
+app.get('/api/payment/:reference', authenticate, PaymentController.getPaymentStatus);
+
+// Verification routes (World ID)
+app.post('/api/verify-world-id', authenticate, VerificationController.verifyWorldID);
 
 // Match routes
 app.get('/api/matches/history', authenticate, MatchController.getMatchHistory);
@@ -47,7 +59,7 @@ app.get('/api/leaderboard/me', authenticate, LeaderboardController.getUserRank);
 new GameSocketHandler(io);
 
 // Error handler
-app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   console.error('Error:', err);
   res.status(500).json({ error: 'Internal server error' });
 });

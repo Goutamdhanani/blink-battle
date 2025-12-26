@@ -1,14 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useWorldcoin } from '../hooks/useWorldcoin';
+import { useMiniKit } from '../hooks/useMiniKit';
+import { minikit } from '../lib/minikit';
 import { useGameContext } from '../context/GameContext';
 import './WalletConnect.css';
 
 const WalletConnect: React.FC = () => {
   const navigate = useNavigate();
-  const { login, loading, error } = useWorldcoin();
-  const { state } = useGameContext();
-  const [walletInput, setWalletInput] = useState('');
+  const { isInstalled, walletAddress } = useMiniKit();
+  const { state, setUser, setToken } = useGameContext();
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     // If already logged in, redirect to dashboard
@@ -17,24 +19,72 @@ const WalletConnect: React.FC = () => {
     }
   }, [state.token, state.user, navigate]);
 
-  const handleConnect = async () => {
-    if (!walletInput) {
-      alert('Please enter a wallet address');
-      return;
+  useEffect(() => {
+    // Auto-authenticate if in World App and wallet is available
+    if (isInstalled && walletAddress && !state.token) {
+      handleMiniKitAuth();
     }
+  }, [isInstalled, walletAddress, state.token]);
 
-    const success = await login(walletInput);
-    if (success) {
-      navigate('/dashboard');
+  const handleMiniKitAuth = async () => {
+    setLoading(true);
+    setError(null);
+
+    try {
+      const result = await minikit.signInWithWallet();
+      
+      if (result.success) {
+        setToken(result.token);
+        setUser(result.user);
+        minikit.sendHaptic('success');
+        navigate('/dashboard');
+      } else {
+        setError('Authentication failed');
+        minikit.sendHaptic('error');
+      }
+    } catch (err: any) {
+      console.error('MiniKit auth error:', err);
+      setError(err.message || 'Failed to authenticate with World App');
+      minikit.sendHaptic('error');
+    } finally {
+      setLoading(false);
     }
   };
 
   const handleDemoLogin = async () => {
-    // Demo wallet for testing
-    const demoWallet = '0x' + Math.random().toString(16).substring(2, 42);
-    const success = await login(demoWallet);
-    if (success) {
-      navigate('/dashboard');
+    setLoading(true);
+    setError(null);
+
+    try {
+      // Demo wallet for testing (fallback when not in World App)
+      const demoWallet = '0x' + Math.random().toString(16).substring(2, 42);
+      
+      const response = await fetch(
+        `${import.meta.env.VITE_API_URL || 'http://localhost:3001'}/api/auth/login`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            walletAddress: demoWallet,
+            region: Intl.DateTimeFormat().resolvedOptions().timeZone,
+          }),
+        }
+      );
+
+      const data = await response.json();
+
+      if (data.success) {
+        setToken(data.token);
+        setUser(data.user);
+        navigate('/dashboard');
+      } else {
+        setError('Demo login failed');
+      }
+    } catch (err: any) {
+      console.error('Demo login error:', err);
+      setError(err.message || 'Failed to login');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -45,38 +95,43 @@ const WalletConnect: React.FC = () => {
         <p className="subtitle">Test your reflexes. Win WLD.</p>
         
         <div className="connect-box">
-          <h2>Connect Your Worldcoin Wallet</h2>
-          
-          <div className="input-group">
-            <input
-              type="text"
-              placeholder="Enter wallet address"
-              value={walletInput}
-              onChange={(e) => setWalletInput(e.target.value)}
-              className="wallet-input"
-              disabled={loading}
-            />
-          </div>
+          {isInstalled ? (
+            <>
+              <h2>🌍 Running in World App</h2>
+              <p className="info-text">
+                {walletAddress 
+                  ? `Connected: ${walletAddress.substring(0, 6)}...${walletAddress.substring(38)}`
+                  : 'Connecting to your wallet...'}
+              </p>
+              <button
+                onClick={handleMiniKitAuth}
+                disabled={loading}
+                className="btn btn-primary glow"
+              >
+                {loading ? 'Authenticating...' : 'Sign In with World App'}
+              </button>
+            </>
+          ) : (
+            <>
+              <h2>🔗 World App Required</h2>
+              <p className="info-text">
+                This is a Worldcoin Mini-App. Please open it inside the World App to play.
+              </p>
+              
+              <div className="divider">
+                <span>OR</span>
+              </div>
 
-          <button
-            onClick={handleConnect}
-            disabled={loading || !walletInput}
-            className="btn btn-primary glow"
-          >
-            {loading ? 'Connecting...' : 'Connect Wallet'}
-          </button>
-
-          <div className="divider">
-            <span>OR</span>
-          </div>
-
-          <button
-            onClick={handleDemoLogin}
-            disabled={loading}
-            className="btn btn-secondary"
-          >
-            Demo Mode (Test Wallet)
-          </button>
+              <p className="info-text small">For testing purposes only:</p>
+              <button
+                onClick={handleDemoLogin}
+                disabled={loading}
+                className="btn btn-secondary"
+              >
+                Demo Mode (Test Wallet)
+              </button>
+            </>
+          )}
 
           {error && <div className="error-message">{error}</div>}
         </div>

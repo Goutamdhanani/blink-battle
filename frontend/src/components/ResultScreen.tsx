@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useGameContext } from '../context/GameContext';
+import { minikit } from '../lib/minikit';
 import confetti from 'canvas-confetti';
 import './ResultScreen.css';
 
@@ -14,9 +15,13 @@ const ResultScreen: React.FC = () => {
       return;
     }
 
-    // Fire confetti if user won
+    // Fire confetti and haptic feedback if user won
     if (state.winnerId === state.user.userId) {
       fireConfetti();
+      minikit.sendHaptic('success');
+    } else {
+      // Send haptic notification for loss
+      minikit.sendHaptic('warning');
     }
   }, [state.user, state.result, state.winnerId, navigate]);
 
@@ -49,6 +54,7 @@ const ResultScreen: React.FC = () => {
   };
 
   const handlePlayAgain = () => {
+    minikit.sendHaptic('success');
     resetGame();
     navigate('/matchmaking');
   };

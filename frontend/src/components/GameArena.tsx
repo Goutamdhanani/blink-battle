@@ -2,11 +2,12 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useGameContext } from '../context/GameContext';
 import { useWebSocket } from '../hooks/useWebSocket';
+import { minikit } from '../lib/minikit';
 import './GameArena.css';
 
 const GameArena: React.FC = () => {
   const navigate = useNavigate();
-  const { state, setGamePhase } = useGameContext();
+  const { state } = useGameContext();
   const { playerReady, playerTap, connected } = useWebSocket();
   const [tapped, setTapped] = useState(false);
   const [tapTime, setTapTime] = useState<number | null>(null);
@@ -28,6 +29,20 @@ const GameArena: React.FC = () => {
     }
   }, [state.user, state.matchId, state.gamePhase, navigate]);
 
+  // Send haptic feedback for countdown
+  useEffect(() => {
+    if (state.gamePhase === 'countdown' && state.countdown !== null) {
+      minikit.sendHaptic('warning');
+    }
+  }, [state.countdown]);
+
+  // Send haptic feedback for signal
+  useEffect(() => {
+    if (state.gamePhase === 'signal') {
+      minikit.sendHaptic('success');
+    }
+  }, [state.gamePhase]);
+
   const handleTap = () => {
     if (tapped || !state.matchId || state.gamePhase !== 'signal') return;
 
@@ -36,7 +51,10 @@ const GameArena: React.FC = () => {
     setTapTime(clientTimestamp);
     playerTap(state.matchId, clientTimestamp);
 
-    // Add haptic feedback if available
+    // Send haptic feedback
+    minikit.sendHaptic('success');
+    
+    // Fallback vibration for browsers
     if (navigator.vibrate) {
       navigator.vibrate(50);
     }
