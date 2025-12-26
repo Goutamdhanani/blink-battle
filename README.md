@@ -1,6 +1,16 @@
-# ⚡ Blink Battle - Worldcoin Reaction Game
+# ⚡ Blink Battle - Worldcoin Mini-App Reaction Game
 
-A real-time reaction-based PvP game built as a Worldcoin Mini-App where players compete to test their reflexes and win WLD tokens.
+A real-time reaction-based PvP game built as a **Worldcoin Mini-App** that runs inside **World App**. Players compete to test their reflexes and win WLD tokens.
+
+## 🌍 What is a Mini-App?
+
+Blink Battle is a **Worldcoin Mini-App** - a web application that runs natively inside the World App using the **MiniKit SDK**. This means:
+
+- ✅ **No wallet connection** - users are automatically authenticated via World App
+- ✅ **Integrated payments** - seamless WLD payments using MiniKit Pay command
+- ✅ **World ID verification** - optional anti-cheat using World ID proofs
+- ✅ **Native experience** - haptic feedback and mobile-optimized UI
+- ✅ **Secure authentication** - Sign-In with Ethereum (SIWE) via MiniKit
 
 ## 🎮 Overview
 
@@ -38,21 +48,31 @@ Blink Battle is a fast-paced multiplayer reaction game where two players face of
 
 ## 🏗️ Tech Stack
 
-### Frontend
+### Frontend (Mini-App)
 - **React 18** with TypeScript
 - **Vite** for fast development
+- **@worldcoin/minikit-js** - MiniKit SDK for World App integration
 - **Socket.io Client** for real-time communication
 - **Canvas Confetti** for victory celebrations
 - **Axios** for API requests
-- **Worldcoin IDKit** for wallet authentication
 
 ### Backend
 - **Node.js** with Express
 - **TypeScript** for type safety
+- **@worldcoin/minikit-js** - MiniKit SDK for backend verification
+- **SIWE** - Sign-In with Ethereum
 - **Socket.io** for WebSocket handling
 - **PostgreSQL** for data persistence
 - **Redis** for matchmaking queues and caching
 - **JWT** for authentication
+- **Axios** for Developer Portal API calls
+
+### MiniKit Integration
+- **Wallet Authentication** - SIWE via MiniKit `walletAuth` command
+- **Payments** - WLD staking via MiniKit `pay` command
+- **World ID** - Optional verification via MiniKit `verify` command
+- **Haptic Feedback** - Native haptics via MiniKit `sendHapticFeedback`
+- **Payment Verification** - Developer Portal API integration
 
 ## 📦 Project Structure
 
@@ -104,101 +124,90 @@ blink-battle/
 
 ## 🚀 Getting Started
 
-### Prerequisites
+This project is a Worldcoin Mini-App. For complete setup instructions including Developer Portal configuration, see the **[MiniKit Setup Guide](./MINIKIT_SETUP.md)**.
+
+### Quick Start (Development)
+
+#### Prerequisites
 - Node.js 18+
 - PostgreSQL 14+
 - Redis 6+
-- Worldcoin Developer Account
+- Worldcoin Developer Account ([developer.worldcoin.org](https://developer.worldcoin.org))
+- World App installed on mobile device
 
-### Backend Setup
+#### Backend Setup
 
-1. **Clone the repository**
+1. **Clone and install**
    ```bash
    git clone https://github.com/Goutamdhanani/blink-battle.git
    cd blink-battle/backend
-   ```
-
-2. **Install dependencies**
-   ```bash
    npm install
    ```
 
-3. **Configure environment variables**
+2. **Configure environment**
    ```bash
    cp .env.example .env
-   ```
-   
-   Edit `.env` with your settings:
-   ```env
-   PORT=3001
-   NODE_ENV=development
-   DATABASE_URL=postgresql://user:password@localhost:5432/blink_battle
-   REDIS_URL=redis://localhost:6379
-   WORLDCOIN_APP_ID=your_app_id
-   WORLDCOIN_ACTION=your_action_name
-   JWT_SECRET=your_jwt_secret_key
-   PLATFORM_FEE_PERCENT=3
-   MIN_REACTION_MS=80
-   MAX_REACTION_MS=3000
-   SIGNAL_DELAY_MIN_MS=2000
-   SIGNAL_DELAY_MAX_MS=5000
-   MATCHMAKING_TIMEOUT_MS=30000
+   # Edit .env with your settings (see MINIKIT_SETUP.md)
    ```
 
-4. **Set up database**
+3. **Set up database**
    ```bash
    npm run migrate
    ```
 
-5. **Start development server**
+4. **Start server**
    ```bash
    npm run dev
    ```
 
-### Frontend Setup
+#### Frontend Setup
 
-1. **Navigate to frontend directory**
+1. **Navigate and install**
    ```bash
    cd ../frontend
-   ```
-
-2. **Install dependencies**
-   ```bash
    npm install
    ```
 
-3. **Configure environment**
-   Create `.env` file:
-   ```env
-   VITE_API_URL=http://localhost:3001
+2. **Configure environment**
+   ```bash
+   cp .env.example .env
+   # Add your APP_ID and PLATFORM_WALLET_ADDRESS
    ```
 
-4. **Start development server**
+3. **Start development server**
    ```bash
    npm run dev
    ```
 
-5. **Open in browser**
-   Navigate to `http://localhost:3000`
+4. **Test in World App**
+   - Enable Developer Mode in World App
+   - Add `http://localhost:3000` (or ngrok URL)
+   - Open the Mini-App in World App
+
+For detailed setup instructions, troubleshooting, and deployment guides, see **[MINIKIT_SETUP.md](./MINIKIT_SETUP.md)**.
 
 ## 🎯 Game Flow
 
-1. **Authentication**: Connect Worldcoin wallet
-2. **Mode Selection**: Choose Practice or PvP mode
-3. **Matchmaking**: Select stake and find opponent
-4. **Match Confirmation**: Funds locked in escrow
-5. **Countdown**: 3... 2... 1...
-6. **Random Delay**: 2-5 seconds wait
-7. **Signal Appears**: Tap as fast as possible!
-8. **Validation**: Server validates reactions
-9. **Results**: Winner determined, funds distributed
-10. **Post-Match**: View stats, play again, or return to dashboard
+1. **Open in World App**: Launch the Mini-App inside World App
+2. **Auto-Authentication**: Sign in with World App wallet (SIWE)
+3. **Mode Selection**: Choose Practice or PvP mode
+4. **Matchmaking**: For PvP, stake WLD via MiniKit Pay command
+5. **Match Confirmation**: Funds locked in escrow, opponent matched
+6. **Countdown**: 3... 2... 1... (with haptic feedback)
+7. **Random Delay**: 2-5 seconds wait
+8. **Signal Appears**: Tap as fast as possible! (with haptic feedback)
+9. **Validation**: Server validates reactions with anti-cheat
+10. **Results**: Winner determined, funds distributed (with haptic feedback)
+11. **Post-Match**: View stats, play again, or return to dashboard
 
 ## 🔒 Security Features
 
 - **Server-Side Validation**: All game logic runs on server
 - **Cryptographic RNG**: Unpredictable signal timing
 - **Anti-Bot Detection**: Flags reactions < 80ms
+- **World ID Verification**: Optional enhanced trust via MiniKit
+- **SIWE Authentication**: Secure wallet-based authentication
+- **Payment Verification**: Developer Portal API validation
 - **Audit Logging**: All matches logged for review
 - **Escrow Protection**: Funds locked until match completion
 - **JWT Authentication**: Secure API access
@@ -254,36 +263,44 @@ blink-battle/
 
 ## 🚢 Deployment
 
-### Heroku Deployment
+This Mini-App requires both frontend and backend deployment.
 
-1. **Create Heroku app**
-   ```bash
-   heroku create your-app-name
-   ```
+### Backend (Heroku)
 
-2. **Add addons**
-   ```bash
-   heroku addons:create heroku-postgresql:hobby-dev
-   heroku addons:create heroku-redis:hobby-dev
-   ```
+```bash
+# Create app and add addons
+heroku create your-app-name
+heroku addons:create heroku-postgresql:mini
+heroku addons:create heroku-redis:mini
 
-3. **Set environment variables**
-   ```bash
-   heroku config:set NODE_ENV=production
-   heroku config:set JWT_SECRET=your_production_secret
-   heroku config:set WORLDCOIN_APP_ID=your_app_id
-   # ... other variables
-   ```
+# Set all required environment variables (see MINIKIT_SETUP.md)
+heroku config:set APP_ID=your_app_id
+heroku config:set DEV_PORTAL_API_KEY=your_api_key
+# ... (see MINIKIT_SETUP.md for complete list)
 
-4. **Deploy**
-   ```bash
-   git push heroku main
-   ```
+# Deploy
+git push heroku main
+heroku run npm run migrate
+```
 
-5. **Run migrations**
-   ```bash
-   heroku run npm run migrate
-   ```
+### Frontend (Vercel/Netlify)
+
+```bash
+# Update .env with production backend URL
+VITE_API_URL=https://your-backend-app.herokuapp.com
+VITE_APP_ID=app_staging_your_app_id
+VITE_PLATFORM_WALLET_ADDRESS=0xYourWalletAddress
+
+# Deploy to Vercel
+vercel deploy
+
+# Or deploy to Netlify
+netlify deploy
+```
+
+**Important**: Update redirect URLs in the Worldcoin Developer Portal after deployment.
+
+For detailed deployment instructions, see **[MINIKIT_SETUP.md](./MINIKIT_SETUP.md)**.
 
 ## 🧪 Testing
 
@@ -301,27 +318,46 @@ npm test
 
 ## 📝 API Documentation
 
-### Authentication
-- `POST /api/auth/login` - Authenticate with wallet
+### MiniKit Integration APIs
+
+#### Authentication (SIWE)
+- `GET /api/auth/nonce` - Generate nonce for SIWE
+- `POST /api/auth/verify-siwe` - Verify SIWE signature
+- `POST /api/auth/login` - Legacy login (demo mode)
 - `GET /api/auth/me` - Get current user
 
-### Matches
+#### Payments (MiniKit)
+- `POST /api/initiate-payment` - Initialize payment reference
+- `POST /api/confirm-payment` - Confirm via Developer Portal
+- `GET /api/payment/:reference` - Get payment status
+
+#### Verification (World ID)
+- `POST /api/verify-world-id` - Verify World ID proof
+
+#### Matches
 - `GET /api/matches/history` - Get match history
 - `GET /api/matches/:matchId` - Get match details
 
-### Leaderboard
+#### Leaderboard
 - `GET /api/leaderboard` - Get global leaderboard
 - `GET /api/leaderboard/me` - Get user rank
 
 ### WebSocket Events
-- `join_matchmaking` - Join matchmaking queue
+
+**Client → Server:**
+- `join_matchmaking` - Join queue
 - `cancel_matchmaking` - Leave queue
-- `player_ready` - Mark as ready
-- `player_tap` - Send tap event
+- `player_ready` - Mark ready
+- `player_tap` - Send tap
+
+**Server → Client:**
 - `match_found` - Opponent found
+- `matchmaking_queued` - Queued
 - `countdown` - Countdown number
-- `signal` - Signal appears
+- `signal` - Signal to tap
 - `match_result` - Match completed
+
+For complete API documentation, see **[API_REFERENCE.md](./API_REFERENCE.md)**.
 
 ## 🤝 Contributing
 
@@ -333,8 +369,12 @@ MIT License - see LICENSE file for details
 
 ## 🔗 Links
 
-- [Worldcoin Documentation](https://docs.worldcoin.org/)
-- [World App Mini-Apps Guide](https://docs.worldcoin.org/mini-apps)
+- **[MiniKit Setup Guide](./MINIKIT_SETUP.md)** - Complete setup and deployment guide
+- **[Worldcoin Documentation](https://docs.worldcoin.org/)**
+- **[MiniKit SDK Documentation](https://docs.worldcoin.org/minikit)**
+- **[Developer Portal](https://developer.worldcoin.org)**
+- **[World App Download](https://worldcoin.org/download)**
+- **[GitHub Repository](https://github.com/Goutamdhanani/blink-battle)**
 
 ## 📞 Support
 

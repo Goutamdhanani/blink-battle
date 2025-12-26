@@ -39,6 +39,19 @@
   text-align: center;
 }
 
+.info-text {
+  text-align: center;
+  color: var(--text-dim);
+  margin-bottom: 20px;
+  line-height: 1.5;
+}
+
+.info-text.small {
+  font-size: 0.9rem;
+  margin-top: 10px;
+  margin-bottom: 10px;
+}
+
 .input-group {
   margin-bottom: 20px;
 }

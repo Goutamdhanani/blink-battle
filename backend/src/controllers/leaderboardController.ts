@@ -45,7 +45,7 @@ export class LeaderboardController {
       const leaderboard = await UserModel.getLeaderboard(1000);
       const userRank = leaderboard.findIndex(u => u.user_id === userId) + 1;
 
-      res.json({
+      return res.json({
         success: true,
         rank: userRank || null,
         stats: {
@@ -57,7 +57,7 @@ export class LeaderboardController {
       });
     } catch (error) {
       console.error('Error fetching user rank:', error);
-      res.status(500).json({ error: 'Failed to fetch user rank' });
+      return res.status(500).json({ error: 'Failed to fetch user rank' });
     }
   }
 }
