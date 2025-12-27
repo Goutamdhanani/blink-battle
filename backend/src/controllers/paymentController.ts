@@ -29,8 +29,9 @@ export class PaymentController {
         success: true,
         id: payment.reference,
       });
-    } catch (error: any) {
-      console.error('[Payment] Error initiating payment:', error);
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      console.error('[Payment] Error initiating payment:', errorMessage);
       return res.status(500).json({ error: 'Failed to initiate payment' });
     }
   }
@@ -103,11 +104,13 @@ export class PaymentController {
           }
         );
         transaction = response.data;
-      } catch (apiError: any) {
-        console.error(`[Payment] Developer Portal API error:`, apiError.response?.data || apiError.message);
+      } catch (apiError: unknown) {
+        const errorMessage = apiError instanceof Error ? apiError.message : 'Unknown error';
+        const errorDetails = (apiError as any)?.response?.data || errorMessage;
+        console.error(`[Payment] Developer Portal API error:`, errorDetails);
         return res.status(500).json({ 
           error: 'Failed to verify transaction with Developer Portal',
-          details: apiError.response?.data || apiError.message,
+          details: errorDetails,
         });
       }
 
@@ -155,11 +158,12 @@ export class PaymentController {
           status: updatedPayment!.status,
         },
       });
-    } catch (error: any) {
-      console.error('[Payment] Error confirming payment:', error);
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      console.error('[Payment] Error confirming payment:', errorMessage);
       return res.status(500).json({ 
         error: 'Failed to confirm payment',
-        details: error.message,
+        details: errorMessage,
       });
     }
   }
