@@ -1,6 +1,26 @@
 import axios, { AxiosInstance, InternalAxiosRequestConfig, AxiosError } from 'axios';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+// Determine API URL with production-safe defaults
+const getApiUrl = (): string => {
+  // If explicitly set, use it
+  if (import.meta.env.VITE_API_URL) {
+    return import.meta.env.VITE_API_URL;
+  }
+  
+  // In production, try to use same origin
+  if (import.meta.env.PROD) {
+    console.warn('[API] No VITE_API_URL set in production, using window.location.origin');
+    return window.location.origin;
+  }
+  
+  // Development default
+  return 'http://localhost:3001';
+};
+
+const API_URL = getApiUrl();
+
+// Log API URL on startup for debugging
+console.log('[API] Using API URL:', API_URL);
 
 /**
  * Custom error type for authentication failures
@@ -20,6 +40,7 @@ export const createApiClient = (): AxiosInstance => {
     headers: {
       'Content-Type': 'application/json',
     },
+    withCredentials: true, // Include credentials (cookies, authorization headers)
   });
 
   // Add request interceptor to include auth token

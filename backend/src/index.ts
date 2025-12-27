@@ -80,7 +80,35 @@ io.use((socket, next) => {
 });
 
 // Middleware
-app.use(cors());
+// Configure CORS to allow credentials (JWT tokens) and specify allowed origins
+const allowedOrigins = [
+  process.env.FRONTEND_URL || 'http://localhost:3000',
+  'http://localhost:3000', // Always allow local development
+];
+
+// Add production URLs if specified
+if (process.env.FRONTEND_URL_PRODUCTION) {
+  allowedOrigins.push(process.env.FRONTEND_URL_PRODUCTION);
+}
+
+app.use(cors({
+  origin: (origin, callback) => {
+    // Allow requests with no origin (mobile apps, Postman, etc.)
+    if (!origin) return callback(null, true);
+    
+    // Check if origin is in allowed list
+    if (allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      console.warn(`[CORS] Blocked request from origin: ${origin}`);
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true, // Allow credentials (cookies, authorization headers)
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+}));
+
 app.use(express.json());
 app.use(requestIdMiddleware); // Add request ID to all requests
 
