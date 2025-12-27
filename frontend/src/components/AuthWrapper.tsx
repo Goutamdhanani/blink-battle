@@ -11,6 +11,59 @@ interface AuthWrapperProps {
   children: React.ReactNode;
 }
 
+// Helper to generate UUID v4 for request ID
+const generateRequestId = (): string => {
+  // Use native crypto.randomUUID if available, fallback to polyfill
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
+  // Fallback for environments without crypto.randomUUID
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === 'x' ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+};
+
+// Store last auth flow data for debug panel
+export interface AuthDebugData {
+  apiUrl: string;
+  lastNonceRequest?: {
+    requestId: string;
+    timestamp: number;
+    response?: { nonce: string; requestId?: string };
+    error?: string;
+  };
+  lastWalletAuth?: {
+    timestamp: number;
+    nonce: string;
+    finalPayload?: {
+      status: string;
+      address?: string;
+      message?: string; // Redacted
+      signature?: string; // Redacted
+    };
+    error?: string;
+  };
+  lastVerifyRequest?: {
+    requestId: string;
+    timestamp: number;
+    httpStatus?: number;
+    response?: any;
+    error?: string;
+  };
+}
+
+// Initialize global debug data store (accessible from debug panel)
+// Only in development or when debug mode is enabled
+const initDebugData = (): void => {
+  if (!((window as any).__authDebugData)) {
+    (window as any).__authDebugData = {
+      apiUrl: API_URL,
+    } as AuthDebugData;
+  }
+};
+
 const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
   const { state, setUser, setToken } = useGameContext();
   const { isReady, isInstalled } = useMiniKitReady();
@@ -36,6 +89,9 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
     setError(null);
     setAuthStarted(true);
 
+    // Initialize debug data if not already done
+    initDebugData();
+
     // Set up timeout using a ref to track if request is still pending
     let timedOut = false;
     const timeoutId = setTimeout(() => {
@@ -46,15 +102,48 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
 
     try {
       // Step 1: Get nonce from backend
-      const nonceRes = await fetch(`${API_URL}/api/auth/nonce`);
+      const nonceRequestId = generateRequestId();
+      const nonceTimestamp = Date.now();
+      
+      (window as any).__authDebugData.lastNonceRequest = {
+        requestId: nonceRequestId,
+        timestamp: nonceTimestamp,
+      };
+
+      const nonceRes = await fetch(`${API_URL}/api/auth/nonce`, {
+        headers: {
+          'X-Request-Id': nonceRequestId,
+        },
+      });
+      
       if (!nonceRes.ok) {
-        throw new Error('Failed to get authentication nonce');
+        let errorText = `Failed to get nonce (HTTP ${nonceRes.status})`;
+        try {
+          const errorBody = await nonceRes.json();
+          errorText = errorBody.error || errorText;
+          (window as any).__authDebugData.lastNonceRequest!.error = JSON.stringify(errorBody);
+        } catch {
+          const textBody = await nonceRes.text();
+          (window as any).__authDebugData.lastNonceRequest!.error = textBody;
+          errorText = textBody || errorText;
+        }
+        throw new Error(errorText);
       }
-      const { nonce } = await nonceRes.json();
+      
+      const nonceData = await nonceRes.json();
+      const { nonce } = nonceData;
+      
+      (window as any).__authDebugData.lastNonceRequest!.response = nonceData;
 
       if (timedOut) return; // Exit if already timed out
 
       // Step 2: Call MiniKit.walletAuth() - only after MiniKit is ready
+      const walletAuthTimestamp = Date.now();
+      (window as any).__authDebugData.lastWalletAuth = {
+        timestamp: walletAuthTimestamp,
+        nonce,
+      };
+
       const { finalPayload } = await MiniKit.commandsAsync.walletAuth({
         nonce: nonce,
         expirationTime: new Date(new Date().getTime() + 7 * 24 * 60 * 60 * 1000),
@@ -66,10 +155,24 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
       
       if (timedOut) return; // Exit if already timed out
 
+      // Redact sensitive fields for debug display
+      const redactString = (str: string | undefined, showChars = 6): string => {
+        if (!str || str.length <= showChars * 2) return '***';
+        return `${str.substring(0, showChars)}...${str.substring(str.length - showChars)}`;
+      };
+
+      (window as any).__authDebugData.lastWalletAuth!.finalPayload = {
+        status: finalPayload.status,
+        address: (finalPayload as any).address ? redactString((finalPayload as any).address, 6) : undefined,
+        message: (finalPayload as any).message ? redactString((finalPayload as any).message, 20) : undefined,
+        signature: (finalPayload as any).signature ? redactString((finalPayload as any).signature, 8) : undefined,
+      };
+
       // Check for errors in payload
       if (finalPayload.status === 'error') {
         const errorCode = finalPayload.error_code || 'unknown_error';
         console.error('[Auth] MiniKit error:', errorCode);
+        (window as any).__authDebugData.lastWalletAuth!.error = `${errorCode}: ${(finalPayload as any).error_message || 'Unknown error'}`;
         throw new Error(
           errorCode === 'user_rejected'
             ? 'Sign-in was cancelled'
@@ -78,17 +181,60 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
       }
 
       // Step 3: Verify SIWE on backend
+      const verifyRequestId = generateRequestId();
+      const verifyTimestamp = Date.now();
+
+      (window as any).__authDebugData.lastVerifyRequest = {
+        requestId: verifyRequestId,
+        timestamp: verifyTimestamp,
+      };
+
       const verifyRes = await fetch(`${API_URL}/api/auth/verify-siwe`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'X-Request-Id': verifyRequestId,
+        },
         body: JSON.stringify({ payload: finalPayload }),
       });
 
+      (window as any).__authDebugData.lastVerifyRequest!.httpStatus = verifyRes.status;
+
       if (!verifyRes.ok) {
-        throw new Error('Backend verification failed');
+        // Try to extract detailed error message from backend
+        let errorMessage = `Backend verification failed (HTTP ${verifyRes.status})`;
+        let errorDetails = null;
+        
+        try {
+          const errorBody = await verifyRes.json();
+          errorMessage = errorBody.error || errorMessage;
+          errorDetails = errorBody;
+          (window as any).__authDebugData.lastVerifyRequest!.response = errorBody;
+        } catch {
+          // If JSON parsing fails, try to get text
+          try {
+            const textBody = await verifyRes.text();
+            if (textBody) {
+              errorMessage = textBody;
+              (window as any).__authDebugData.lastVerifyRequest!.response = { text: textBody };
+            }
+          } catch {
+            // Ignore
+          }
+        }
+
+        console.error('[Auth] Backend verification error:', errorDetails || errorMessage);
+        
+        // Construct user-friendly error with details
+        const detailedError = errorDetails
+          ? `${errorMessage}${errorDetails.hint ? `\n\nHint: ${errorDetails.hint}` : ''}${errorDetails.requestId ? `\n\nRequest ID: ${errorDetails.requestId}` : ''}`
+          : errorMessage;
+
+        throw new Error(detailedError);
       }
 
       const verifyData = await verifyRes.json();
+      (window as any).__authDebugData.lastVerifyRequest!.response = verifyData;
 
       if (verifyData.success) {
         setToken(verifyData.token);

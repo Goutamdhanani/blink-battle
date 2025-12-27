@@ -4,6 +4,17 @@ import jwt from 'jsonwebtoken';
 import { verifySiweMessage } from '@worldcoin/minikit-js';
 import { UserModel } from '../models/User';
 
+// Debug logging flag (enable with DEBUG_AUTH=true environment variable)
+const DEBUG_AUTH = process.env.DEBUG_AUTH === 'true';
+
+// Helper function to redact sensitive data for logging
+const redactSensitive = (value: string, showChars = 6): string => {
+  if (!value || value.length <= showChars * 2) {
+    return '***';
+  }
+  return `${value.substring(0, showChars)}...${value.substring(value.length - showChars)}`;
+};
+
 // Store nonces temporarily (in production, use Redis with TTL)
 const nonceStore = new Map<string, { nonce: string; timestamp: number }>();
 
@@ -29,7 +40,9 @@ export class AuthController {
   /**
    * Generate a nonce for SIWE authentication
    */
-  static async getNonce(_req: Request, res: Response) {
+  static async getNonce(req: Request, res: Response) {
+    const requestId = (req as any).requestId || 'unknown';
+    
     try {
       const nonce = crypto.randomBytes(16).toString('base64');
       
@@ -39,10 +52,17 @@ export class AuthController {
         timestamp: Date.now(),
       });
 
-      res.json({ nonce });
+      if (DEBUG_AUTH) {
+        console.log(`[Auth:getNonce] requestId=${requestId} nonce=${redactSensitive(nonce, 8)} nonceStoreSize=${nonceStore.size}`);
+      }
+
+      res.json({ nonce, requestId });
     } catch (error) {
-      console.error('Error generating nonce:', error);
-      res.status(500).json({ error: 'Failed to generate nonce' });
+      console.error(`[Auth:getNonce] requestId=${requestId} error:`, error);
+      res.status(500).json({ 
+        error: 'Failed to generate nonce',
+        requestId,
+      });
     }
   }
 
@@ -50,44 +70,129 @@ export class AuthController {
    * Verify SIWE message from MiniKit
    */
   static async verifySiwe(req: Request, res: Response) {
+    const requestId = (req as any).requestId || 'unknown';
+    
     try {
       const { payload } = req.body;
 
+      if (DEBUG_AUTH) {
+        console.log(`[Auth:verifySiwe] requestId=${requestId} payloadStatus=${payload?.status} nonceStoreSize=${nonceStore.size}`);
+      }
+
       if (!payload || payload.status === 'error') {
-        return res.status(400).json({ error: 'Invalid payload' });
+        const errorMsg = 'Invalid payload or user rejected authentication';
+        if (DEBUG_AUTH) {
+          console.log(`[Auth:verifySiwe] requestId=${requestId} error: ${errorMsg} errorCode=${payload?.error_code}`);
+        }
+        return res.status(400).json({ 
+          error: errorMsg,
+          errorCode: payload?.error_code,
+          requestId,
+        });
+      }
+
+      // Check if nonce exists and is valid BEFORE verifying signature
+      // This prevents DoS attacks from invalid signatures and is the recommended order
+      // because signature verification is computationally expensive
+      const storedNonce = nonceStore.get(payload.nonce);
+      if (!storedNonce) {
+        const errorMsg = 'Invalid or expired nonce - nonce not found in store';
+        if (DEBUG_AUTH) {
+          console.log(`[Auth:verifySiwe] requestId=${requestId} error: ${errorMsg} nonce=${redactSensitive(payload.nonce || 'missing', 8)} nonceStoreSize=${nonceStore.size}`);
+        }
+        return res.status(401).json({ 
+          error: errorMsg,
+          requestId,
+          hint: 'Nonce may have expired or backend restarted. Multi-instance backends need shared nonce storage (Redis).',
+        });
+      }
+
+      // Check nonce age
+      const nonceAge = Date.now() - storedNonce.timestamp;
+      if (nonceAge > NONCE_MAX_AGE) {
+        nonceStore.delete(payload.nonce);
+        const errorMsg = `Nonce expired (age: ${Math.floor(nonceAge / 1000)}s, max: ${NONCE_MAX_AGE / 1000}s)`;
+        if (DEBUG_AUTH) {
+          console.log(`[Auth:verifySiwe] requestId=${requestId} error: ${errorMsg}`);
+        }
+        return res.status(401).json({ 
+          error: errorMsg,
+          requestId,
+        });
+      }
+
+      if (DEBUG_AUTH) {
+        console.log(`[Auth:verifySiwe] requestId=${requestId} nonce validated, age=${Math.floor(nonceAge / 1000)}s, attempting SIWE verification`);
       }
 
       // Verify the SIWE message
-      const validMessage = await verifySiweMessage(
-        payload,
-        payload.nonce
-      );
+      let validMessage;
+      try {
+        validMessage = await verifySiweMessage(
+          payload,
+          payload.nonce
+        );
+      } catch (siweError: any) {
+        const errorMsg = 'SIWE message verification failed';
+        if (DEBUG_AUTH) {
+          console.log(`[Auth:verifySiwe] requestId=${requestId} error: ${errorMsg} siweError=${siweError.message || siweError}`);
+        }
+        // Delete nonce on verification failure
+        nonceStore.delete(payload.nonce);
+        return res.status(401).json({ 
+          error: errorMsg,
+          requestId,
+          details: siweError.message || 'Unknown SIWE verification error',
+        });
+      }
 
       if (!validMessage.isValid) {
-        return res.status(401).json({ error: 'Invalid SIWE message' });
+        const errorMsg = 'Invalid SIWE message signature or format';
+        if (DEBUG_AUTH) {
+          console.log(`[Auth:verifySiwe] requestId=${requestId} error: ${errorMsg}`);
+        }
+        // Delete nonce on verification failure
+        nonceStore.delete(payload.nonce);
+        return res.status(401).json({ 
+          error: errorMsg,
+          requestId,
+        });
       }
 
       // Extract wallet address from the verified SIWE message
       const walletAddress = validMessage.siweMessageData.address;
 
       if (!walletAddress) {
-        return res.status(401).json({ error: 'No wallet address in SIWE message' });
+        const errorMsg = 'No wallet address in SIWE message';
+        if (DEBUG_AUTH) {
+          console.log(`[Auth:verifySiwe] requestId=${requestId} error: ${errorMsg}`);
+        }
+        nonceStore.delete(payload.nonce);
+        return res.status(401).json({ 
+          error: errorMsg,
+          requestId,
+        });
       }
 
-      // Check if nonce exists and is valid
-      const storedNonce = nonceStore.get(payload.nonce);
-      if (!storedNonce) {
-        return res.status(401).json({ error: 'Invalid or expired nonce' });
-      }
-
-      // Delete used nonce
+      // Delete used nonce (one-time use)
       nonceStore.delete(payload.nonce);
+
+      if (DEBUG_AUTH) {
+        console.log(`[Auth:verifySiwe] requestId=${requestId} SIWE verification successful, wallet=${redactSensitive(walletAddress, 6)}`);
+      }
 
       // Find or create user
       let user = await UserModel.findByWallet(walletAddress);
       
       if (!user) {
         user = await UserModel.create(walletAddress, undefined);
+        if (DEBUG_AUTH) {
+          console.log(`[Auth:verifySiwe] requestId=${requestId} created new user userId=${user.user_id}`);
+        }
+      } else {
+        if (DEBUG_AUTH) {
+          console.log(`[Auth:verifySiwe] requestId=${requestId} existing user userId=${user.user_id}`);
+        }
       }
 
       // Generate JWT token
@@ -107,10 +212,19 @@ export class AuthController {
           losses: user.losses,
           avgReactionTime: user.avg_reaction_time,
         },
+        requestId,
       });
-    } catch (error) {
-      console.error('SIWE verification error:', error);
-      return res.status(500).json({ error: 'Authentication failed' });
+    } catch (error: any) {
+      const errorMsg = 'Authentication failed - internal server error';
+      console.error(`[Auth:verifySiwe] requestId=${requestId} error:`, error);
+      if (DEBUG_AUTH) {
+        console.log(`[Auth:verifySiwe] requestId=${requestId} error details: ${error.message || error}`);
+      }
+      return res.status(500).json({ 
+        error: errorMsg,
+        requestId,
+        details: DEBUG_AUTH ? error.message : undefined,
+      });
     }
   }
 
