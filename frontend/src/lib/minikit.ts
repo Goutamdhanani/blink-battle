@@ -6,7 +6,7 @@ import {
   Tokens,
   tokenToDecimals 
 } from '@worldcoin/minikit-js';
-import { apiClient, API_URL } from './api';
+import { apiClient } from './api';
 
 /**
  * MiniKit utility functions for World App integration
