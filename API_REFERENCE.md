@@ -15,14 +15,115 @@ All authenticated endpoints require a JWT token in the Authorization header:
 Authorization: Bearer <token>
 ```
 
+### SIWE (Sign-In with Ethereum) Authentication Flow
+
+The recommended authentication method uses SIWE through World App MiniKit:
+
+1. **Get Nonce**: Request a nonce from the server
+2. **Sign Message**: Use MiniKit to sign the SIWE message with the nonce
+3. **Verify SIWE**: Send the signed payload and nonce to verify and get a JWT token
+
 ---
 
 ## REST API Endpoints
 
 ### Authentication
 
+#### GET /api/auth/nonce
+Generate a nonce for SIWE authentication. The nonce is valid for 5 minutes and can only be used once.
+
+**Request Headers:**
+```
+X-Request-Id: <optional-request-id>
+```
+
+**Response:**
+```json
+{
+  "nonce": "abc123def456...",
+  "requestId": "uuid-here"
+}
+```
+
+**Notes:**
+- The nonce must be alphanumeric and at least 8 characters long
+- Each nonce expires after 5 minutes
+- Nonces are single-use and deleted after verification
+
+#### POST /api/auth/verify-siwe
+Verify SIWE (Sign-In with Ethereum) message and authenticate user.
+
+**Request Headers:**
+```
+Content-Type: application/json
+X-Request-Id: <optional-request-id>
+```
+
+**Request Body:**
+```json
+{
+  "payload": {
+    "status": "success",
+    "address": "0x1234567890abcdef...",
+    "message": "Sign in to Blink Battle...",
+    "signature": "0xabc..."
+  },
+  "nonce": "abc123def456..."
+}
+```
+
+**Important:** Both `payload` and `nonce` are required. The `nonce` must be the same nonce that was obtained from `GET /api/auth/nonce`.
+
+**Success Response:**
+```json
+{
+  "success": true,
+  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "user": {
+    "userId": "uuid-here",
+    "walletAddress": "0x1234567890abcdef...",
+    "wins": 0,
+    "losses": 0,
+    "avgReactionTime": null
+  },
+  "requestId": "uuid-here"
+}
+```
+
+**Error Responses:**
+
+- `400 Bad Request` - Missing or invalid parameters:
+  ```json
+  {
+    "error": "Authentication failed: nonce is required",
+    "code": "NONCE_REQUIRED",
+    "hint": "The nonce parameter must be included in the request body",
+    "requestId": "uuid-here"
+  }
+  ```
+
+- `401 Unauthorized` - Invalid or expired nonce, or signature verification failed:
+  ```json
+  {
+    "error": "Authentication failed: invalid or expired nonce",
+    "code": "NONCE_NOT_FOUND",
+    "hint": "Nonce may have expired or been used already. Please request a new nonce.",
+    "requestId": "uuid-here"
+  }
+  ```
+
+**Error Codes:**
+- `NONCE_REQUIRED` - Nonce parameter is missing
+- `INVALID_NONCE_FORMAT` - Nonce format is invalid
+- `INVALID_PAYLOAD` - Payload is missing or has error status
+- `NONCE_NOT_FOUND` - Nonce not found in store (expired or used)
+- `NONCE_EXPIRED` - Nonce is older than 5 minutes
+- `SIWE_VERIFICATION_FAILED` - SIWE signature verification failed
+- `INVALID_SIGNATURE` - Signature validation failed
+- `NO_WALLET_ADDRESS` - Could not extract wallet address from SIWE message
+
 #### POST /api/auth/login
-Authenticate user with wallet address and get JWT token.
+Authenticate user with wallet address and get JWT token (legacy method for demo/testing).
 
 **Request Body:**
 ```json
