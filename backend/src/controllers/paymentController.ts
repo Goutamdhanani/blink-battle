@@ -1,19 +1,12 @@
 import { Request, Response } from 'express';
 import crypto from 'crypto';
 import axios from 'axios';
-
-// Store pending payments (in production, use database)
-const pendingPayments = new Map<string, {
-  id: string;
-  amount: number;
-  userId: string;
-  timestamp: number;
-  status: 'pending' | 'confirmed' | 'failed';
-}>();
+import { PaymentModel, PaymentStatus } from '../models/Payment';
 
 export class PaymentController {
   /**
-   * Initiate a payment - generates a reference ID
+   * Initiate a payment - generates a reference ID and stores in database
+   * Idempotent: Safe to retry with same parameters
    */
   static async initiatePayment(req: Request, res: Response) {
     try {
@@ -27,31 +20,29 @@ export class PaymentController {
       // Generate unique reference ID (no dashes as per MiniKit requirements)
       const uuid = crypto.randomUUID().replace(/-/g, '');
 
-      // Store payment reference
-      pendingPayments.set(uuid, {
-        id: uuid,
-        amount,
-        userId,
-        timestamp: Date.now(),
-        status: 'pending',
-      });
+      // Store payment reference in database (idempotent)
+      const payment = await PaymentModel.create(uuid, userId, amount);
+
+      console.log(`[Payment] Initiated payment reference=${uuid} userId=${userId} amount=${amount} status=${payment.status}`);
 
       return res.json({
         success: true,
-        id: uuid,
+        id: payment.reference,
       });
-    } catch (error) {
-      console.error('Error initiating payment:', error);
+    } catch (error: any) {
+      console.error('[Payment] Error initiating payment:', error);
       return res.status(500).json({ error: 'Failed to initiate payment' });
     }
   }
 
   /**
    * Confirm payment - verifies with Developer Portal
+   * Idempotent: Safe to call multiple times with same transaction
    */
   static async confirmPayment(req: Request, res: Response) {
     try {
       const { payload } = req.body;
+      const userId = (req as any).userId; // From auth middleware
 
       if (!payload || payload.status !== 'success') {
         return res.status(400).json({ error: 'Invalid payment payload' });
@@ -59,10 +50,35 @@ export class PaymentController {
 
       const { transaction_id, reference } = payload;
 
-      // Get payment details from our store
-      const payment = pendingPayments.get(reference);
+      if (!reference || !transaction_id) {
+        return res.status(400).json({ error: 'Missing reference or transaction_id' });
+      }
+
+      // Get payment details from database
+      const payment = await PaymentModel.findByReference(reference);
       if (!payment) {
+        console.error(`[Payment] Reference not found: ${reference}`);
         return res.status(404).json({ error: 'Payment reference not found' });
+      }
+
+      // Verify the payment belongs to the authenticated user
+      if (payment.user_id !== userId) {
+        console.error(`[Payment] User mismatch for reference=${reference} expected=${payment.user_id} got=${userId}`);
+        return res.status(403).json({ error: 'Payment does not belong to this user' });
+      }
+
+      // If already confirmed with same transaction_id, return success (idempotent)
+      if (payment.status === PaymentStatus.CONFIRMED && payment.transaction_id === transaction_id) {
+        console.log(`[Payment] Already confirmed reference=${reference} transactionId=${transaction_id}`);
+        return res.json({
+          success: true,
+          transaction: { status: 'confirmed' },
+          payment: {
+            id: payment.reference,
+            amount: payment.amount,
+            status: payment.status,
+          },
+        });
       }
 
       // Verify transaction with Developer Portal API
@@ -70,46 +86,80 @@ export class PaymentController {
       const DEV_PORTAL_API_KEY = process.env.DEV_PORTAL_API_KEY;
 
       if (!APP_ID || !DEV_PORTAL_API_KEY) {
-        console.error('Missing APP_ID or DEV_PORTAL_API_KEY');
+        console.error('[Payment] Missing APP_ID or DEV_PORTAL_API_KEY');
         return res.status(500).json({ error: 'Server configuration error' });
       }
 
-      const response = await axios.get(
-        `https://developer.worldcoin.org/api/v2/minikit/transaction/${transaction_id}?app_id=${APP_ID}`,
-        {
-          headers: {
-            Authorization: `Bearer ${DEV_PORTAL_API_KEY}`,
-          },
-        }
-      );
+      console.log(`[Payment] Verifying transaction reference=${reference} transactionId=${transaction_id}`);
 
-      const transaction = response.data;
+      let transaction;
+      try {
+        const response = await axios.get(
+          `https://developer.worldcoin.org/api/v2/minikit/transaction/${transaction_id}?app_id=${APP_ID}`,
+          {
+            headers: {
+              Authorization: `Bearer ${DEV_PORTAL_API_KEY}`,
+            },
+          }
+        );
+        transaction = response.data;
+      } catch (apiError: any) {
+        console.error(`[Payment] Developer Portal API error:`, apiError.response?.data || apiError.message);
+        return res.status(500).json({ 
+          error: 'Failed to verify transaction with Developer Portal',
+          details: apiError.response?.data || apiError.message,
+        });
+      }
 
+      console.log(`[Payment] Transaction status from Developer Portal: ${transaction.status}`);
+
+      // Handle different transaction statuses
       if (transaction.status === 'failed') {
-        payment.status = 'failed';
+        await PaymentModel.updateStatus(reference, PaymentStatus.FAILED, transaction_id);
         return res.status(400).json({ 
           error: 'Transaction failed',
           transaction,
         });
       }
 
-      // Update payment status
-      payment.status = 'confirmed';
+      if (transaction.status === 'pending') {
+        // Transaction is still pending on-chain, keep payment as pending
+        console.log(`[Payment] Transaction still pending reference=${reference}`);
+        return res.json({
+          success: true,
+          pending: true,
+          transaction,
+          payment: {
+            id: payment.reference,
+            amount: payment.amount,
+            status: payment.status,
+          },
+        });
+      }
+
+      // Transaction is confirmed (mined)
+      const updatedPayment = await PaymentModel.updateStatus(
+        reference,
+        PaymentStatus.CONFIRMED,
+        transaction_id
+      );
+
+      console.log(`[Payment] Payment confirmed reference=${reference} transactionId=${transaction_id}`);
 
       return res.json({
         success: true,
         transaction,
         payment: {
-          id: payment.id,
-          amount: payment.amount,
-          status: payment.status,
+          id: updatedPayment!.reference,
+          amount: updatedPayment!.amount,
+          status: updatedPayment!.status,
         },
       });
     } catch (error: any) {
-      console.error('Error confirming payment:', error.response?.data || error);
+      console.error('[Payment] Error confirming payment:', error);
       return res.status(500).json({ 
         error: 'Failed to confirm payment',
-        details: error.response?.data || error.message,
+        details: error.message,
       });
     }
   }
@@ -120,23 +170,31 @@ export class PaymentController {
   static async getPaymentStatus(req: Request, res: Response) {
     try {
       const { reference } = req.params;
+      const userId = (req as any).userId; // From auth middleware
 
-      const payment = pendingPayments.get(reference);
+      const payment = await PaymentModel.findByReference(reference);
       if (!payment) {
         return res.status(404).json({ error: 'Payment not found' });
+      }
+
+      // Verify the payment belongs to the authenticated user
+      if (payment.user_id !== userId) {
+        return res.status(403).json({ error: 'Payment does not belong to this user' });
       }
 
       return res.json({
         success: true,
         payment: {
-          id: payment.id,
+          id: payment.reference,
           amount: payment.amount,
           status: payment.status,
-          timestamp: payment.timestamp,
+          transactionId: payment.transaction_id,
+          createdAt: payment.created_at,
+          confirmedAt: payment.confirmed_at,
         },
       });
     } catch (error) {
-      console.error('Error getting payment status:', error);
+      console.error('[Payment] Error getting payment status:', error);
       return res.status(500).json({ error: 'Failed to get payment status' });
     }
   }
