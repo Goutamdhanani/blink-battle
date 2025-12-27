@@ -127,7 +127,8 @@ export const migrate = async () => {
       }
     }
     
-    console.error('💡 For more help, see: https://github.com/Goutamdhanani/blink-battle#troubleshooting\n');
+    const repoUrl = process.env.REPO_URL || 'https://github.com/Goutamdhanani/blink-battle';
+    console.error(`💡 For more help, see: ${repoUrl}#troubleshooting\n`);
     process.exit(1);
   }
 };

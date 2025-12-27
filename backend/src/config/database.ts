@@ -1,6 +1,7 @@
 import { Pool, PoolConfig } from 'pg';
 import dotenv from 'dotenv';
 import fs from 'fs';
+import { ConnectionOptions } from 'tls';
 
 dotenv.config();
 
@@ -22,7 +23,7 @@ function getSSLConfig(): PoolConfig['ssl'] {
     }
     
     if (databaseSSL === 'true' || databaseSSL === '1' || databaseSSL === 'require') {
-      const sslConfig: any = { rejectUnauthorized: false };
+      const sslConfig: ConnectionOptions = { rejectUnauthorized: false };
       
       // Support custom CA certificate if provided
       const caCertPath = process.env.DATABASE_SSL_CA;
