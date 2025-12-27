@@ -53,12 +53,31 @@ export const createTables = async () => {
       );
     `);
 
+    // Payments table for tracking payment references
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS payments (
+        payment_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        reference VARCHAR(255) UNIQUE NOT NULL,
+        user_id UUID REFERENCES users(user_id) NOT NULL,
+        amount DECIMAL(10, 4) NOT NULL,
+        status VARCHAR(50) NOT NULL,
+        transaction_id VARCHAR(255),
+        match_id UUID REFERENCES matches(match_id),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        confirmed_at TIMESTAMP
+      );
+    `);
+
     // Create indexes
     await client.query(`
       CREATE INDEX IF NOT EXISTS idx_users_wallet ON users(wallet_address);
       CREATE INDEX IF NOT EXISTS idx_matches_players ON matches(player1_id, player2_id);
       CREATE INDEX IF NOT EXISTS idx_matches_status ON matches(status);
       CREATE INDEX IF NOT EXISTS idx_transactions_match ON transactions(match_id);
+      CREATE INDEX IF NOT EXISTS idx_payments_reference ON payments(reference);
+      CREATE INDEX IF NOT EXISTS idx_payments_user ON payments(user_id);
+      CREATE INDEX IF NOT EXISTS idx_payments_status ON payments(status);
     `);
 
     await client.query('COMMIT');

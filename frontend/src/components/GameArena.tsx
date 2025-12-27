@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useGameContext } from '../context/GameContext';
 import { useWebSocket } from '../hooks/useWebSocket';
 import { minikit } from '../lib/minikit';
-import ReactionLights from './ReactionLights';
+import ReactionTestUI, { ReactionPhase } from './ReactionTestUI';
 import './GameArena.css';
 
 const GameArena: React.FC = () => {
@@ -61,84 +61,27 @@ const GameArena: React.FC = () => {
     }
   };
 
-  const renderPhaseContent = () => {
-    switch (state.gamePhase) {
-      case 'countdown':
-        return (
-          <div className="phase-content fade-in">
-            <div className="game-status">
-              <h2 className="status-text">Get Ready!</h2>
-              <p className="opponent-info-inline">
-                vs {state.opponentWallet?.substring(0, 8)}...
-              </p>
-            </div>
-            
-            {state.countdown !== null ? (
-              <>
-                <ReactionLights state="red" countdown={state.countdown} />
-                <div className="countdown-display">
-                  <div className="countdown-number glow-secondary pulse">
-                    {state.countdown}
-                  </div>
-                </div>
-              </>
-            ) : (
-              <div className="waiting-text">
-                <p>Waiting for opponent...</p>
-                <div className="spinner"></div>
-              </div>
-            )}
-          </div>
-        );
+  // Map game phase to ReactionTestUI phase
+  const getReactionPhase = (): ReactionPhase => {
+    if (state.gamePhase === 'signal' && tapped) return 'tapped';
+    if (state.gamePhase === 'waiting') return 'waiting';
+    if (state.gamePhase === 'countdown') return 'countdown';
+    if (state.gamePhase === 'signal') return 'go';
+    return 'idle';
+  };
 
-      case 'waiting':
-        return (
-          <div className="phase-content fade-in">
-            <div className="game-status">
-              <h2 className="status-text">Wait for it...</h2>
-            </div>
-            
-            <ReactionLights state="red" countdown={0} />
-            
-            <div className="waiting-for-signal">
-              <p className="focus-text">Don't tap early!</p>
-            </div>
-          </div>
-        );
-
-      case 'signal':
-        return (
-          <div className="phase-content signal-phase fade-in">
-            <div className="game-status">
-              <h2 className="status-text status-go">GO!</h2>
-            </div>
-            
-            <ReactionLights state="green" />
-            
-            <div className={`tap-button ${tapped ? 'tapped' : ''} ${!tapped ? 'glow-green pulse' : ''}`} onClick={handleTap}>
-              <div className="tap-button-inner">
-                {tapped ? (
-                  <span className="tapped-text">✓ Tapped!</span>
-                ) : (
-                  <span className="tap-text">TAP NOW!</span>
-                )}
-              </div>
-            </div>
-            {tapped && tapTime && state.signalTimestamp && (
-              <div className="reaction-time fade-in">
-                Your reaction: {tapTime - state.signalTimestamp}ms
-              </div>
-            )}
-          </div>
-        );
-
-      default:
-        return (
-          <div className="phase-content">
-            <p>Loading...</p>
-          </div>
-        );
+  const getOpponentInfo = (): string | undefined => {
+    if (state.opponentWallet) {
+      return `vs ${state.opponentWallet.substring(0, 8)}...`;
     }
+    return undefined;
+  };
+
+  const getReactionTime = (): number | null => {
+    if (tapped && tapTime && state.signalTimestamp) {
+      return tapTime - state.signalTimestamp;
+    }
+    return null;
   };
 
   return (
@@ -156,16 +99,15 @@ const GameArena: React.FC = () => {
         </div>
 
         <div className="game-content">
-          {renderPhaseContent()}
+          <ReactionTestUI
+            phase={getReactionPhase()}
+            countdown={state.countdown}
+            onTap={handleTap}
+            disabled={tapped}
+            reactionTime={getReactionTime()}
+            opponentInfo={getOpponentInfo()}
+          />
         </div>
-
-        {state.gamePhase !== 'countdown' && state.opponentWallet && (
-          <div className="game-footer">
-            <p className="opponent-info">
-              vs {state.opponentWallet.substring(0, 8)}...
-            </p>
-          </div>
-        )}
       </div>
     </div>
   );

@@ -74,6 +74,199 @@ Blink Battle is a fast-paced multiplayer reaction game where two players face of
 - **Haptic Feedback** - Native haptics via MiniKit `sendHapticFeedback`
 - **Payment Verification** - Developer Portal API integration
 
+## 💳 Payment Flow
+
+### Overview
+
+Blink Battle uses MiniKit's built-in Pay command for secure WLD payments. All payment operations are idempotent and persist in the database to survive server restarts.
+
+### Flow Diagram
+
+```
+User Initiates Battle
+        ↓
+Frontend: Check Auth (JWT token in localStorage)
+        ↓ (if not authenticated)
+MiniKit: walletAuth() → SIWE signature → Backend verification → JWT token
+        ↓
+Frontend: Request payment reference
+        ↓
+Backend: Create payment record (idempotent)
+        ↓
+Frontend: MiniKit.commandsAsync.pay()
+        ↓
+User: Approve payment in World App
+        ↓
+Frontend: Send transaction_id to backend
+        ↓
+Backend: Verify with Developer Portal API
+        ↓
+Backend: Update payment status to confirmed
+        ↓
+Frontend: Join matchmaking queue
+```
+
+### Key Features
+
+1. **Idempotency**: All payment endpoints are safe to retry
+   - `initiate-payment`: Returns existing payment if reference already exists
+   - `confirm-payment`: Safe to call multiple times with same transaction
+
+2. **Database Persistence**: Payments stored in PostgreSQL
+   - Survives server restarts
+   - Enables payment history and auditing
+   - Prevents duplicate charges
+
+3. **Transaction Status Handling**:
+   - `pending`: Transaction submitted but not yet mined
+   - `mined`: Transaction confirmed on-chain
+   - `failed`: Transaction failed or rejected
+
+4. **Security**:
+   - All payment endpoints require JWT authentication
+   - Developer Portal API key never exposed to client
+   - User ownership verification for all payment operations
+
+### Backend Endpoints
+
+#### POST /api/initiate-payment
+**Authentication**: Required (JWT)
+
+Initiates a payment and returns a reference ID for MiniKit Pay.
+
+**Request**:
+```json
+{
+  "amount": 0.5
+}
+```
+
+**Response**:
+```json
+{
+  "success": true,
+  "id": "abc123def456..."
+}
+```
+
+#### POST /api/confirm-payment
+**Authentication**: Required (JWT)
+
+Verifies payment with Developer Portal and updates status.
+
+**Request**:
+```json
+{
+  "payload": {
+    "status": "success",
+    "reference": "abc123def456...",
+    "transaction_id": "0x..."
+  }
+}
+```
+
+**Response**:
+```json
+{
+  "success": true,
+  "transaction": {
+    "status": "mined",
+    "transaction_id": "0x..."
+  },
+  "payment": {
+    "id": "abc123def456...",
+    "amount": 0.5,
+    "status": "confirmed"
+  }
+}
+```
+
+#### GET /api/payment/:reference
+**Authentication**: Required (JWT)
+
+Get payment status by reference ID.
+
+**Response**:
+```json
+{
+  "success": true,
+  "payment": {
+    "id": "abc123def456...",
+    "amount": 0.5,
+    "status": "confirmed",
+    "transactionId": "0x...",
+    "createdAt": "2024-01-01T00:00:00Z",
+    "confirmedAt": "2024-01-01T00:01:00Z"
+  }
+}
+```
+
+### Frontend Integration
+
+```typescript
+// Initiate payment flow (from Matchmaking component)
+const result = await minikit.initiatePayment(selectedStake);
+
+if (result.success) {
+  if (result.pending) {
+    // Transaction is pending on-chain
+    showPendingMessage();
+  } else {
+    // Payment confirmed, proceed to matchmaking
+    joinMatchmaking();
+  }
+} else {
+  // Handle error
+  showError(result.error);
+}
+```
+
+### Error Handling
+
+Common errors and solutions:
+
+- **401 Unauthorized**: Token expired or missing
+  - Solution: Trigger walletAuth flow again
+  
+- **404 Payment Not Found**: Invalid reference
+  - Solution: Initiate new payment
+  
+- **403 Forbidden**: Payment belongs to different user
+  - Solution: Security error, should not happen in normal flow
+
+- **Pending Transaction**: On-chain confirmation in progress
+  - Solution: Wait and retry after a few seconds
+
+### Database Schema
+
+```sql
+CREATE TABLE payments (
+  payment_id UUID PRIMARY KEY,
+  reference VARCHAR(255) UNIQUE NOT NULL,
+  user_id UUID REFERENCES users(user_id),
+  amount DECIMAL(10, 4) NOT NULL,
+  status VARCHAR(50) NOT NULL,
+  transaction_id VARCHAR(255),
+  match_id UUID REFERENCES matches(match_id),
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  confirmed_at TIMESTAMP
+);
+```
+
+### Environment Variables
+
+**Backend** (required for payments):
+- `APP_ID`: Worldcoin App ID from Developer Portal
+- `DEV_PORTAL_API_KEY`: API key for payment verification
+- `PLATFORM_WALLET_ADDRESS`: Your Ethereum wallet address
+- `JWT_SECRET`: Secret key for JWT tokens
+- `DATABASE_URL`: PostgreSQL connection string
+
+**Frontend** (required for payments):
+- `VITE_APP_ID`: Must match backend APP_ID
+- `VITE_PLATFORM_WALLET_ADDRESS`: Must match backend address
+
 ## 📦 Project Structure
 
 ```

@@ -56,6 +56,13 @@ const Matchmaking: React.FC = () => {
       const result = await minikit.initiatePayment(selectedStake);
 
       if (result.success) {
+        // Check if transaction is still pending
+        if (result.pending) {
+          minikit.sendHaptic('warning');
+          setPaymentError('Transaction is pending confirmation. Please wait and try again in a moment.');
+          return;
+        }
+
         // Payment successful - send haptic feedback and join matchmaking
         minikit.sendHaptic('success');
         

@@ -54,10 +54,35 @@ const initialState: GameState = {
 };
 
 export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [state, setState] = useState<GameState>(initialState);
+  const [state, setState] = useState<GameState>(() => {
+    // Try to restore token and user from localStorage on initial load
+    const storedToken = localStorage.getItem('token');
+    const storedUser = localStorage.getItem('user');
+    
+    let initialUser = null;
+    if (storedUser) {
+      try {
+        initialUser = JSON.parse(storedUser);
+      } catch (e) {
+        console.error('Failed to parse stored user:', e);
+        localStorage.removeItem('user');
+      }
+    }
+    
+    return {
+      ...initialState,
+      token: storedToken,
+      user: initialUser,
+    };
+  });
 
   const setUser = (user: User | null) => {
     setState((prev) => ({ ...prev, user }));
+    if (user) {
+      localStorage.setItem('user', JSON.stringify(user));
+    } else {
+      localStorage.removeItem('user');
+    }
   };
 
   const setToken = (token: string | null) => {
@@ -66,6 +91,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       localStorage.setItem('token', token);
     } else {
       localStorage.removeItem('token');
+      localStorage.removeItem('user'); // Clear user when token is cleared
     }
   };
 
