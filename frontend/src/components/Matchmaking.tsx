@@ -95,10 +95,10 @@ const Matchmaking: React.FC = () => {
       minikit.sendHaptic('error');
       
       // Check if it's an authentication error (using isAuthError flag from API client)
-      if (error.isAuthError || error.response?.status === 401) {
+      if (error.isAuthError) {
         setPaymentError('Your session has expired. Please sign in again.');
         setNeedsAuth(true);
-        // Clear expired token (setToken will also clear user data automatically)
+        // Update React state to reflect cleared authentication (localStorage already cleared by API interceptor)
         setToken(null);
       } else {
         setPaymentError(error.message || 'Failed to process payment');
