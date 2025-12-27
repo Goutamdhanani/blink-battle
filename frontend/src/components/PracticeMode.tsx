@@ -58,7 +58,8 @@ const PracticeMode: React.FC = () => {
         
         // Auto timeout after 3 seconds
         timeoutRef.current = window.setTimeout(() => {
-          if (phase === 'go') {
+          // Check if signal is still active (user hasn't tapped yet)
+          if (signalTimeRef.current !== null) {
             handleTimeout();
           }
         }, 3000);
@@ -104,8 +105,8 @@ const PracticeMode: React.FC = () => {
       
       // Update best time from valid attempts
       const validTimes = updatedAttempts
-        .filter(a => !a.falseStart && a.reactionTime !== null)
-        .map(a => a.reactionTime!);
+        .filter((a): a is AttemptResult & { reactionTime: number } => !a.falseStart && a.reactionTime !== null)
+        .map(a => a.reactionTime);
       
       if (validTimes.length > 0) {
         const newBest = Math.min(...validTimes);
@@ -225,8 +226,13 @@ const PracticeMode: React.FC = () => {
                 <div className="reaction-display glow-primary">
                   {reactionTime}ms
                 </div>
-                {bestTime === reactionTime && attempts.filter(a => !a.falseStart && a.reactionTime !== null).length > 1 && (
-                  <p className="result-message success">🎉 New Personal Best!</p>
+                {bestTime === reactionTime && (
+                  (() => {
+                    const validAttemptsCount = attempts.filter(a => !a.falseStart && a.reactionTime !== null).length;
+                    return validAttemptsCount > 1 ? (
+                      <p className="result-message success">🎉 New Personal Best!</p>
+                    ) : null;
+                  })()
                 )}
               </div>
             ) : (
@@ -245,7 +251,7 @@ const PracticeMode: React.FC = () => {
               <div className="recent-attempts">
                 <h3>Recent Attempts</h3>
                 <div className="attempts-list">
-                  {[...attempts].reverse().map((attempt, idx) => (
+                  {attempts.slice().reverse().map((attempt, idx) => (
                     <div key={attempts.length - idx} className="attempt-item">
                       <span className="attempt-number">#{attempts.length - idx}</span>
                       <span className="attempt-result">
