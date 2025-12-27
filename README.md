@@ -151,7 +151,25 @@ This project is a Worldcoin Mini-App. For complete setup instructions including 
    ```
 
 3. **Set up database**
+   
+   For local development with PostgreSQL (no SSL):
    ```bash
+   npm run migrate
+   ```
+   
+   For managed Postgres instances (Heroku, AWS RDS, etc.) that require SSL:
+   ```bash
+   DATABASE_SSL=true npm run migrate
+   # Or add DATABASE_SSL=true to your .env file
+   ```
+   
+   **Note:** Commands can be run from the backend directory or from the repo root:
+   ```bash
+   # From repo root
+   cd backend && npm run migrate
+   
+   # From backend directory
+   cd blink-battle/backend
    npm run migrate
    ```
 
@@ -420,6 +438,42 @@ Test backend auth endpoints:
 - Check DEBUG_AUTH logs for specific error
 - Verify database connectivity
 - Ensure JWT_SECRET is configured
+
+### Database Connection Issues
+
+**"no pg_hba.conf entry" or "no encryption" error**
+
+This error means your Postgres instance requires SSL connections. Most managed Postgres providers (Heroku, AWS RDS, DigitalOcean) require SSL.
+
+**Solution:**
+```bash
+# Set in your environment
+DATABASE_SSL=true npm run migrate
+DATABASE_SSL=true npm run dev
+
+# Or add to .env file
+DATABASE_SSL=true
+```
+
+**For Heroku:**
+```bash
+heroku config:set DATABASE_SSL=true
+```
+
+**"Connection refused" or timeout errors**
+
+Check these potential issues:
+1. Verify your `DATABASE_URL` is correct
+2. Ensure your IP address is allowed in the database firewall/security group
+3. Check if the database server is running and accessible
+4. If behind a firewall/VPN, ensure the database port is accessible
+
+**"Authentication failed" errors**
+
+Verify:
+1. Database credentials in `DATABASE_URL` are correct
+2. Database user has proper permissions
+3. Database exists and is accessible
 
 For detailed debugging instructions, see:
 - **[AUTH_DEBUGGING.md](./AUTH_DEBUGGING.md)** - Complete debugging guide

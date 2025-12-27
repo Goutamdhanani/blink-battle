@@ -77,8 +77,58 @@ export const migrate = async () => {
     await createTables();
     console.log('Migration completed successfully');
     process.exit(0);
-  } catch (error) {
+  } catch (error: any) {
     console.error('Migration failed:', error);
+    
+    // Provide actionable guidance for common connection errors
+    if (error.message) {
+      const errorMsg = error.message.toLowerCase();
+      
+      if (errorMsg.includes('no pg_hba.conf entry') || errorMsg.includes('no encryption')) {
+        console.error('\n❌ Connection Error: SSL/Encryption Required\n');
+        console.error('Your Postgres instance requires SSL connections.');
+        console.error('\n📋 Solutions:');
+        console.error('  1. Enable SSL in your environment:');
+        console.error('     DATABASE_SSL=true npm run migrate');
+        console.error('     or add DATABASE_SSL=true to your .env file');
+        console.error('');
+        console.error('  2. For production (Heroku/managed Postgres):');
+        console.error('     heroku config:set DATABASE_SSL=true');
+        console.error('');
+        console.error('  3. If you have a custom CA certificate:');
+        console.error('     DATABASE_SSL=true DATABASE_SSL_CA=/path/to/ca-cert.pem npm run migrate');
+        console.error('');
+      }
+      
+      if (errorMsg.includes('connection refused') || errorMsg.includes('econnrefused')) {
+        console.error('\n❌ Connection Error: Cannot reach database\n');
+        console.error('📋 Check:');
+        console.error('  1. Is your DATABASE_URL correct?');
+        console.error('  2. Is the database server running?');
+        console.error('  3. Is your IP address allowed in the database firewall/security group?');
+        console.error('');
+      }
+      
+      if (errorMsg.includes('authentication') || errorMsg.includes('password')) {
+        console.error('\n❌ Authentication Error\n');
+        console.error('📋 Check:');
+        console.error('  1. Verify your DATABASE_URL contains correct username/password');
+        console.error('  2. Check if the database user exists and has proper permissions');
+        console.error('');
+      }
+      
+      if (errorMsg.includes('timeout') || errorMsg.includes('timed out')) {
+        console.error('\n❌ Connection Timeout\n');
+        console.error('📋 Check:');
+        console.error('  1. Is your IP address allowed in the database firewall/security group?');
+        console.error('  2. Is the database accessible from your network?');
+        console.error('  3. Are you behind a firewall or VPN?');
+        console.error('');
+      }
+    }
+    
+    const repoUrl = process.env.REPO_URL || 'https://github.com/Goutamdhanani/blink-battle';
+    console.error(`💡 For more help, see: ${repoUrl}#troubleshooting\n`);
     process.exit(1);
   }
 };
