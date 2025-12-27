@@ -52,10 +52,29 @@ validateEnvVars();
 const app = express();
 const httpServer = createServer(app);
 
-// Create Socket.IO server
+// Create Socket.IO server with same CORS configuration as REST API
 const io = new Server(httpServer, {
   cors: {
-    origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+    origin: (origin, callback) => {
+      // Allow requests with no origin in development only
+      if (!origin) {
+        if (process.env.NODE_ENV !== 'production') {
+          return callback(null, true);
+        } else {
+          console.warn('[WebSocket CORS] Blocked request with no origin in production');
+          return callback(new Error('Not allowed by CORS'));
+        }
+      }
+      
+      // Check if origin is in allowed list (reuse same list as REST API)
+      if (allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        console.warn(`[WebSocket CORS] Blocked request from origin: ${origin}`);
+        callback(new Error('Not allowed by CORS'));
+      }
+    },
+    credentials: true,
     methods: ['GET', 'POST'],
   },
 });
@@ -80,7 +99,50 @@ io.use((socket, next) => {
 });
 
 // Middleware
-app.use(cors());
+// Configure CORS to allow credentials (JWT tokens) and specify allowed origins
+const LOCALHOST_URL = 'http://localhost:3000';
+
+const allowedOrigins = [
+  process.env.FRONTEND_URL || LOCALHOST_URL,
+];
+
+// Always allow localhost in development (avoid duplicates)
+if (process.env.NODE_ENV !== 'production') {
+  if (!allowedOrigins.includes(LOCALHOST_URL)) {
+    allowedOrigins.push(LOCALHOST_URL);
+  }
+}
+
+// Add production URLs if specified
+if (process.env.FRONTEND_URL_PRODUCTION) {
+  allowedOrigins.push(process.env.FRONTEND_URL_PRODUCTION);
+}
+
+app.use(cors({
+  origin: (origin, callback) => {
+    // Allow requests with no origin in development only (for tools like Postman)
+    if (!origin) {
+      if (process.env.NODE_ENV !== 'production') {
+        return callback(null, true);
+      } else {
+        console.warn('[CORS] Blocked request with no origin in production');
+        return callback(new Error('Not allowed by CORS'));
+      }
+    }
+    
+    // Check if origin is in allowed list
+    if (allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      console.warn(`[CORS] Blocked request from origin: ${origin}`);
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true, // Allow credentials (cookies, authorization headers)
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+}));
+
 app.use(express.json());
 app.use(requestIdMiddleware); // Add request ID to all requests
 

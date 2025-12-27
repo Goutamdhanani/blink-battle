@@ -6,6 +6,7 @@ export const authenticate = (req: Request, res: Response, next: NextFunction): v
     const authHeader = req.headers.authorization;
     
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      console.error('[Auth] No token provided in request to', req.path);
       res.status(401).json({ error: 'No token provided' });
       return;
     }
@@ -15,9 +16,12 @@ export const authenticate = (req: Request, res: Response, next: NextFunction): v
 
     (req as any).userId = decoded.userId;
     (req as any).walletAddress = decoded.walletAddress;
+    
+    console.log('[Auth] Request authenticated for user:', decoded.userId, 'to', req.path);
 
     next();
   } catch (error) {
+    console.error('[Auth] Token verification failed for request to', req.path, ':', error instanceof Error ? error.message : error);
     res.status(401).json({ error: 'Invalid token' });
   }
 };

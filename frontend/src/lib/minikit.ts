@@ -97,11 +97,15 @@ export const minikit = {
     }
 
     try {
+      console.log('[MiniKit] Initiating payment:', { amount });
+      
       // First, initiate payment on backend to get reference ID
       // This call now includes auth token via axios interceptor
       const res = await apiClient.post('/api/initiate-payment', {
         amount,
       });
+      
+      console.log('[MiniKit] Payment reference created:', res.data.id);
       const { id } = res.data;
 
       const platformWallet = import.meta.env.VITE_PLATFORM_WALLET_ADDRESS;
@@ -122,13 +126,18 @@ export const minikit = {
         description: `Stake ${amount} WLD for reaction battle`,
       };
 
+      console.log('[MiniKit] Requesting MiniKit Pay command');
       const { finalPayload } = await MiniKit.commandsAsync.pay(payload);
 
       if (finalPayload.status === 'success') {
+        console.log('[MiniKit] Payment approved by user, confirming with backend');
+        
         // Verify payment on backend (includes auth token via axios interceptor)
         const confirmRes = await apiClient.post('/api/confirm-payment', {
           payload: finalPayload,
         });
+
+        console.log('[MiniKit] Payment confirmed:', confirmRes.data);
 
         // Handle pending transaction (not yet mined)
         if (confirmRes.data.pending) {
@@ -147,6 +156,7 @@ export const minikit = {
         };
       }
 
+      console.log('[MiniKit] Payment not successful:', finalPayload.error_code);
       return {
         success: false,
         error: minikit.getPaymentErrorMessage(finalPayload.error_code),
@@ -156,6 +166,7 @@ export const minikit = {
       
       // Provide better error messages for common issues
       if (error.response?.status === 401) {
+        console.error('[MiniKit] 401 Authentication error - token invalid or expired');
         const authError = new Error('Your session has expired. Please sign in again.') as any;
         authError.isAuthError = true;
         throw authError;
