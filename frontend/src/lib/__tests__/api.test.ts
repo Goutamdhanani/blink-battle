@@ -71,7 +71,7 @@ describe('API Client', () => {
       expect(result.headers.Authorization).toBeUndefined();
     });
 
-    it('should handle config with no headers gracefully', async () => {
+    it('should not attach Authorization header when config.headers is undefined', async () => {
       // Arrange
       const testToken = 'test-jwt-token-12345';
       (global.localStorage.getItem as any).mockReturnValue(testToken);
@@ -86,6 +86,8 @@ describe('API Client', () => {
       const result = await requestInterceptor.fulfilled(mockConfig);
 
       // Assert
+      // When headers is undefined, the interceptor doesn't attach Authorization
+      // This is the expected behavior to avoid creating headers object unnecessarily
       expect(result.headers).toBeUndefined();
     });
   });

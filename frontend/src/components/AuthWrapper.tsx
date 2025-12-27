@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { MiniKit } from '@worldcoin/minikit-js';
 import { useGameContext } from '../context/GameContext';
 import { useMiniKitReady } from '../hooks/useMiniKitReady';
-import { apiClient, API_URL } from '../lib/api';
+import { apiClient, API_URL, authLog, logAuthError } from '../lib/api';
 import './AuthWrapper.css';
 const AUTH_TIMEOUT_MS = 15000; // 15 seconds timeout
 
@@ -135,7 +135,7 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
         nonce,
       };
 
-      console.log('[Auth] Calling MiniKit.walletAuth with nonce:', redactString(nonce, 8));
+      authLog('[Auth] Calling MiniKit.walletAuth with nonce:', redactString(nonce, 8));
       
       const { finalPayload } = await MiniKit.commandsAsync.walletAuth({
         nonce: nonce,
@@ -143,7 +143,7 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
         statement: 'Sign in to Blink Battle',
       });
 
-      console.log('[Auth] MiniKit.walletAuth completed, finalPayload:', finalPayload ? 'present' : 'undefined');
+      authLog('[Auth] MiniKit.walletAuth completed, finalPayload:', finalPayload ? 'present' : 'undefined');
 
       // Clear timeout on response
       clearTimeout(timeoutId);
@@ -153,12 +153,12 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
       // Validate finalPayload exists
       if (!finalPayload) {
         const errorMsg = 'MiniKit walletAuth returned undefined payload';
-        console.error('[Auth]', errorMsg);
+        logAuthError('[Auth]', errorMsg);
         (window as any).__authDebugData.lastWalletAuth!.error = errorMsg;
         throw new Error('Authentication failed: No response from wallet. Please ensure you are using World App and try again.');
       }
 
-      console.log('[Auth] finalPayload.status:', finalPayload.status);
+      authLog('[Auth] finalPayload.status:', finalPayload.status);
 
       (window as any).__authDebugData.lastWalletAuth!.finalPayload = {
         status: finalPayload.status,
@@ -170,7 +170,7 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
       // Check for errors in payload
       if (finalPayload.status === 'error') {
         const errorCode = finalPayload.error_code || 'unknown_error';
-        console.error('[Auth] MiniKit error:', errorCode);
+        logAuthError('[Auth] MiniKit error:', errorCode);
         (window as any).__authDebugData.lastWalletAuth!.error = `${errorCode}: ${(finalPayload as any).error_message || 'Unknown error'}`;
         throw new Error(
           errorCode === 'user_rejected'
@@ -182,12 +182,12 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
       // Explicitly check for success status before proceeding
       if (finalPayload.status !== 'success') {
         const errorMsg = `Unexpected wallet auth status: ${(finalPayload as any).status}`;
-        console.error('[Auth]', errorMsg);
+        logAuthError('[Auth]', errorMsg);
         (window as any).__authDebugData.lastWalletAuth!.error = errorMsg;
         throw new Error(`Authentication failed: Unexpected response status. Please try again.`);
       }
 
-      console.log('[Auth] Wallet auth successful, proceeding to verify SIWE signature');
+      authLog('[Auth] Wallet auth successful, proceeding to verify SIWE signature');
 
       // Step 3: Verify SIWE on backend
       const verifyRequestId = generateRequestId();
@@ -198,7 +198,7 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
         timestamp: verifyTimestamp,
       };
 
-      console.log('[Auth] Sending POST to /api/auth/verify-siwe', {
+      authLog('[Auth] Sending POST to /api/auth/verify-siwe', {
         requestId: verifyRequestId,
         apiUrl: API_URL,
         hasPayload: !!finalPayload,
@@ -210,12 +210,11 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
         {
           headers: { 
             'X-Request-Id': verifyRequestId,
-            'Content-Type': 'application/json',
           },
         }
       );
 
-      console.log('[Auth] Received response from /api/auth/verify-siwe', {
+      authLog('[Auth] Received response from /api/auth/verify-siwe', {
         status: verifyRes.status,
         hasData: !!verifyRes.data,
       });
@@ -225,7 +224,7 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
       (window as any).__authDebugData.lastVerifyRequest!.httpStatus = verifyRes.status;
 
       if (verifyData.success) {
-        console.log('[Auth] Verification successful, storing token and user');
+        authLog('[Auth] Verification successful, storing token and user');
         setToken(verifyData.token);
         setUser(verifyData.user);
         sendHaptic('success');
@@ -234,7 +233,7 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
       }
     } catch (err: any) {
       if (!timedOut) {
-        console.error('[Auth] Authentication error:', err);
+        logAuthError('[Auth] Authentication error:', err);
         
         // Better error handling for axios errors
         let errorMessage = err.message || 'Authentication failed';
@@ -263,7 +262,7 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
           errorMessage = `${errorMessage} (HTTP ${err.response.status})${errorDetails}`;
         } else if (err.request && !err.response) {
           // Network error - no response received
-          console.error('[Auth] Network error - request was sent but no response received', {
+          logAuthError('[Auth] Network error - request was sent but no response received', {
             url: err.config?.url,
             method: err.config?.method,
           });
@@ -278,7 +277,7 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
           errorMessage = 'Request timed out. Please check your connection and try again.';
         }
         
-        console.error('[Auth] Final error message shown to user:', errorMessage);
+        logAuthError('[Auth] Final error message shown to user:', errorMessage);
         setError(errorMessage);
         sendHaptic('error');
         clearTimeout(timeoutId);
@@ -311,7 +310,7 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
           }
         } catch (error: any) {
           // Token is invalid or expired
-          console.error('[Auth] Session validation failed:', error);
+          logAuthError('[Auth] Session validation failed:', error);
           // Clear invalid session
           setToken(null);
           setUser(null);
