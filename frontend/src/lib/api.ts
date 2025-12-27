@@ -7,9 +7,13 @@ const getApiUrl = (): string => {
     return import.meta.env.VITE_API_URL;
   }
   
-  // In production, try to use same origin
+  // In production, try to use same origin (works if frontend and backend are on same domain)
+  // WARNING: This only works if your backend is accessible from the same domain as the frontend
+  // For separate domains, you MUST set VITE_API_URL explicitly
   if (import.meta.env.PROD) {
     console.warn('[API] No VITE_API_URL set in production, using window.location.origin');
+    console.warn('[API] If your backend is on a different domain, this will NOT work!');
+    console.warn('[API] Set VITE_API_URL environment variable to your backend URL.');
     return window.location.origin;
   }
   

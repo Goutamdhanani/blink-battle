@@ -64,6 +64,11 @@ const Matchmaking: React.FC = () => {
     setProcessingPayment(true);
     setPaymentError(null);
 
+    // Helper to reset payment state
+    const resetPaymentState = () => {
+      setProcessingPayment(false);
+    };
+
     try {
       // Initiate payment via MiniKit Pay command
       const result = await minikit.initiatePayment(selectedStake);
@@ -73,14 +78,14 @@ const Matchmaking: React.FC = () => {
         if (result.pending) {
           minikit.sendHaptic('warning');
           setPaymentError('Transaction is pending confirmation. Please wait and try again in a moment.');
-          setProcessingPayment(false); // Reset payment state
+          resetPaymentState();
           return;
         }
 
         // Payment successful - send haptic feedback and join matchmaking
         minikit.sendHaptic('success');
         
-        setProcessingPayment(false); // Reset payment state before starting matchmaking
+        resetPaymentState(); // Reset payment state before starting matchmaking
         setSearching(true);
         // Note: payment reference is stored on backend, matchmaking uses the same stake
         joinMatchmaking(
@@ -91,7 +96,7 @@ const Matchmaking: React.FC = () => {
       } else {
         minikit.sendHaptic('error');
         setPaymentError(result.error || 'Payment failed');
-        setProcessingPayment(false); // Reset payment state on error
+        resetPaymentState();
       }
     } catch (error: any) {
       console.error('Payment error:', error);
@@ -107,7 +112,7 @@ const Matchmaking: React.FC = () => {
         setPaymentError(error.message || 'Failed to process payment');
       }
       
-      setProcessingPayment(false); // Reset payment state on error
+      resetPaymentState();
     }
   };
 

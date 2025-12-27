@@ -56,8 +56,15 @@ const httpServer = createServer(app);
 const io = new Server(httpServer, {
   cors: {
     origin: (origin, callback) => {
-      // Allow requests with no origin (mobile apps, Postman, etc.)
-      if (!origin) return callback(null, true);
+      // Allow requests with no origin in development only
+      if (!origin) {
+        if (process.env.NODE_ENV !== 'production') {
+          return callback(null, true);
+        } else {
+          console.warn('[WebSocket CORS] Blocked request with no origin in production');
+          return callback(new Error('Not allowed by CORS'));
+        }
+      }
       
       // Check if origin is in allowed list (reuse same list as REST API)
       if (allowedOrigins.includes(origin)) {
@@ -95,8 +102,14 @@ io.use((socket, next) => {
 // Configure CORS to allow credentials (JWT tokens) and specify allowed origins
 const allowedOrigins = [
   process.env.FRONTEND_URL || 'http://localhost:3000',
-  'http://localhost:3000', // Always allow local development
 ];
+
+// Always allow localhost in development
+if (process.env.NODE_ENV !== 'production') {
+  if (!allowedOrigins.includes('http://localhost:3000')) {
+    allowedOrigins.push('http://localhost:3000');
+  }
+}
 
 // Add production URLs if specified
 if (process.env.FRONTEND_URL_PRODUCTION) {
@@ -105,8 +118,15 @@ if (process.env.FRONTEND_URL_PRODUCTION) {
 
 app.use(cors({
   origin: (origin, callback) => {
-    // Allow requests with no origin (mobile apps, Postman, etc.)
-    if (!origin) return callback(null, true);
+    // Allow requests with no origin in development only (for tools like Postman)
+    if (!origin) {
+      if (process.env.NODE_ENV !== 'production') {
+        return callback(null, true);
+      } else {
+        console.warn('[CORS] Blocked request with no origin in production');
+        return callback(new Error('Not allowed by CORS'));
+      }
+    }
     
     // Check if origin is in allowed list
     if (allowedOrigins.includes(origin)) {
