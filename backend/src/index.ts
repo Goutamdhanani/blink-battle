@@ -166,8 +166,8 @@ app.use(cors({
   credentials: true, // Allow credentials (cookies, authorization headers)
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
-  optionsSuccessStatus: 204, // Some legacy browsers (IE11, various SmartTVs) choke on 204
-  preflightContinue: false, // Pass the CORS preflight response to the next handler
+  optionsSuccessStatus: 204, // Standard status for successful OPTIONS with no content
+  preflightContinue: false, // Handle CORS preflight response directly without passing to next handler
 }));
 
 app.use(express.json());
