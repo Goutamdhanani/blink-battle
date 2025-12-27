@@ -19,7 +19,7 @@ export class MatchmakingService {
     });
 
     await redisClient.rPush(queueKey, requestData);
-    console.log(`Added player ${request.userId} to queue for stake ${request.stake}`);
+    console.log(`Matchmaking: Added player ${request.userId} to queue for stake ${request.stake} WLD`);
   }
 
   /**
@@ -67,7 +67,7 @@ export class MatchmakingService {
       const request: MatchmakingRequest = JSON.parse(item);
       if (request.userId === userId) {
         await redisClient.lRem(queueKey, 1, item);
-        console.log(`Removed player ${userId} from queue`);
+        console.log(`Matchmaking: Removed player ${userId} from queue for stake ${stake} WLD`);
         break;
       }
     }
