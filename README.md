@@ -521,10 +521,17 @@ heroku create your-app-name
 heroku addons:create heroku-postgresql:mini
 heroku addons:create heroku-redis:mini
 
-# Set all required environment variables (see MINIKIT_SETUP.md)
+# Set all required environment variables
 heroku config:set APP_ID=your_app_id
 heroku config:set DEV_PORTAL_API_KEY=your_api_key
-# ... (see MINIKIT_SETUP.md for complete list)
+heroku config:set PLATFORM_WALLET_ADDRESS=0xYourWalletAddress
+heroku config:set JWT_SECRET=$(openssl rand -base64 32)
+heroku config:set DATABASE_SSL=true
+
+# IMPORTANT: Set CORS allowed origins
+heroku config:set FRONTEND_URL=https://your-frontend.vercel.app
+# If you have multiple frontend URLs (staging, production):
+heroku config:set FRONTEND_URL_PRODUCTION=https://your-prod-frontend.vercel.app
 
 # Deploy
 git push heroku main
@@ -546,7 +553,15 @@ vercel deploy
 netlify deploy
 ```
 
-**Important**: Update redirect URLs in the Worldcoin Developer Portal after deployment.
+**Important Configuration Notes:**
+
+1. **CORS Configuration**: The backend MUST have your frontend URL set in `FRONTEND_URL` or `FRONTEND_URL_PRODUCTION` to allow API requests. Without this, all API calls will fail with CORS errors.
+
+2. **API URL**: The frontend MUST have `VITE_API_URL` pointing to your deployed backend. If not set, it will try to use localhost (which won't work in production).
+
+3. **Matching IDs**: `VITE_APP_ID` on frontend must exactly match `APP_ID` on backend.
+
+4. **Update Developer Portal**: After deployment, update redirect URLs in the Worldcoin Developer Portal to point to your production URLs.
 
 For detailed deployment instructions, see **[MINIKIT_SETUP.md](./MINIKIT_SETUP.md)**.
 
@@ -619,6 +634,8 @@ This error occurs when payment-related API calls don't include proper authentica
 1. User is not authenticated (token missing or expired)
 2. Token not properly stored in localStorage
 3. API client not including Authorization header
+4. **CORS configuration blocking credentials in production**
+5. **Frontend using wrong API URL (localhost in production)**
 
 **Solutions:**
 1. **Check authentication status:**
@@ -635,11 +652,27 @@ This error occurs when payment-related API calls don't include proper authentica
 3. **Verify environment variables:**
    - Backend: `APP_ID`, `DEV_PORTAL_API_KEY`, `JWT_SECRET` must be set
    - Frontend: `VITE_APP_ID` must match backend `APP_ID`
+   - **Frontend: `VITE_API_URL` must point to your deployed backend (not localhost)**
    - Check that wallet addresses match between frontend and backend
 
-4. **Check backend logs:**
+4. **Check CORS configuration (Production):**
+   - Backend must set `FRONTEND_URL` to your deployed frontend URL
+   - For multiple frontend URLs, set `FRONTEND_URL_PRODUCTION` as well
+   - CORS is configured to allow credentials and specific origins
+   - Example Heroku config:
+     ```bash
+     heroku config:set FRONTEND_URL=https://your-app.vercel.app
+     ```
+
+5. **Check backend logs:**
    - Look for JWT verification errors
+   - Look for CORS blocking messages: `[CORS] Blocked request from origin: ...`
    - Enable `DEBUG_AUTH=true` in backend .env for detailed logs
+
+6. **Verify API URL in browser console:**
+   - Open browser DevTools → Console
+   - Look for `[API] Using API URL: ...` message
+   - Should show your production backend URL, not localhost
 
 #### App Stuck on "Initializing..." or Loading Screen
 

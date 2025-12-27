@@ -52,10 +52,22 @@ validateEnvVars();
 const app = express();
 const httpServer = createServer(app);
 
-// Create Socket.IO server
+// Create Socket.IO server with same CORS configuration as REST API
 const io = new Server(httpServer, {
   cors: {
-    origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+    origin: (origin, callback) => {
+      // Allow requests with no origin (mobile apps, Postman, etc.)
+      if (!origin) return callback(null, true);
+      
+      // Check if origin is in allowed list (reuse same list as REST API)
+      if (allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        console.warn(`[WebSocket CORS] Blocked request from origin: ${origin}`);
+        callback(new Error('Not allowed by CORS'));
+      }
+    },
+    credentials: true,
     methods: ['GET', 'POST'],
   },
 });
