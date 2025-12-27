@@ -57,17 +57,42 @@ export const createApiClient = (): AxiosInstance => {
         config.headers.Authorization = `Bearer ${token}`;
       }
       
+      // Log outgoing requests (non-sensitive info only)
+      console.log('[API] Outgoing request:', {
+        method: config.method?.toUpperCase(),
+        url: config.url,
+        hasAuth: !!token,
+        hasData: !!config.data,
+      });
+      
       return config;
     },
     (error) => {
+      console.error('[API] Request interceptor error:', error);
       return Promise.reject(error);
     }
   );
 
   // Add response interceptor for better error handling
   client.interceptors.response.use(
-    (response) => response,
+    (response) => {
+      // Log successful responses
+      console.log('[API] Response received:', {
+        status: response.status,
+        url: response.config.url,
+        method: response.config.method?.toUpperCase(),
+      });
+      return response;
+    },
     (error: AxiosError) => {
+      console.error('[API] Response error:', {
+        status: error.response?.status,
+        url: error.config?.url,
+        method: error.config?.method?.toUpperCase(),
+        hasResponse: !!error.response,
+        hasRequest: !!error.request,
+      });
+      
       if (error.response?.status === 401) {
         console.error('[API] Authentication error - token may be invalid or expired');
         // Clear invalid token
