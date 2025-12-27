@@ -124,7 +124,7 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
 
       // Helper to redact sensitive data for logging
       const redactString = (str: string | undefined, showChars = 6): string => {
-        if (!str || str.length <= showChars * 2) return '***';
+        if (!str || str.length < showChars * 2 + 3) return '***';
         return `${str.substring(0, showChars)}...${str.substring(str.length - showChars)}`;
       };
 

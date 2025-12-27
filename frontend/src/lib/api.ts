@@ -2,18 +2,24 @@ import axios, { AxiosInstance, InternalAxiosRequestConfig, AxiosError } from 'ax
 
 // Enable debug logging via ?debug=1 URL parameter or development mode
 const isDevelopment = !import.meta.env.PROD;
-const hasDebugParam = typeof window !== 'undefined' && 
-  new URLSearchParams(window.location.search).get('debug') === '1';
+const hasDebugParam = (() => {
+  try {
+    return typeof window !== 'undefined' && 
+      new URLSearchParams(window.location.search).get('debug') === '1';
+  } catch {
+    return false;
+  }
+})();
 const ENABLE_AUTH_LOGS = isDevelopment || hasDebugParam;
 
 // Conditional logging helper
-const authLog = (message: string, ...args: any[]) => {
+const authLog = (message: string, ...args: unknown[]) => {
   if (ENABLE_AUTH_LOGS) {
     console.log(message, ...args);
   }
 };
 
-const logAuthError = (message: string, ...args: any[]) => {
+const logAuthError = (message: string, ...args: unknown[]) => {
   // Always log errors, even in production
   console.error(message, ...args);
 };
