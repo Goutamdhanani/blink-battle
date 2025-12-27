@@ -54,6 +54,8 @@ export class GameSocketHandler {
     try {
       const { userId, stake, walletAddress } = data;
 
+      console.log(`Multiplayer matchmaking: Player ${userId} joining queue for stake ${stake} WLD`);
+
       // Validate user
       const user = await UserModel.findById(userId);
       if (!user) {
@@ -132,6 +134,8 @@ export class GameSocketHandler {
         player1Request.stake
       );
 
+      console.log(`Multiplayer match created: ${match.match_id} between ${player1.user_id} and ${player2.user_id}, stake: ${player1Request.stake} WLD`);
+
       // Store active match data
       const activeMatch: ActiveMatch = {
         matchId: match.match_id,
@@ -164,8 +168,6 @@ export class GameSocketHandler {
         opponent: { userId: player1.user_id, wallet: player1.wallet_address },
         stake: player1Request.stake,
       });
-
-      console.log(`Match created: ${match.match_id}`);
     } catch (error) {
       console.error('Error creating match:', error);
       socket.emit('error', { message: 'Failed to create match' });

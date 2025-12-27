@@ -19,7 +19,7 @@ Blink Battle is a fast-paced multiplayer reaction game where two players face of
 ## ✨ Features
 
 ### Game Modes
-- **🎯 Practice Mode**: Free-to-play mode for skill testing without stakes
+- **🎯 Practice Mode**: Single-player reaction test for skill improvement (no matchmaking, fully client-side)
 - **💎 PvP Staking**: Compete with real WLD stakes (0.1 / 0.25 / 0.5 / 1.0 WLD)
 
 ### Core Mechanics
