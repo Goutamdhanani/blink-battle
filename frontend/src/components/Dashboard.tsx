@@ -14,8 +14,8 @@ const Dashboard: React.FC = () => {
 
   const handlePlayFree = () => {
     resetGame();
-    // For free mode, we'll use stake = 0
-    navigate('/matchmaking', { state: { isFree: true } });
+    // Navigate to single-player practice mode
+    navigate('/practice');
   };
 
   const handlePlayPvP = () => {

@@ -5,6 +5,7 @@ import AuthWrapper from './components/AuthWrapper';
 import Dashboard from './components/Dashboard';
 import GameArena from './components/GameArena';
 import Matchmaking from './components/Matchmaking';
+import PracticeMode from './components/PracticeMode';
 import ResultScreen from './components/ResultScreen';
 import MatchHistory from './components/MatchHistory';
 import Leaderboard from './components/Leaderboard';
@@ -19,6 +20,7 @@ function App() {
             <Routes>
               <Route path="/" element={<Dashboard />} />
               <Route path="/dashboard" element={<Dashboard />} />
+              <Route path="/practice" element={<PracticeMode />} />
               <Route path="/matchmaking" element={<Matchmaking />} />
               <Route path="/game" element={<GameArena />} />
               <Route path="/result" element={<ResultScreen />} />
