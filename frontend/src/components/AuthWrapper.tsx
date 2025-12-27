@@ -195,7 +195,7 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
           'Content-Type': 'application/json',
           'X-Request-Id': verifyRequestId,
         },
-        body: JSON.stringify({ payload: finalPayload }),
+        body: JSON.stringify({ payload: finalPayload, nonce }),
       });
 
       (window as any).__authDebugData.lastVerifyRequest!.httpStatus = verifyRes.status;

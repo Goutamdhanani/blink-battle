@@ -157,12 +157,13 @@ export class AuthController {
       }
 
       if (!payload || payload.status === 'error') {
-        const errorMsg = 'Authentication failed';
+        const errorMsg = 'Authentication failed: invalid payload';
         if (DEBUG_AUTH) {
           console.log(`[Auth:verifySiwe] requestId=${requestId} error: ${errorMsg} errorCode=${payload?.error_code}`);
         }
         return res.status(400).json({ 
           error: errorMsg,
+          code: 'INVALID_PAYLOAD',
           errorCode: payload?.error_code,
           requestId,
         });
@@ -170,24 +171,28 @@ export class AuthController {
 
       // Validate nonce is provided
       if (!nonce) {
-        const errorMsg = 'Authentication failed';
+        const errorMsg = 'Authentication failed: nonce is required';
         if (DEBUG_AUTH) {
           console.log(`[Auth:verifySiwe] requestId=${requestId} error: nonce not provided`);
         }
         return res.status(400).json({ 
           error: errorMsg,
+          code: 'NONCE_REQUIRED',
+          hint: 'The nonce parameter must be included in the request body',
           requestId,
         });
       }
 
       // Validate nonce format (alphanumeric, >= 8 chars)
       if (!isValidNonceFormat(nonce)) {
-        const errorMsg = 'Authentication failed';
+        const errorMsg = 'Authentication failed: invalid nonce format';
         if (DEBUG_AUTH) {
           console.log(`[Auth:verifySiwe] requestId=${requestId} error: invalid nonce format nonce=${redactSensitive(nonce, 8)}`);
         }
         return res.status(400).json({ 
           error: errorMsg,
+          code: 'INVALID_NONCE_FORMAT',
+          hint: 'Nonce must be alphanumeric and at least 8 characters',
           requestId,
         });
       }
@@ -197,12 +202,14 @@ export class AuthController {
       // because signature verification is computationally expensive
       const storedNonce = await getNonce(nonce);
       if (!storedNonce) {
-        const errorMsg = 'Authentication failed';
+        const errorMsg = 'Authentication failed: invalid or expired nonce';
         if (DEBUG_AUTH) {
           console.log(`[Auth:verifySiwe] requestId=${requestId} error: nonce not found or expired nonce=${redactSensitive(nonce, 8)}`);
         }
         return res.status(401).json({ 
           error: errorMsg,
+          code: 'NONCE_NOT_FOUND',
+          hint: 'Nonce may have expired or been used already. Please request a new nonce.',
           requestId,
         });
       }
@@ -211,12 +218,14 @@ export class AuthController {
       const nonceAge = Date.now() - storedNonce.timestamp;
       if (nonceAge > NONCE_MAX_AGE) {
         await deleteNonce(nonce);
-        const errorMsg = 'Authentication failed';
+        const errorMsg = 'Authentication failed: nonce expired';
         if (DEBUG_AUTH) {
           console.log(`[Auth:verifySiwe] requestId=${requestId} error: nonce expired age=${Math.floor(nonceAge / 1000)}s`);
         }
         return res.status(401).json({ 
           error: errorMsg,
+          code: 'NONCE_EXPIRED',
+          hint: 'Nonce is valid for 5 minutes. Please request a new nonce.',
           requestId,
         });
       }
@@ -233,7 +242,7 @@ export class AuthController {
           nonce
         );
       } catch (siweError: any) {
-        const errorMsg = 'Authentication failed';
+        const errorMsg = 'Authentication failed: SIWE verification error';
         if (DEBUG_AUTH) {
           console.log(`[Auth:verifySiwe] requestId=${requestId} error: SIWE verification failed siweError=${siweError.message || siweError}`);
         }
@@ -241,12 +250,14 @@ export class AuthController {
         await deleteNonce(nonce);
         return res.status(401).json({ 
           error: errorMsg,
+          code: 'SIWE_VERIFICATION_FAILED',
+          hint: 'Failed to verify SIWE signature. Please try again.',
           requestId,
         });
       }
 
       if (!validMessage.isValid) {
-        const errorMsg = 'Authentication failed';
+        const errorMsg = 'Authentication failed: invalid signature';
         if (DEBUG_AUTH) {
           console.log(`[Auth:verifySiwe] requestId=${requestId} error: invalid SIWE message signature`);
         }
@@ -254,6 +265,8 @@ export class AuthController {
         await deleteNonce(nonce);
         return res.status(401).json({ 
           error: errorMsg,
+          code: 'INVALID_SIGNATURE',
+          hint: 'SIWE signature validation failed. Please try again.',
           requestId,
         });
       }
@@ -262,13 +275,15 @@ export class AuthController {
       const walletAddress = validMessage.siweMessageData.address;
 
       if (!walletAddress) {
-        const errorMsg = 'Authentication failed';
+        const errorMsg = 'Authentication failed: no wallet address';
         if (DEBUG_AUTH) {
           console.log(`[Auth:verifySiwe] requestId=${requestId} error: no wallet address in SIWE message`);
         }
         await deleteNonce(nonce);
         return res.status(401).json({ 
           error: errorMsg,
+          code: 'NO_WALLET_ADDRESS',
+          hint: 'Could not extract wallet address from SIWE message.',
           requestId,
         });
       }
