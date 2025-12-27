@@ -3,6 +3,7 @@ import { createServer } from 'http';
 import { Server } from 'socket.io';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import jwt from 'jsonwebtoken';
 import { AuthController } from './controllers/authController';
 import { MatchController } from './controllers/matchController';
 import { LeaderboardController } from './controllers/leaderboardController';
@@ -50,11 +51,32 @@ validateEnvVars();
 
 const app = express();
 const httpServer = createServer(app);
+
+// Create Socket.IO server
 const io = new Server(httpServer, {
   cors: {
     origin: process.env.FRONTEND_URL || 'http://localhost:3000',
     methods: ['GET', 'POST'],
   },
+});
+
+// WebSocket authentication middleware
+io.use((socket, next) => {
+  const token = socket.handshake.auth.token;
+  
+  if (!token) {
+    return next(new Error('Authentication required'));
+  }
+
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'default-secret') as any;
+    // Attach userId to socket for use in handlers
+    (socket as any).userId = decoded.userId;
+    next();
+  } catch (error) {
+    console.error('[WebSocket] Auth error:', error);
+    return next(new Error('Invalid or expired token'));
+  }
 });
 
 // Middleware

@@ -6,7 +6,7 @@ import './Dashboard.css';
 
 const Dashboard: React.FC = () => {
   const navigate = useNavigate();
-  const { state, resetGame } = useGameContext();
+  const { state, resetGame, setToken, setUser } = useGameContext();
 
   if (!state.user || !state.token) {
     navigate('/');
@@ -21,6 +21,15 @@ const Dashboard: React.FC = () => {
   const handlePlayPvP = () => {
     resetGame();
     navigate('/matchmaking', { state: { isFree: false } });
+  };
+
+  const handleLogout = () => {
+    // Clear all state
+    setToken(null);
+    setUser(null);
+    resetGame();
+    // Redirect to home (will trigger re-auth)
+    navigate('/');
   };
 
   const winRate = state.user.wins + state.user.losses > 0
@@ -47,6 +56,15 @@ const Dashboard: React.FC = () => {
               <span className="status-indicator online"></span>
               <span className="status-text">Online</span>
             </span>
+            <button 
+              className="logout-btn" 
+              onClick={handleLogout}
+              title="Sign out of your account"
+              aria-label="Sign out of your account"
+            >
+              <span className="logout-icon">🚪</span>
+              <span className="logout-text">Logout</span>
+            </button>
           </div>
         </header>
 
