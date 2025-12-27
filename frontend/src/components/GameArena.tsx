@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useGameContext } from '../context/GameContext';
 import { useWebSocket } from '../hooks/useWebSocket';
 import { minikit } from '../lib/minikit';
+import ReactionLights from './ReactionLights';
 import './GameArena.css';
 
 const GameArena: React.FC = () => {
@@ -65,11 +66,22 @@ const GameArena: React.FC = () => {
       case 'countdown':
         return (
           <div className="phase-content fade-in">
-            <h2 className="phase-title">Get Ready!</h2>
+            <div className="game-status">
+              <h2 className="status-text">Get Ready!</h2>
+              <p className="opponent-info-inline">
+                vs {state.opponentWallet?.substring(0, 8)}...
+              </p>
+            </div>
+            
             {state.countdown !== null ? (
-              <div className="countdown-number glow-primary pulse">
-                {state.countdown}
-              </div>
+              <>
+                <ReactionLights state="red" countdown={state.countdown} />
+                <div className="countdown-display">
+                  <div className="countdown-number glow-secondary pulse">
+                    {state.countdown}
+                  </div>
+                </div>
+              </>
             ) : (
               <div className="waiting-text">
                 <p>Waiting for opponent...</p>
@@ -82,18 +94,29 @@ const GameArena: React.FC = () => {
       case 'waiting':
         return (
           <div className="phase-content fade-in">
+            <div className="game-status">
+              <h2 className="status-text">Wait for it...</h2>
+            </div>
+            
+            <ReactionLights state="red" countdown={0} />
+            
             <div className="waiting-for-signal">
-              <div className="focus-circle pulse"></div>
-              <p className="focus-text">Wait for the signal...</p>
+              <p className="focus-text">Don't tap early!</p>
             </div>
           </div>
         );
 
       case 'signal':
         return (
-          <div className="phase-content fade-in">
-            <div className={`tap-button ${tapped ? 'tapped' : ''}`} onClick={handleTap}>
-              <div className="tap-button-inner glow">
+          <div className="phase-content signal-phase fade-in">
+            <div className="game-status">
+              <h2 className="status-text status-go">GO!</h2>
+            </div>
+            
+            <ReactionLights state="green" />
+            
+            <div className={`tap-button ${tapped ? 'tapped' : ''} ${!tapped ? 'glow-green pulse' : ''}`} onClick={handleTap}>
+              <div className="tap-button-inner">
                 {tapped ? (
                   <span className="tapped-text">✓ Tapped!</span>
                 ) : (
@@ -136,11 +159,13 @@ const GameArena: React.FC = () => {
           {renderPhaseContent()}
         </div>
 
-        <div className="game-footer">
-          <p className="opponent-info">
-            vs {state.opponentWallet?.substring(0, 8)}...
-          </p>
-        </div>
+        {state.gamePhase !== 'countdown' && state.opponentWallet && (
+          <div className="game-footer">
+            <p className="opponent-info">
+              vs {state.opponentWallet.substring(0, 8)}...
+            </p>
+          </div>
+        )}
       </div>
     </div>
   );

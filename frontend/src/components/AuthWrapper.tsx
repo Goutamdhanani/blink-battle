@@ -2,9 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { MiniKit } from '@worldcoin/minikit-js';
 import { useGameContext } from '../context/GameContext';
 import { useMiniKitReady } from '../hooks/useMiniKitReady';
+import { apiClient, API_URL } from '../lib/api';
 import './AuthWrapper.css';
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 const AUTH_TIMEOUT_MS = 15000; // 15 seconds timeout
 
 interface AuthWrapperProps {
@@ -110,27 +109,13 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
         timestamp: nonceTimestamp,
       };
 
-      const nonceRes = await fetch(`${API_URL}/api/auth/nonce`, {
+      const nonceRes = await apiClient.get('/api/auth/nonce', {
         headers: {
           'X-Request-Id': nonceRequestId,
         },
       });
       
-      if (!nonceRes.ok) {
-        let errorText = `Failed to get nonce (HTTP ${nonceRes.status})`;
-        try {
-          const errorBody = await nonceRes.json();
-          errorText = errorBody.error || errorText;
-          (window as any).__authDebugData.lastNonceRequest!.error = JSON.stringify(errorBody);
-        } catch {
-          const textBody = await nonceRes.text();
-          (window as any).__authDebugData.lastNonceRequest!.error = textBody;
-          errorText = textBody || errorText;
-        }
-        throw new Error(errorText);
-      }
-      
-      const nonceData = await nonceRes.json();
+      const nonceData = nonceRes.data;
       const { nonce } = nonceData;
       
       (window as any).__authDebugData.lastNonceRequest!.response = nonceData;
@@ -189,52 +174,18 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
         timestamp: verifyTimestamp,
       };
 
-      const verifyRes = await fetch(`${API_URL}/api/auth/verify-siwe`, {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'X-Request-Id': verifyRequestId,
-        },
-        body: JSON.stringify({ payload: finalPayload, nonce }),
-      });
-
-      (window as any).__authDebugData.lastVerifyRequest!.httpStatus = verifyRes.status;
-
-      if (!verifyRes.ok) {
-        // Try to extract detailed error message from backend
-        let errorMessage = `Backend verification failed (HTTP ${verifyRes.status})`;
-        let errorDetails = null;
-        
-        try {
-          const errorBody = await verifyRes.json();
-          errorMessage = errorBody.error || errorMessage;
-          errorDetails = errorBody;
-          (window as any).__authDebugData.lastVerifyRequest!.response = errorBody;
-        } catch {
-          // If JSON parsing fails, try to get text
-          try {
-            const textBody = await verifyRes.text();
-            if (textBody) {
-              errorMessage = textBody;
-              (window as any).__authDebugData.lastVerifyRequest!.response = { text: textBody };
-            }
-          } catch {
-            // Ignore
-          }
+      const verifyRes = await apiClient.post('/api/auth/verify-siwe', 
+        { payload: finalPayload, nonce },
+        {
+          headers: { 
+            'X-Request-Id': verifyRequestId,
+          },
         }
+      );
 
-        console.error('[Auth] Backend verification error:', errorDetails || errorMessage);
-        
-        // Construct user-friendly error with details
-        const detailedError = errorDetails
-          ? `${errorMessage}${errorDetails.hint ? `\n\nHint: ${errorDetails.hint}` : ''}${errorDetails.requestId ? `\n\nRequest ID: ${errorDetails.requestId}` : ''}`
-          : errorMessage;
-
-        throw new Error(detailedError);
-      }
-
-      const verifyData = await verifyRes.json();
+      const verifyData = verifyRes.data;
       (window as any).__authDebugData.lastVerifyRequest!.response = verifyData;
+      (window as any).__authDebugData.lastVerifyRequest!.httpStatus = verifyRes.status;
 
       if (verifyData.success) {
         setToken(verifyData.token);
@@ -246,7 +197,35 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
     } catch (err: any) {
       if (!timedOut) {
         console.error('[Auth] Authentication error:', err);
-        setError(err.message || 'Authentication failed');
+        
+        // Better error handling for axios errors
+        let errorMessage = err.message || 'Authentication failed';
+        
+        if (err.response?.data) {
+          const errorData = err.response.data;
+          errorMessage = errorData.error || errorMessage;
+          
+          // Store error details in debug data
+          (window as any).__authDebugData.lastVerifyRequest = {
+            ...(window as any).__authDebugData.lastVerifyRequest,
+            httpStatus: err.response.status,
+            response: errorData,
+            error: errorMessage,
+          };
+          
+          // Construct user-friendly error with hints
+          if (errorData.hint) {
+            errorMessage += `\n\nHint: ${errorData.hint}`;
+          }
+          if (errorData.requestId) {
+            errorMessage += `\n\nRequest ID: ${errorData.requestId}`;
+          }
+        } else if (err.request && !err.response) {
+          // Network error
+          errorMessage = 'Network error. Please check your connection and try again.';
+        }
+        
+        setError(errorMessage);
         sendHaptic('error');
         clearTimeout(timeoutId);
       }

@@ -126,6 +126,32 @@ blink-battle/
 
 This project is a Worldcoin Mini-App. For complete setup instructions including Developer Portal configuration, see the **[MiniKit Setup Guide](./MINIKIT_SETUP.md)**.
 
+### Required Environment Variables
+
+#### Backend (.env)
+
+**Critical variables (app will fail to start if missing):**
+- `APP_ID` - Your Worldcoin App ID from Developer Portal (e.g., `app_staging_xxxxx`)
+- `DEV_PORTAL_API_KEY` - Your Developer Portal API key for payment verification
+- `PLATFORM_WALLET_ADDRESS` - Ethereum address for receiving payments (must be valid 0x... format)
+- `JWT_SECRET` - Secret key for JWT token generation
+- `DATABASE_URL` - PostgreSQL connection string
+
+**Optional but recommended:**
+- `REDIS_URL` - Redis connection string (defaults to `redis://localhost:6379`)
+- `PORT` - Server port (defaults to 3001)
+- `FRONTEND_URL` - Frontend URL for CORS (defaults to `http://localhost:3000`)
+- `DEBUG_AUTH` - Set to `true` to enable detailed authentication logging
+
+#### Frontend (.env)
+
+**Critical variables (app will fail or have limited functionality if missing):**
+- `VITE_APP_ID` - Your Worldcoin App ID (same as backend APP_ID)
+- `VITE_PLATFORM_WALLET_ADDRESS` - Platform wallet address (same as backend)
+
+**Optional:**
+- `VITE_API_URL` - Backend API URL (defaults to `http://localhost:3001`)
+
 ### Quick Start (Development)
 
 #### Prerequisites
@@ -147,8 +173,13 @@ This project is a Worldcoin Mini-App. For complete setup instructions including 
 2. **Configure environment**
    ```bash
    cp .env.example .env
-   # Edit .env with your settings (see MINIKIT_SETUP.md)
+   # Edit .env with your settings
    ```
+   
+   **⚠️ Important:** Ensure all critical variables are set:
+   - Get `APP_ID` and `DEV_PORTAL_API_KEY` from [developer.worldcoin.org](https://developer.worldcoin.org)
+   - Set `PLATFORM_WALLET_ADDRESS` to your Ethereum wallet address
+   - Generate a strong `JWT_SECRET` (e.g., `openssl rand -base64 32`)
 
 3. **Set up database**
    
@@ -177,6 +208,8 @@ This project is a Worldcoin Mini-App. For complete setup instructions including 
    ```bash
    npm run dev
    ```
+   
+   The server will validate all critical environment variables on startup. If any are missing, you'll see a clear error message.
 
 #### Frontend Setup
 
@@ -191,6 +224,10 @@ This project is a Worldcoin Mini-App. For complete setup instructions including 
    cp .env.example .env
    # Add your APP_ID and PLATFORM_WALLET_ADDRESS
    ```
+   
+   **⚠️ Important:** 
+   - Set `VITE_APP_ID` to the same value as backend `APP_ID`
+   - Set `VITE_PLATFORM_WALLET_ADDRESS` to the same wallet address
 
 3. **Start development server**
    ```bash
@@ -379,11 +416,70 @@ For complete API documentation, see **[API_REFERENCE.md](./API_REFERENCE.md)**.
 
 ## 🔍 Debugging & Troubleshooting
 
-### Authentication Issues
+### Common Issues
+
+#### Payment Fails with "Request failed with status code 401"
+
+This error occurs when payment-related API calls don't include proper authentication. 
+
+**Causes:**
+1. User is not authenticated (token missing or expired)
+2. Token not properly stored in localStorage
+3. API client not including Authorization header
+
+**Solutions:**
+1. **Check authentication status:**
+   - Ensure you're signed in through World App
+   - Check browser console for auth errors
+   - Look for token in localStorage (DevTools → Application → Local Storage)
+
+2. **Enable debug mode:**
+   ```
+   Open app with ?debug=1 parameter: https://your-app.com/?debug=1
+   ```
+   This shows the debug panel with detailed auth flow information.
+
+3. **Verify environment variables:**
+   - Backend: `APP_ID`, `DEV_PORTAL_API_KEY`, `JWT_SECRET` must be set
+   - Frontend: `VITE_APP_ID` must match backend `APP_ID`
+   - Check that wallet addresses match between frontend and backend
+
+4. **Check backend logs:**
+   - Look for JWT verification errors
+   - Enable `DEBUG_AUTH=true` in backend .env for detailed logs
+
+#### App Stuck on "Initializing..." or Loading Screen
+
+**Causes:**
+1. MiniKit not properly installed
+2. Missing or incorrect `VITE_APP_ID`
+3. Race condition in MiniKit initialization
+4. Running outside World App
+
+**Solutions:**
+1. **Verify you're in World App:**
+   - The app must be opened inside World App, not in a regular browser
+   - Check debug panel: MiniKit Installed should show ✅
+
+2. **Check environment variables:**
+   - Ensure `VITE_APP_ID` is set in frontend `.env`
+   - Format should be: `app_staging_xxxxx` or `app_xxxxx`
+
+3. **Clear cache and restart:**
+   - Close World App completely
+   - Clear app cache
+   - Reopen World App and try again
+
+4. **Check console for errors:**
+   - Open debug mode with `?debug=1`
+   - Look for MiniKit installation errors
+   - Check supported commands in debug panel
+
+#### Authentication Issues
 
 If you're experiencing authentication failures or SIWE verification errors, this project includes comprehensive debugging tools:
 
-#### Frontend Debug Panel
+##### Frontend Debug Panel
 
 Enable the debug panel by adding `?debug=1` to the URL or running in development mode:
 
@@ -399,7 +495,7 @@ The debug panel shows:
 - Request IDs for correlation with backend logs
 - Redacted sensitive data (addresses, signatures)
 
-#### Backend Debug Logging
+##### Backend Debug Logging
 
 Enable detailed authentication logs by setting the environment variable:
 
@@ -414,7 +510,7 @@ Debug logs include:
 - Request IDs for correlation
 - Redacted sensitive information
 
-#### Manual Testing
+##### Manual Testing
 
 Test backend auth endpoints:
 
@@ -422,12 +518,12 @@ Test backend auth endpoints:
 ./test-auth-debug.sh
 ```
 
-#### Common Issues
+##### Common Authentication Errors
 
 **"Invalid or expired nonce"**
-- Check if backend has multiple instances (nonces are in-memory)
+- Check if backend has multiple instances (nonces are in-memory by default)
 - Verify user completed auth within 5 minutes
-- Consider migrating to Redis-based nonce storage
+- Consider using Redis for nonce storage in production
 
 **"SIWE message verification failed"**
 - Verify domain/uri configuration matches
@@ -438,6 +534,25 @@ Test backend auth endpoints:
 - Check DEBUG_AUTH logs for specific error
 - Verify database connectivity
 - Ensure JWT_SECRET is configured
+
+#### Missing Environment Variables
+
+**Backend fails to start:**
+```
+❌ Missing required environment variables:
+   - APP_ID
+   - DEV_PORTAL_API_KEY
+```
+
+**Solution:**
+- Copy `.env.example` to `.env`
+- Fill in all required variables
+- See "Required Environment Variables" section above
+
+**Frontend shows configuration errors:**
+- Check browser console for error messages
+- Verify `.env` file exists and contains `VITE_APP_ID`
+- Restart Vite dev server after changing `.env`
 
 ### Database Connection Issues
 

@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Blink Battle - UI Preview</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #0f0f1e 0%, #1a1a2e 100%);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            color: white;
+        }
+        
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        
+        h1 {
+            text-align: center;
+            color: #00ff88;
+            margin-bottom: 40px;
+        }
+        
+        .section {
+            background: rgba(26, 26, 46, 0.8);
+            border-radius: 20px;
+            padding: 40px;
+            margin-bottom: 30px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .section-title {
+            font-size: 1.5rem;
+            margin-bottom: 20px;
+            color: rgba(255, 255, 255, 0.9);
+        }
+        
+        /* Reaction Lights Styles */
+        .reaction-lights {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 16px;
+            margin: 32px 0;
+            padding: 24px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 16px;
+            border: 2px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .light {
+            position: relative;
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.05);
+            border: 2px solid rgba(255, 255, 255, 0.1);
+            transition: all 0.3s ease;
+        }
+
+        .light-glow {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            background: transparent;
+            transition: all 0.3s ease;
+        }
+
+        /* Red state - during countdown */
+        .light-red {
+            background: #ff4444;
+            border-color: #ff6666;
+            box-shadow: 0 0 20px rgba(255, 68, 68, 0.6),
+                        0 0 40px rgba(255, 68, 68, 0.4),
+                        inset 0 0 10px rgba(255, 255, 255, 0.2);
+        }
+
+        .light-red .light-glow {
+            background: radial-gradient(circle, rgba(255, 255, 255, 0.3) 0%, transparent 70%);
+        }
+
+        /* Green state - GO signal */
+        .light-green {
+            background: #00ff88;
+            border-color: #00ffaa;
+            animation: pulse-green 0.5s ease-in-out infinite;
+            box-shadow: 0 0 30px rgba(0, 255, 136, 0.8),
+                        0 0 60px rgba(0, 255, 136, 0.5),
+                        inset 0 0 15px rgba(255, 255, 255, 0.3);
+        }
+
+        .light-green .light-glow {
+            background: radial-gradient(circle, rgba(255, 255, 255, 0.5) 0%, transparent 70%);
+        }
+
+        @keyframes pulse-green {
+            0% {
+                transform: scale(1);
+                box-shadow: 0 0 20px rgba(0, 255, 136, 0.6),
+                            0 0 40px rgba(0, 255, 136, 0.4);
+            }
+            50% {
+                transform: scale(1.1);
+                box-shadow: 0 0 40px rgba(0, 255, 136, 0.8),
+                            0 0 80px rgba(0, 255, 136, 0.6);
+            }
+            100% {
+                transform: scale(1);
+                box-shadow: 0 0 30px rgba(0, 255, 136, 0.8),
+                            0 0 60px rgba(0, 255, 136, 0.5);
+            }
+        }
+        
+        .description {
+            text-align: center;
+            color: rgba(255, 255, 255, 0.7);
+            margin-top: 20px;
+        }
+        
+        .status-text {
+            text-align: center;
+            font-size: 2rem;
+            font-weight: 600;
+            margin-bottom: 20px;
+        }
+        
+        .countdown-number {
+            text-align: center;
+            font-size: 6rem;
+            font-weight: bold;
+            color: #ff4444;
+            text-shadow: 0 0 30px rgba(255, 68, 68, 0.6);
+            margin: 20px 0;
+        }
+        
+        .go-text {
+            font-size: 3rem;
+            color: #00ff88;
+            text-shadow: 0 0 20px rgba(0, 255, 136, 0.6);
+            text-align: center;
+            margin: 20px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>⚡ Blink Battle - UI Preview</h1>
+        
+        <div class="section">
+            <div class="section-title">State 1: Lights Off (Idle)</div>
+            <div class="reaction-lights">
+                <div class="light"><div class="light-glow"></div></div>
+                <div class="light"><div class="light-glow"></div></div>
+                <div class="light"><div class="light-glow"></div></div>
+                <div class="light"><div class="light-glow"></div></div>
+                <div class="light"><div class="light-glow"></div></div>
+            </div>
+            <p class="description">All lights are off, waiting to start</p>
+        </div>
+        
+        <div class="section">
+            <div class="section-title">State 2: Countdown 3</div>
+            <div class="status-text">Get Ready!</div>
+            <div class="reaction-lights">
+                <div class="light light-red"><div class="light-glow"></div></div>
+                <div class="light light-red"><div class="light-glow"></div></div>
+                <div class="light"><div class="light-glow"></div></div>
+                <div class="light"><div class="light-glow"></div></div>
+                <div class="light"><div class="light-glow"></div></div>
+            </div>
+            <div class="countdown-number">3</div>
+            <p class="description">2 lights turn red during countdown of 3</p>
+        </div>
+        
+        <div class="section">
+            <div class="section-title">State 3: Countdown 2</div>
+            <div class="status-text">Get Ready!</div>
+            <div class="reaction-lights">
+                <div class="light light-red"><div class="light-glow"></div></div>
+                <div class="light light-red"><div class="light-glow"></div></div>
+                <div class="light light-red"><div class="light-glow"></div></div>
+                <div class="light"><div class="light-glow"></div></div>
+                <div class="light"><div class="light-glow"></div></div>
+            </div>
+            <div class="countdown-number">2</div>
+            <p class="description">3 lights turn red during countdown of 2</p>
+        </div>
+        
+        <div class="section">
+            <div class="section-title">State 4: Countdown 1</div>
+            <div class="status-text">Get Ready!</div>
+            <div class="reaction-lights">
+                <div class="light light-red"><div class="light-glow"></div></div>
+                <div class="light light-red"><div class="light-glow"></div></div>
+                <div class="light light-red"><div class="light-glow"></div></div>
+                <div class="light light-red"><div class="light-glow"></div></div>
+                <div class="light"><div class="light-glow"></div></div>
+            </div>
+            <div class="countdown-number">1</div>
+            <p class="description">4 lights turn red during countdown of 1</p>
+        </div>
+        
+        <div class="section">
+            <div class="section-title">State 5: Waiting (All Red)</div>
+            <div class="status-text">Wait for it...</div>
+            <div class="reaction-lights">
+                <div class="light light-red"><div class="light-glow"></div></div>
+                <div class="light light-red"><div class="light-glow"></div></div>
+                <div class="light light-red"><div class="light-glow"></div></div>
+                <div class="light light-red"><div class="light-glow"></div></div>
+                <div class="light light-red"><div class="light-glow"></div></div>
+            </div>
+            <p class="description">All 5 lights are red, waiting for random delay to pass</p>
+        </div>
+        
+        <div class="section" style="background: linear-gradient(135deg, rgba(0, 255, 136, 0.1) 0%, rgba(0, 204, 102, 0.15) 100%);">
+            <div class="section-title">State 6: GO! (All Green) 🎯</div>
+            <div class="go-text">GO!</div>
+            <div class="reaction-lights">
+                <div class="light light-green"><div class="light-glow"></div></div>
+                <div class="light light-green"><div class="light-glow"></div></div>
+                <div class="light light-green"><div class="light-glow"></div></div>
+                <div class="light light-green"><div class="light-glow"></div></div>
+                <div class="light light-green"><div class="light-glow"></div></div>
+            </div>
+            <p class="description">All lights turn green with pulsing animation - TAP NOW!</p>
+        </div>
+        
+        <div style="text-align: center; margin-top: 40px; padding: 20px; opacity: 0.7;">
+            <p>This preview demonstrates the F1-style reaction lights used in both Practice Mode and Battle screens.</p>
+            <p>The lights progress from off → red (countdown) → all red (waiting) → all green (GO!)</p>
+        </div>
+    </div>
+</body>
+</html>
