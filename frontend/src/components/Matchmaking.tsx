@@ -12,13 +12,14 @@ const STAKE_OPTIONS = [0.1, 0.25, 0.5, 1.0];
 const Matchmaking: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { state } = useGameContext();
+  const { state, setToken } = useGameContext();
   const { joinMatchmaking, cancelMatchmaking, connected } = useWebSocket();
   const { isInstalled } = useMiniKit();
   const [selectedStake, setSelectedStake] = useState<number>(0.1);
   const [searching, setSearching] = useState(false);
   const [processingPayment, setProcessingPayment] = useState(false);
   const [paymentError, setPaymentError] = useState<string | null>(null);
+  const [needsAuth, setNeedsAuth] = useState(false);
   const isFree = location.state?.isFree || false;
 
   useEffect(() => {
@@ -35,6 +36,17 @@ const Matchmaking: React.FC = () => {
 
   const handleJoinQueue = async () => {
     if (!state.user) return;
+
+    // Clear previous errors
+    setPaymentError(null);
+    setNeedsAuth(false);
+
+    // Check if user has valid token before proceeding with payment
+    if (!state.token) {
+      setPaymentError('Authentication required. Please sign in again.');
+      setNeedsAuth(true);
+      return;
+    }
 
     // For PvP mode, process payment with MiniKit first
     if (!isFree && isInstalled) {
@@ -81,7 +93,16 @@ const Matchmaking: React.FC = () => {
     } catch (error: any) {
       console.error('Payment error:', error);
       minikit.sendHaptic('error');
-      setPaymentError(error.message || 'Failed to process payment');
+      
+      // Check if it's an authentication error (using isAuthError flag from API client)
+      if (error.isAuthError) {
+        setPaymentError('Your session has expired. Please sign in again.');
+        setNeedsAuth(true);
+        // Update React state to reflect cleared authentication (localStorage already cleared by API interceptor)
+        setToken(null);
+      } else {
+        setPaymentError(error.message || 'Failed to process payment');
+      }
     } finally {
       setProcessingPayment(false);
     }
@@ -98,7 +119,20 @@ const Matchmaking: React.FC = () => {
     if (searching) {
       handleCancel();
     }
-    navigate('/dashboard');
+    // If auth error, navigate to root to trigger re-auth
+    if (needsAuth) {
+      navigate('/');
+    } else {
+      navigate('/dashboard');
+    }
+  };
+
+  const handleRetry = () => {
+    // Clear error state and allow retry
+    setPaymentError(null);
+    setNeedsAuth(false);
+    setProcessingPayment(false);
+    setSearching(false);
   };
 
   if (!state.user) return null;
@@ -106,7 +140,11 @@ const Matchmaking: React.FC = () => {
   return (
     <div className="matchmaking">
       <div className="matchmaking-container fade-in">
-        <button className="back-btn" onClick={handleBack}>
+        <button 
+          className="back-btn" 
+          onClick={handleBack}
+          disabled={processingPayment}
+        >
           ← Back
         </button>
 
@@ -151,7 +189,33 @@ const Matchmaking: React.FC = () => {
             )}
 
             {paymentError && (
-              <GlassCard className="error-message">{paymentError}</GlassCard>
+              <GlassCard className="error-message">
+                <div>{paymentError}</div>
+                {needsAuth && (
+                  <div style={{ marginTop: '12px' }}>
+                    <NeonButton
+                      variant="secondary"
+                      size="small"
+                      fullWidth
+                      onClick={handleBack}
+                    >
+                      Sign In Again
+                    </NeonButton>
+                  </div>
+                )}
+                {!needsAuth && (
+                  <div style={{ marginTop: '12px' }}>
+                    <NeonButton
+                      variant="secondary"
+                      size="small"
+                      fullWidth
+                      onClick={handleRetry}
+                    >
+                      Try Again
+                    </NeonButton>
+                  </div>
+                )}
+              </GlassCard>
             )}
 
             <NeonButton
@@ -159,9 +223,9 @@ const Matchmaking: React.FC = () => {
               size="large"
               fullWidth
               onClick={handleJoinQueue}
-              disabled={!connected}
+              disabled={!connected || needsAuth}
             >
-              {connected ? 'Find Opponent' : 'Connecting...'}
+              {!connected ? 'Connecting...' : needsAuth ? 'Sign In Required' : 'Find Opponent'}
             </NeonButton>
           </div>
         ) : processingPayment ? (

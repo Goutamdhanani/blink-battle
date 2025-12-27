@@ -4,6 +4,22 @@ import { useGameContext } from '../context/GameContext';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 
+/**
+ * LEGACY/DEMO AUTH HOOK
+ * 
+ * This hook provides a legacy authentication method using the /api/auth/login endpoint.
+ * 
+ * ⚠️ WARNING: This is for DEMO/TESTING purposes only and should NOT be used in production.
+ * 
+ * In production, authentication should ALWAYS use MiniKit Wallet Auth (SIWE) via AuthWrapper.tsx
+ * which calls /api/auth/nonce and /api/auth/verify-siwe endpoints.
+ * 
+ * The /api/auth/login endpoint bypasses proper SIWE authentication and is only kept for:
+ * - Development/testing outside World App
+ * - Demo mode when MiniKit is not available
+ * 
+ * DO NOT USE THIS HOOK FOR PAID BATTLES OR REAL WLD TRANSACTIONS.
+ */
 export const useWorldcoin = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
