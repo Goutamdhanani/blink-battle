@@ -52,6 +52,47 @@ validateEnvVars();
 const app = express();
 const httpServer = createServer(app);
 
+// Build allowed origins list from environment variables
+const LOCALHOST_URL = 'http://localhost:3000';
+
+const buildAllowedOrigins = (): string[] => {
+  const origins: string[] = [];
+  
+  // Add FRONTEND_URL (single URL)
+  if (process.env.FRONTEND_URL) {
+    origins.push(process.env.FRONTEND_URL);
+  }
+  
+  // Add FRONTEND_URL_PRODUCTION (single URL for backwards compatibility)
+  if (process.env.FRONTEND_URL_PRODUCTION) {
+    origins.push(process.env.FRONTEND_URL_PRODUCTION);
+  }
+  
+  // Add ALLOWED_ORIGINS (comma-separated list for flexibility)
+  if (process.env.ALLOWED_ORIGINS) {
+    const additionalOrigins = process.env.ALLOWED_ORIGINS
+      .split(',')
+      .map(origin => origin.trim())
+      .filter(origin => origin.length > 0);
+    origins.push(...additionalOrigins);
+  }
+  
+  // Always allow localhost in development (avoid duplicates)
+  if (process.env.NODE_ENV !== 'production') {
+    if (!origins.includes(LOCALHOST_URL)) {
+      origins.push(LOCALHOST_URL);
+    }
+  }
+  
+  // Remove duplicates
+  return [...new Set(origins)];
+};
+
+const allowedOrigins = buildAllowedOrigins();
+
+// Log allowed origins on startup for debugging
+console.log('✅ CORS allowed origins:', allowedOrigins);
+
 // Create Socket.IO server with same CORS configuration as REST API
 const io = new Server(httpServer, {
   cors: {
@@ -70,7 +111,8 @@ const io = new Server(httpServer, {
       if (allowedOrigins.includes(origin)) {
         callback(null, true);
       } else {
-        console.warn(`[WebSocket CORS] Blocked request from origin: ${origin}`);
+        console.error(`[WebSocket CORS] Blocked request from origin: ${origin}`);
+        console.error(`[WebSocket CORS] Allowed origins are: ${allowedOrigins.join(', ')}`);
         callback(new Error('Not allowed by CORS'));
       }
     },
@@ -100,24 +142,6 @@ io.use((socket, next) => {
 
 // Middleware
 // Configure CORS to allow credentials (JWT tokens) and specify allowed origins
-const LOCALHOST_URL = 'http://localhost:3000';
-
-const allowedOrigins = [
-  process.env.FRONTEND_URL || LOCALHOST_URL,
-];
-
-// Always allow localhost in development (avoid duplicates)
-if (process.env.NODE_ENV !== 'production') {
-  if (!allowedOrigins.includes(LOCALHOST_URL)) {
-    allowedOrigins.push(LOCALHOST_URL);
-  }
-}
-
-// Add production URLs if specified
-if (process.env.FRONTEND_URL_PRODUCTION) {
-  allowedOrigins.push(process.env.FRONTEND_URL_PRODUCTION);
-}
-
 app.use(cors({
   origin: (origin, callback) => {
     // Allow requests with no origin in development only (for tools like Postman)
@@ -134,13 +158,16 @@ app.use(cors({
     if (allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
-      console.warn(`[CORS] Blocked request from origin: ${origin}`);
+      console.error(`[CORS] Blocked request from origin: ${origin}`);
+      console.error(`[CORS] Allowed origins are: ${allowedOrigins.join(', ')}`);
       callback(new Error('Not allowed by CORS'));
     }
   },
   credentials: true, // Allow credentials (cookies, authorization headers)
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
+  optionsSuccessStatus: 204, // Standard status for successful OPTIONS with no content
+  preflightContinue: false, // Handle CORS preflight response directly without passing to next handler
 }));
 
 app.use(express.json());

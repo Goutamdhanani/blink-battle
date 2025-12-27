@@ -50,6 +50,10 @@ heroku config:set FRONTEND_URL=https://your-frontend.vercel.app
 # Optional: Multiple frontend URLs
 heroku config:set FRONTEND_URL_PRODUCTION=https://your-prod-frontend.vercel.app
 
+# New: For multiple origins (comma-separated list)
+# This is the recommended way to allow multiple origins like www.blumea.me and blumea.me
+heroku config:set ALLOWED_ORIGINS=https://www.blumea.me,https://blumea.me,https://app.blumea.me
+
 # Node Environment
 heroku config:set NODE_ENV=production
 ```
@@ -198,18 +202,38 @@ has been blocked by CORS policy
 # Verify FRONTEND_URL is set correctly
 heroku config:get FRONTEND_URL
 
-# If not set or wrong, update it:
+# For multiple origins (recommended approach)
+heroku config:set ALLOWED_ORIGINS=https://www.blumea.me,https://blumea.me
+
+# Or use individual variables (legacy approach)
 heroku config:set FRONTEND_URL=https://your-frontend.vercel.app
+heroku config:set FRONTEND_URL_PRODUCTION=https://your-prod-frontend.vercel.app
+
+# Check backend logs to see which origin was blocked
+heroku logs --tail | grep CORS
 ```
 
-**If you see 401 errors:**
+**If you see 401 errors during payment:**
 
-1. Check browser console for API URL being used
-2. Verify token is stored in localStorage
-3. Check backend logs for authentication errors:
-   ```bash
-   heroku logs --tail | grep Auth
-   ```
+This is often caused by:
+1. Missing or expired JWT token
+2. CORS blocking the Authorization header
+3. Incorrect CORS configuration
+
+**Solution:**
+```bash
+# 1. Check CORS configuration
+heroku logs --tail | grep -E "(CORS|Auth)"
+
+# 2. Verify allowed origins are configured correctly
+heroku config:get ALLOWED_ORIGINS
+
+# 3. Test auth endpoint
+curl -H "Origin: https://www.blumea.me" https://your-backend.herokuapp.com/api/auth/nonce
+
+# 4. If you see "Blocked request from origin" in logs, add it to ALLOWED_ORIGINS
+heroku config:set ALLOWED_ORIGINS=https://www.blumea.me,https://app.blumea.me
+```
 
 **If WebSocket won't connect:**
 ```
