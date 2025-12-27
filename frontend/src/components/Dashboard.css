@@ -55,6 +55,29 @@
   box-shadow: var(--glass-shadow);
 }
 
+.logout-btn {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  font-size: var(--text-lg);
+  padding: var(--space-xs);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.2s ease, filter 0.2s ease;
+  opacity: 0.7;
+}
+
+.logout-btn:hover {
+  opacity: 1;
+  transform: scale(1.1);
+  filter: drop-shadow(0 0 8px rgba(255, 100, 100, 0.5));
+}
+
+.logout-btn:active {
+  transform: scale(0.95);
+}
+
 .user-address {
   font-family: 'Courier New', monospace;
   font-size: var(--text-sm);

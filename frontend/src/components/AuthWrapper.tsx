@@ -236,9 +236,38 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
     }
   };
 
+  // Validate existing token on mount
   useEffect(() => {
-    // If already authenticated, skip
+    const validateSession = async () => {
+      // If we have a token, validate it with the backend
+      if (state.token && state.user) {
+        try {
+          const response = await apiClient.get('/api/auth/me');
+          if (response.data.success) {
+            // Token is valid, update user info if needed
+            const serverUser = response.data.user;
+            if (
+              serverUser.wins !== state.user.wins ||
+              serverUser.losses !== state.user.losses ||
+              serverUser.avgReactionTime !== state.user.avgReactionTime
+            ) {
+              // Update user info from server
+              setUser(serverUser);
+            }
+          }
+        } catch (error: any) {
+          // Token is invalid or expired
+          console.error('[Auth] Session validation failed:', error);
+          // Clear invalid session
+          setToken(null);
+          setUser(null);
+        }
+      }
+    };
+
+    // Only validate if already authenticated
     if (state.token && state.user) {
+      validateSession();
       return;
     }
 

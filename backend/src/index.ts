@@ -50,6 +50,28 @@ validateEnvVars();
 
 const app = express();
 const httpServer = createServer(app);
+
+// WebSocket authentication middleware
+import jwt from 'jsonwebtoken';
+
+io.use((socket, next) => {
+  const token = socket.handshake.auth.token;
+  
+  if (!token) {
+    return next(new Error('Authentication required'));
+  }
+
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'default-secret') as any;
+    // Attach userId to socket for use in handlers
+    (socket as any).userId = decoded.userId;
+    next();
+  } catch (error) {
+    console.error('[WebSocket] Auth error:', error);
+    return next(new Error('Invalid or expired token'));
+  }
+});
+
 const io = new Server(httpServer, {
   cors: {
     origin: process.env.FRONTEND_URL || 'http://localhost:3000',
