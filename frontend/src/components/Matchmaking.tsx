@@ -190,28 +190,30 @@ const Matchmaking: React.FC = () => {
 
             {paymentError && (
               <GlassCard className="error-message">
-                {paymentError}
+                <div>{paymentError}</div>
                 {needsAuth && (
-                  <NeonButton
-                    variant="secondary"
-                    size="small"
-                    fullWidth
-                    onClick={handleBack}
-                    style={{ marginTop: '12px' }}
-                  >
-                    Sign In Again
-                  </NeonButton>
+                  <div style={{ marginTop: '12px' }}>
+                    <NeonButton
+                      variant="secondary"
+                      size="small"
+                      fullWidth
+                      onClick={handleBack}
+                    >
+                      Sign In Again
+                    </NeonButton>
+                  </div>
                 )}
                 {!needsAuth && (
-                  <NeonButton
-                    variant="secondary"
-                    size="small"
-                    fullWidth
-                    onClick={handleRetry}
-                    style={{ marginTop: '12px' }}
-                  >
-                    Try Again
-                  </NeonButton>
+                  <div style={{ marginTop: '12px' }}>
+                    <NeonButton
+                      variant="secondary"
+                      size="small"
+                      fullWidth
+                      onClick={handleRetry}
+                    >
+                      Try Again
+                    </NeonButton>
+                  </div>
                 )}
               </GlassCard>
             )}
