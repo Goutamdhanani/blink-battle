@@ -149,14 +149,16 @@ export const minikit = {
 
       return {
         success: false,
-        error: finalPayload.error_code || 'Payment failed',
+        error: minikit.getPaymentErrorMessage(finalPayload.error_code),
       };
     } catch (error: any) {
       console.error('[MiniKit] Payment error:', error);
       
       // Provide better error messages for common issues
       if (error.response?.status === 401) {
-        throw new Error('Authentication required. Please sign in again.');
+        const authError = new Error('Your session has expired. Please sign in again.') as any;
+        authError.isAuthError = true;
+        throw authError;
       }
       
       if (error.response?.data?.error) {
@@ -165,6 +167,22 @@ export const minikit = {
       
       throw error;
     }
+  },
+
+  /**
+   * Get user-friendly error message for payment error codes
+   */
+  getPaymentErrorMessage: (errorCode?: string): string => {
+    const errorMessages: Record<string, string> = {
+      'user_rejected': 'Payment was cancelled. Please try again when ready.',
+      'insufficient_funds': 'Insufficient WLD balance. Please add funds to your World App wallet.',
+      'transaction_failed': 'Transaction failed. Please try again.',
+      'network_error': 'Network error. Please check your connection and try again.',
+      'invalid_amount': 'Invalid payment amount.',
+      'rate_limit': 'Too many requests. Please wait a moment and try again.',
+    };
+
+    return errorMessages[errorCode || ''] || 'Payment failed. Please try again.';
   },
 
   /**
