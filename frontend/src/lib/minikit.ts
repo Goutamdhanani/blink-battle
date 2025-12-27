@@ -130,6 +130,16 @@ export const minikit = {
           payload: finalPayload,
         });
 
+        // Handle pending transaction (not yet mined)
+        if (confirmRes.data.pending) {
+          return {
+            success: true,
+            pending: true,
+            reference: id,
+            transaction: confirmRes.data.transaction,
+          };
+        }
+
         return {
           success: true,
           reference: id,
