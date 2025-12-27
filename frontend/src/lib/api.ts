@@ -39,6 +39,13 @@ export const createApiClient = (): AxiosInstance => {
         console.error('[API] Authentication error - token may be invalid or expired');
         // Clear invalid token
         localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        
+        // Enhance error message for better handling
+        const enhancedError = new Error('Authentication required. Please sign in again.');
+        (enhancedError as any).response = error.response;
+        (enhancedError as any).isAuthError = true;
+        return Promise.reject(enhancedError);
       }
       return Promise.reject(error);
     }
