@@ -12,7 +12,7 @@ const STAKE_OPTIONS = [0.1, 0.25, 0.5, 1.0];
 const Matchmaking: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { state, setToken, setUser } = useGameContext();
+  const { state, setToken } = useGameContext();
   const { joinMatchmaking, cancelMatchmaking, connected } = useWebSocket();
   const { isInstalled } = useMiniKit();
   const [selectedStake, setSelectedStake] = useState<number>(0.1);
@@ -94,13 +94,12 @@ const Matchmaking: React.FC = () => {
       console.error('Payment error:', error);
       minikit.sendHaptic('error');
       
-      // Check if it's an authentication error
-      if (error.message && error.message.includes('Authentication required')) {
+      // Check if it's an authentication error (using isAuthError flag from API client)
+      if (error.isAuthError || error.response?.status === 401) {
         setPaymentError('Your session has expired. Please sign in again.');
         setNeedsAuth(true);
-        // Clear expired token and user data
+        // Clear expired token (setToken will also clear user data automatically)
         setToken(null);
-        setUser(null);
       } else {
         setPaymentError(error.message || 'Failed to process payment');
       }
