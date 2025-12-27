@@ -41,14 +41,23 @@ process.on('beforeExit', () => {
 
 // Helper: Check if Redis is available
 const isRedisAvailable = (): boolean => {
-  return redisClient.isOpen;
+  return redisClient.isReady;
 };
 
 // Helper: Store nonce (Redis or in-memory fallback)
 const storeNonce = async (nonce: string): Promise<void> => {
   if (isRedisAvailable()) {
-    // Use Redis with TTL
-    await redisClient.setEx(`nonce:${nonce}`, NONCE_TTL_SECONDS, Date.now().toString());
+    try {
+      // Use Redis with TTL
+      await redisClient.setEx(`nonce:${nonce}`, NONCE_TTL_SECONDS, Date.now().toString());
+    } catch (error) {
+      console.error('[Auth:storeNonce] Redis error, falling back to in-memory:', error);
+      // Fallback to in-memory store on Redis failure
+      nonceStore.set(nonce, {
+        nonce,
+        timestamp: Date.now(),
+      });
+    }
   } else {
     // Fallback to in-memory store
     nonceStore.set(nonce, {
@@ -61,12 +70,19 @@ const storeNonce = async (nonce: string): Promise<void> => {
 // Helper: Get nonce (Redis or in-memory fallback)
 const getNonce = async (nonce: string): Promise<{ timestamp: number } | null> => {
   if (isRedisAvailable()) {
-    // Get from Redis
-    const timestamp = await redisClient.get(`nonce:${nonce}`);
-    if (timestamp) {
-      return { timestamp: parseInt(timestamp, 10) };
+    try {
+      // Get from Redis
+      const timestamp = await redisClient.get(`nonce:${nonce}`);
+      if (timestamp) {
+        return { timestamp: parseInt(timestamp, 10) };
+      }
+      return null;
+    } catch (error) {
+      console.error('[Auth:getNonce] Redis error, falling back to in-memory:', error);
+      // Fallback to in-memory store on Redis failure
+      const stored = nonceStore.get(nonce);
+      return stored ? { timestamp: stored.timestamp } : null;
     }
-    return null;
   } else {
     // Fallback to in-memory store
     const stored = nonceStore.get(nonce);
@@ -77,8 +93,14 @@ const getNonce = async (nonce: string): Promise<{ timestamp: number } | null> =>
 // Helper: Delete nonce (Redis or in-memory fallback)
 const deleteNonce = async (nonce: string): Promise<void> => {
   if (isRedisAvailable()) {
-    // Delete from Redis
-    await redisClient.del(`nonce:${nonce}`);
+    try {
+      // Delete from Redis
+      await redisClient.del(`nonce:${nonce}`);
+    } catch (error) {
+      console.error('[Auth:deleteNonce] Redis error, falling back to in-memory:', error);
+      // Fallback to in-memory store on Redis failure
+      nonceStore.delete(nonce);
+    }
   } else {
     // Delete from in-memory store
     nonceStore.delete(nonce);
