@@ -166,16 +166,12 @@ app.use(cors({
   credentials: true, // Allow credentials (cookies, authorization headers)
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
+  optionsSuccessStatus: 204, // Some legacy browsers (IE11, various SmartTVs) choke on 204
+  preflightContinue: false, // Pass the CORS preflight response to the next handler
 }));
 
 app.use(express.json());
 app.use(requestIdMiddleware); // Add request ID to all requests
-
-// Explicit OPTIONS handler for preflight requests
-// This ensures OPTIONS requests succeed with 204 status and proper CORS headers
-app.options('*', (_req, res) => {
-  res.status(204).end();
-});
 
 // Health check
 app.get('/health', (_req, res) => {
