@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useGameContext } from '../context/GameContext';
+import { GlassCard, BottomTabBar } from './ui';
 import axios from 'axios';
 import './Leaderboard.css';
 
@@ -80,13 +81,13 @@ const Leaderboard: React.FC = () => {
           ← Back
         </button>
 
-        <h1 className="title glow-primary">🏆 Leaderboard</h1>
+        <h1 className="page-title">🏆 Leaderboard</h1>
 
         {userRank && (
-          <div className="user-rank-card">
+          <GlassCard className="user-rank-card">
             <span className="rank-label">Your Rank:</span>
             <span className="rank-value">{getRankEmoji(userRank)}</span>
-          </div>
+          </GlassCard>
         )}
 
         {loading ? (
@@ -95,10 +96,10 @@ const Leaderboard: React.FC = () => {
             <p>Loading leaderboard...</p>
           </div>
         ) : leaderboard.length === 0 ? (
-          <div className="empty-state">
-            <p>No players yet!</p>
-            <p className="text-dim">Be the first to climb the leaderboard!</p>
-          </div>
+          <GlassCard className="empty-state">
+            <p className="empty-message">No players yet!</p>
+            <p className="empty-subtitle">Be the first to climb the leaderboard!</p>
+          </GlassCard>
         ) : (
           <div className="leaderboard-table">
             <div className="table-header">
@@ -111,7 +112,7 @@ const Leaderboard: React.FC = () => {
 
             <div className="table-body">
               {leaderboard.map((entry) => (
-                <div
+                <GlassCard
                   key={entry.walletAddress}
                   className={`table-row ${isCurrentUser(entry.walletAddress) ? 'current-user' : ''}`}
                 >
@@ -143,11 +144,13 @@ const Leaderboard: React.FC = () => {
                       {entry.avgReactionTime.toFixed(0)}ms
                     </span>
                   </div>
-                </div>
+                </GlassCard>
               ))}
             </div>
           </div>
         )}
+
+        <BottomTabBar />
       </div>
     </div>
   );

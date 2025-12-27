@@ -5,15 +5,76 @@
 }
 
 :root {
-  --primary: #00ff88;
-  --secondary: #ff0088;
-  --background: #0a0a0f;
-  --surface: #1a1a2e;
+  /* Neon Color Palette */
+  --neon-cyan: #00ffff;
+  --neon-pink: #ff00ff;
+  --neon-green: #00ff88;
+  --neon-purple: #bf00ff;
+  --neon-blue: #0099ff;
+  --neon-yellow: #ffff00;
+  --neon-orange: #ff6600;
+  
+  /* Primary Theme Colors */
+  --primary: var(--neon-cyan);
+  --secondary: var(--neon-pink);
+  --accent: var(--neon-purple);
+  
+  /* Background & Surface */
+  --background: #000000;
+  --background-gradient-start: #0a0015;
+  --background-gradient-end: #001a2e;
+  --surface: rgba(255, 255, 255, 0.05);
+  --surface-hover: rgba(255, 255, 255, 0.08);
+  --glass-bg: rgba(255, 255, 255, 0.03);
+  --glass-border: rgba(255, 255, 255, 0.1);
+  
+  /* Text Colors */
   --text: #ffffff;
-  --text-dim: #a0a0b0;
-  --success: #00ff88;
+  --text-secondary: #b0b0c0;
+  --text-dim: #707080;
+  
+  /* Status Colors */
+  --success: var(--neon-green);
   --error: #ff0044;
   --warning: #ffaa00;
+  --info: var(--neon-blue);
+  
+  /* Glassmorphism Effects */
+  --glass-blur: 12px;
+  --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  --glass-shadow-lg: 0 12px 48px rgba(0, 0, 0, 0.6);
+  
+  /* Neon Glow Effects */
+  --glow-cyan: 0 0 10px var(--neon-cyan), 0 0 20px var(--neon-cyan), 0 0 40px var(--neon-cyan);
+  --glow-pink: 0 0 10px var(--neon-pink), 0 0 20px var(--neon-pink), 0 0 40px var(--neon-pink);
+  --glow-green: 0 0 10px var(--neon-green), 0 0 20px var(--neon-green), 0 0 40px var(--neon-green);
+  --glow-purple: 0 0 10px var(--neon-purple), 0 0 20px var(--neon-purple), 0 0 40px var(--neon-purple);
+  
+  /* Spacing Scale */
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 16px;
+  --space-lg: 24px;
+  --space-xl: 32px;
+  --space-2xl: 48px;
+  
+  /* Border Radius */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
+  --radius-full: 9999px;
+  
+  /* Typography Scale */
+  --text-xs: 0.75rem;
+  --text-sm: 0.875rem;
+  --text-base: 1rem;
+  --text-lg: 1.125rem;
+  --text-xl: 1.25rem;
+  --text-2xl: 1.5rem;
+  --text-3xl: 1.875rem;
+  --text-4xl: 2.25rem;
+  --text-5xl: 3rem;
 }
 
 body {
@@ -22,15 +83,34 @@ body {
     sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  background-color: var(--background);
+  background: linear-gradient(135deg, var(--background-gradient-start) 0%, var(--background-gradient-end) 100%);
+  background-attachment: fixed;
   color: var(--text);
   min-height: 100vh;
+  position: relative;
+  overflow-x: hidden;
+}
+
+body::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: 
+    radial-gradient(circle at 20% 20%, rgba(0, 255, 255, 0.08) 0%, transparent 50%),
+    radial-gradient(circle at 80% 80%, rgba(255, 0, 255, 0.08) 0%, transparent 50%);
+  pointer-events: none;
+  z-index: 0;
 }
 
 #root {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
+  position: relative;
+  z-index: 1;
 }
 
 button {
@@ -38,10 +118,79 @@ button {
   border: none;
   outline: none;
   font-family: inherit;
+  transition: all 0.3s ease;
 }
 
+/* Glass Card Base Styles */
+.glass-card {
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--glass-shadow);
+  transition: all 0.3s ease;
+}
+
+.glass-card:hover {
+  background: var(--surface-hover);
+  box-shadow: var(--glass-shadow-lg);
+  transform: translateY(-2px);
+}
+
+/* Neon Button Styles */
+.neon-button {
+  position: relative;
+  padding: var(--space-md) var(--space-xl);
+  border-radius: var(--radius-lg);
+  font-weight: 600;
+  font-size: var(--text-base);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  overflow: hidden;
+  transition: all 0.3s ease;
+}
+
+.neon-button::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+  transition: left 0.5s ease;
+}
+
+.neon-button:hover::before {
+  left: 100%;
+}
+
+.neon-button-primary {
+  background: linear-gradient(135deg, var(--primary) 0%, var(--neon-blue) 100%);
+  color: #000;
+  box-shadow: var(--glow-cyan);
+}
+
+.neon-button-primary:hover {
+  box-shadow: 0 0 20px var(--neon-cyan), 0 0 40px var(--neon-cyan), 0 0 60px var(--neon-cyan);
+  transform: translateY(-2px);
+}
+
+.neon-button-secondary {
+  background: linear-gradient(135deg, var(--secondary) 0%, var(--neon-purple) 100%);
+  color: #fff;
+  box-shadow: var(--glow-pink);
+}
+
+.neon-button-secondary:hover {
+  box-shadow: 0 0 20px var(--neon-pink), 0 0 40px var(--neon-pink), 0 0 60px var(--neon-pink);
+  transform: translateY(-2px);
+}
+
+/* Utility Classes */
 .glow {
-  box-shadow: 0 0 10px currentColor, 0 0 20px currentColor, 0 0 30px currentColor;
+  box-shadow: var(--glow-cyan);
 }
 
 .glow-primary {

@@ -1,0 +1,24 @@
+.glass-card {
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--glass-shadow);
+  transition: all 0.3s ease;
+}
+
+.glass-card-hover {
+  cursor: pointer;
+}
+
+.glass-card-hover:hover {
+  background: var(--surface-hover);
+  border-color: rgba(0, 255, 255, 0.3);
+  box-shadow: var(--glass-shadow-lg), 0 0 20px rgba(0, 255, 255, 0.2);
+  transform: translateY(-4px);
+}
+
+.glass-card-hover:active {
+  transform: translateY(-2px);
+}

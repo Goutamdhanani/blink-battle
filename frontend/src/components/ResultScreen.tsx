@@ -2,6 +2,7 @@ import React, { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useGameContext } from '../context/GameContext';
 import { minikit } from '../lib/minikit';
+import { GlassCard, NeonButton } from './ui';
 import confetti from 'canvas-confetti';
 import './ResultScreen.css';
 
@@ -111,56 +112,56 @@ const ResultScreen: React.FC = () => {
   return (
     <div className="result-screen">
       <div className="result-container fade-in">
-        <div className={`result-header ${isWinner ? 'winner' : isTie ? 'tie' : 'loser'}`}>
+        <GlassCard className={`result-header ${isWinner ? 'winner' : isTie ? 'tie' : 'loser'}`}>
           <h1 className="result-title">{getResultMessage()}</h1>
           <p className="result-description">{getResultDescription()}</p>
-        </div>
+        </GlassCard>
 
         <div className="result-stats">
           <div className="stat-row">
-            <div className="stat-box your-stat">
+            <GlassCard className="stat-box your-stat">
               <div className="stat-label">Your Reaction</div>
               <div className={`stat-value ${yourReaction < opponentReaction ? 'better' : ''}`}>
                 {yourReaction > 0 ? `${yourReaction}ms` : 'No tap'}
               </div>
-            </div>
+            </GlassCard>
             <div className="vs">VS</div>
-            <div className="stat-box opponent-stat">
+            <GlassCard className="stat-box opponent-stat">
               <div className="stat-label">Opponent</div>
               <div className={`stat-value ${opponentReaction < yourReaction ? 'better' : ''}`}>
                 {opponentReaction > 0 ? `${opponentReaction}ms` : 'No tap'}
               </div>
-            </div>
+            </GlassCard>
           </div>
 
           {state.stake && state.stake > 0 && (
-            <div className="winnings-box">
+            <GlassCard className="winnings-box">
               <div className="winnings-label">
                 {isTie ? 'Refunded' : isWinner ? 'You Won' : 'You Lost'}
               </div>
               <div className={`winnings-amount ${isWinner || isTie ? 'positive' : 'negative'}`}>
                 {isWinner || isTie ? '+' : '-'}{winnings.toFixed(2)} WLD
               </div>
-            </div>
+            </GlassCard>
           )}
         </div>
 
         <div className="result-actions">
-          <button className="btn btn-primary glow" onClick={handlePlayAgain}>
+          <NeonButton variant="primary" size="large" fullWidth onClick={handlePlayAgain}>
             🎮 Play Again
-          </button>
-          <button className="btn btn-secondary" onClick={handleViewStats}>
+          </NeonButton>
+          <NeonButton variant="secondary" size="medium" fullWidth onClick={handleViewStats}>
             📊 View Stats
-          </button>
-          <button className="btn btn-outline" onClick={handleDashboard}>
+          </NeonButton>
+          <NeonButton variant="ghost" size="medium" fullWidth onClick={handleDashboard}>
             🏠 Dashboard
-          </button>
+          </NeonButton>
         </div>
 
         {!isWinner && !isTie && (
-          <div className="encouragement">
+          <GlassCard className="encouragement">
             <p>💡 Tip: Focus on the center and trust your instincts!</p>
-          </div>
+          </GlassCard>
         )}
       </div>
     </div>

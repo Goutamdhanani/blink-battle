@@ -1,6 +1,7 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useGameContext } from '../context/GameContext';
+import { GlassCard, NeonButton, StatTile, BottomTabBar } from './ui';
 import './Dashboard.css';
 
 const Dashboard: React.FC = () => {
@@ -14,7 +15,6 @@ const Dashboard: React.FC = () => {
 
   const handlePlayFree = () => {
     resetGame();
-    // Navigate to single-player practice mode
     navigate('/practice');
   };
 
@@ -27,64 +27,61 @@ const Dashboard: React.FC = () => {
     ? ((state.user.wins / (state.user.wins + state.user.losses)) * 100).toFixed(1)
     : '0.0';
 
+  const formatWalletAddress = (address: string) => {
+    return `${address.substring(0, 6)}...${address.substring(address.length - 4)}`;
+  };
+
   return (
     <div className="dashboard">
       <div className="dashboard-container fade-in">
         <header className="dashboard-header">
-          <h1 className="glow-primary">⚡ Blink Battle</h1>
-          <div className="wallet-info">
-            <span className="wallet-address">
-              {state.user.walletAddress.substring(0, 6)}...
-              {state.user.walletAddress.substring(state.user.walletAddress.length - 4)}
+          <div className="dashboard-title">
+            <div className="app-icon">⚡</div>
+            <h1 className="app-title">Blink Battle</h1>
+          </div>
+          <div className="user-pill">
+            <span className="user-address">
+              {formatWalletAddress(state.user.walletAddress)}
+            </span>
+            <span className="user-status">
+              <span className="status-indicator online"></span>
+              <span className="status-text">Online</span>
             </span>
           </div>
         </header>
 
         <div className="stats-grid">
-          <div className="stat-card">
-            <div className="stat-value glow-primary">{state.user.wins}</div>
-            <div className="stat-label">Wins</div>
-          </div>
-          <div className="stat-card">
-            <div className="stat-value">{state.user.losses}</div>
-            <div className="stat-label">Losses</div>
-          </div>
-          <div className="stat-card">
-            <div className="stat-value glow-secondary">{winRate}%</div>
-            <div className="stat-label">Win Rate</div>
-          </div>
-          <div className="stat-card">
-            <div className="stat-value">
-              {state.user.avgReactionTime ? `${state.user.avgReactionTime.toFixed(0)}ms` : '-'}
-            </div>
-            <div className="stat-label">Avg Reaction</div>
-          </div>
+          <StatTile value={state.user.wins} label="Wins" color="green" />
+          <StatTile value={state.user.losses} label="Losses" color="pink" />
+          <StatTile value={`${winRate}%`} label="Win Rate" color="cyan" highlight />
+          <StatTile 
+            value={state.user.avgReactionTime ? `${state.user.avgReactionTime.toFixed(0)}ms` : '-'} 
+            label="Avg Reaction" 
+            color="purple" 
+          />
         </div>
 
         <div className="game-modes">
-          <div className="mode-card" onClick={handlePlayFree}>
+          <GlassCard className="mode-card" hover onClick={handlePlayFree}>
             <div className="mode-icon">🎮</div>
-            <h2>Practice Mode</h2>
-            <p>Play for free, sharpen your skills</p>
-            <button className="btn btn-secondary">Play Free</button>
-          </div>
+            <h2 className="mode-title">Practice Mode</h2>
+            <p className="mode-description">Play free, sharpen your skills</p>
+            <NeonButton variant="ghost" fullWidth>
+              Play Free
+            </NeonButton>
+          </GlassCard>
 
-          <div className="mode-card featured" onClick={handlePlayPvP}>
+          <GlassCard className="mode-card mode-card-featured" hover onClick={handlePlayPvP}>
             <div className="mode-icon">💎</div>
-            <h2>PvP Staking</h2>
-            <p>Compete for real WLD rewards</p>
-            <button className="btn btn-primary glow">Play for Stakes</button>
-          </div>
+            <h2 className="mode-title">PvP Staking</h2>
+            <p className="mode-description">Compete for real WLD rewards</p>
+            <NeonButton variant="primary" fullWidth>
+              Play for Stakes
+            </NeonButton>
+          </GlassCard>
         </div>
 
-        <div className="quick-actions">
-          <button className="action-btn" onClick={() => navigate('/history')}>
-            📊 Match History
-          </button>
-          <button className="action-btn" onClick={() => navigate('/leaderboard')}>
-            🏆 Leaderboard
-          </button>
-        </div>
+        <BottomTabBar />
       </div>
     </div>
   );

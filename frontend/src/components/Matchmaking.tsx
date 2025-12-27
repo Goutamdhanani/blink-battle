@@ -4,6 +4,7 @@ import { useGameContext } from '../context/GameContext';
 import { useWebSocket } from '../hooks/useWebSocket';
 import { minikit } from '../lib/minikit';
 import { useMiniKit } from '../hooks/useMiniKit';
+import { GlassCard, NeonButton } from './ui';
 import './Matchmaking.css';
 
 const STAKE_OPTIONS = [0.1, 0.25, 0.5, 1.0];
@@ -109,62 +110,65 @@ const Matchmaking: React.FC = () => {
           ← Back
         </button>
 
-        <h1 className="title glow-primary">
+        <h1 className="page-title">
           {isFree ? '🎮 Practice Mode' : '💎 PvP Staking'}
         </h1>
 
         {!searching && !processingPayment ? (
           <div className="stake-selection">
-            <h2>Select Your Stake</h2>
+            <h2 className="section-title">Select Your Stake</h2>
             {isFree ? (
-              <div className="free-mode-info">
-                <p>Practice mode is completely free!</p>
-                <p className="text-dim">No stakes, no risk, just pure skill testing</p>
-              </div>
+              <GlassCard className="free-mode-info">
+                <p className="free-mode-text">Practice mode is completely free!</p>
+                <p className="free-mode-subtext">No stakes, no risk, just pure skill testing</p>
+              </GlassCard>
             ) : (
               <>
                 <p className="info-text">
                   Winner takes 97% of the pot. Platform fee: 3%
                 </p>
                 {!isInstalled && (
-                  <div className="warning-box">
+                  <GlassCard className="warning-box">
                     ⚠️ Running in demo mode. Real payments require World App.
-                  </div>
+                  </GlassCard>
                 )}
                 <div className="stake-grid">
                   {STAKE_OPTIONS.map((stake) => (
-                    <div
+                    <GlassCard
                       key={stake}
                       className={`stake-option ${selectedStake === stake ? 'selected' : ''}`}
                       onClick={() => setSelectedStake(stake)}
+                      hover
                     >
                       <div className="stake-amount">{stake} WLD</div>
                       <div className="stake-payout">
                         Win: {(stake * 2 * 0.97).toFixed(2)} WLD
                       </div>
-                    </div>
+                    </GlassCard>
                   ))}
                 </div>
               </>
             )}
 
             {paymentError && (
-              <div className="error-message">{paymentError}</div>
+              <GlassCard className="error-message">{paymentError}</GlassCard>
             )}
 
-            <button
-              className="btn btn-primary glow"
+            <NeonButton
+              variant="primary"
+              size="large"
+              fullWidth
               onClick={handleJoinQueue}
               disabled={!connected}
             >
               {connected ? 'Find Opponent' : 'Connecting...'}
-            </button>
+            </NeonButton>
           </div>
         ) : processingPayment ? (
           <div className="searching">
             <div className="spinner pulse"></div>
-            <h2>Processing Payment...</h2>
-            <p className="text-dim">
+            <h2 className="searching-title">Processing Payment...</h2>
+            <p className="searching-text">
               Waiting for World App payment confirmation
             </p>
             <div className="searching-animation">
@@ -176,8 +180,8 @@ const Matchmaking: React.FC = () => {
         ) : (
           <div className="searching">
             <div className="spinner pulse"></div>
-            <h2>Finding Opponent...</h2>
-            <p className="text-dim">
+            <h2 className="searching-title">Finding Opponent...</h2>
+            <p className="searching-text">
               {isFree ? 'Searching for practice partner' : `Searching for ${selectedStake} WLD stake`}
             </p>
             <div className="searching-animation">
@@ -185,25 +189,25 @@ const Matchmaking: React.FC = () => {
               <div className="dot"></div>
               <div className="dot"></div>
             </div>
-            <button className="btn btn-secondary" onClick={handleCancel}>
+            <NeonButton variant="secondary" onClick={handleCancel}>
               Cancel
-            </button>
+            </NeonButton>
           </div>
         )}
 
         <div className="matchmaking-info">
-          <div className="info-card">
+          <GlassCard className="info-card">
             <h3>⚡ Fast Matching</h3>
             <p>Average wait time: 30 seconds</p>
-          </div>
-          <div className="info-card">
+          </GlassCard>
+          <GlassCard className="info-card">
             <h3>🎯 Fair Play</h3>
             <p>Anti-cheat system active</p>
-          </div>
-          <div className="info-card">
+          </GlassCard>
+          <GlassCard className="info-card">
             <h3>🔒 Secure</h3>
             <p>Funds locked in escrow</p>
-          </div>
+          </GlassCard>
         </div>
       </div>
     </div>
