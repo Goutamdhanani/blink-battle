@@ -100,14 +100,16 @@ io.use((socket, next) => {
 
 // Middleware
 // Configure CORS to allow credentials (JWT tokens) and specify allowed origins
+const LOCALHOST_URL = 'http://localhost:3000';
+
 const allowedOrigins = [
-  process.env.FRONTEND_URL || 'http://localhost:3000',
+  process.env.FRONTEND_URL || LOCALHOST_URL,
 ];
 
-// Always allow localhost in development
+// Always allow localhost in development (avoid duplicates)
 if (process.env.NODE_ENV !== 'production') {
-  if (!allowedOrigins.includes('http://localhost:3000')) {
-    allowedOrigins.push('http://localhost:3000');
+  if (!allowedOrigins.includes(LOCALHOST_URL)) {
+    allowedOrigins.push(LOCALHOST_URL);
   }
 }
 

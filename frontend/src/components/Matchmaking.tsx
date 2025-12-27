@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useGameContext } from '../context/GameContext';
 import { useWebSocket } from '../hooks/useWebSocket';
@@ -34,6 +34,11 @@ const Matchmaking: React.FC = () => {
     }
   }, [state.user, state.token, state.gamePhase, state.matchId, navigate]);
 
+  // Memoized cleanup function to reset payment state
+  const resetPaymentState = useCallback(() => {
+    setProcessingPayment(false);
+  }, []);
+
   const handleJoinQueue = async () => {
     if (!state.user) return;
 
@@ -63,11 +68,6 @@ const Matchmaking: React.FC = () => {
 
     setProcessingPayment(true);
     setPaymentError(null);
-
-    // Helper to reset payment state
-    const resetPaymentState = () => {
-      setProcessingPayment(false);
-    };
 
     try {
       // Initiate payment via MiniKit Pay command
