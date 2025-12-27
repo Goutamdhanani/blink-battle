@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useGameContext } from '../context/GameContext';
+import { GlassCard, BottomTabBar } from './ui';
 import axios from 'axios';
 import './MatchHistory.css';
 
@@ -63,7 +64,7 @@ const MatchHistory: React.FC = () => {
           ← Back
         </button>
 
-        <h1 className="title glow-primary">📊 Match History</h1>
+        <h1 className="page-title">📊 Match History</h1>
 
         {loading ? (
           <div className="loading">
@@ -71,18 +72,16 @@ const MatchHistory: React.FC = () => {
             <p>Loading matches...</p>
           </div>
         ) : matches.length === 0 ? (
-          <div className="empty-state">
-            <p>No matches yet!</p>
-            <button className="btn btn-primary" onClick={() => navigate('/matchmaking')}>
-              Play Your First Match
-            </button>
-          </div>
+          <GlassCard className="empty-state">
+            <p className="empty-message">No matches yet!</p>
+            <p className="empty-subtitle">Start playing to build your history</p>
+          </GlassCard>
         ) : (
           <div className="matches-list">
             {matches.map((match) => (
-              <div key={match.matchId} className={`match-card ${match.won ? 'won' : 'lost'}`}>
+              <GlassCard key={match.matchId} className={`match-card ${match.won ? 'match-won' : 'match-lost'}`}>
                 <div className="match-header">
-                  <span className={`match-result ${match.won ? 'win' : 'loss'}`}>
+                  <span className={`match-result ${match.won ? 'result-win' : 'result-loss'}`}>
                     {match.won ? '✓ WIN' : '✗ LOSS'}
                   </span>
                   <span className="match-stake">{match.stake} WLD</span>
@@ -90,16 +89,16 @@ const MatchHistory: React.FC = () => {
 
                 <div className="match-body">
                   <div className="reaction-comparison">
-                    <div className="your-reaction">
-                      <span className="label">You</span>
-                      <span className={`value ${match.yourReaction < match.opponentReaction ? 'better' : ''}`}>
+                    <div className="reaction-item">
+                      <span className="reaction-label">You</span>
+                      <span className={`reaction-value ${match.yourReaction < match.opponentReaction ? 'reaction-better' : ''}`}>
                         {match.yourReaction}ms
                       </span>
                     </div>
-                    <div className="vs">VS</div>
-                    <div className="opponent-reaction">
-                      <span className="label">Opponent</span>
-                      <span className={`value ${match.opponentReaction < match.yourReaction ? 'better' : ''}`}>
+                    <div className="vs-divider">VS</div>
+                    <div className="reaction-item">
+                      <span className="reaction-label">Opponent</span>
+                      <span className={`reaction-value ${match.opponentReaction < match.yourReaction ? 'reaction-better' : ''}`}>
                         {match.opponentReaction}ms
                       </span>
                     </div>
@@ -118,10 +117,12 @@ const MatchHistory: React.FC = () => {
                 <div className="match-footer">
                   <span className="match-date">{formatDate(match.completedAt)}</span>
                 </div>
-              </div>
+              </GlassCard>
             ))}
           </div>
         )}
+
+        <BottomTabBar />
       </div>
     </div>
   );

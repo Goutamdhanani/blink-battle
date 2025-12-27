@@ -1,4 +1,4 @@
-/* Shared Reaction Test UI Component Styles */
+/* F1-Inspired Reaction Test UI Component Styles */
 .reaction-test-ui {
   width: 100%;
   height: 100%;
@@ -6,7 +6,28 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 20px;
+  padding: var(--space-lg);
+  background: radial-gradient(circle at center, rgba(0, 255, 255, 0.05) 0%, transparent 70%);
+  position: relative;
+}
+
+.reaction-test-ui::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: 
+    repeating-linear-gradient(
+      90deg,
+      transparent,
+      transparent 50px,
+      rgba(0, 255, 255, 0.03) 50px,
+      rgba(0, 255, 255, 0.03) 51px
+    );
+  pointer-events: none;
+  z-index: 0;
 }
 
 .reaction-test-content {
@@ -14,9 +35,11 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 40px;
+  gap: var(--space-2xl);
   width: 100%;
   max-width: 600px;
+  position: relative;
+  z-index: 1;
 }
 
 .reaction-clickable {
@@ -25,27 +48,31 @@
   -webkit-user-select: none;
 }
 
+/* Status Display */
 .reaction-status {
   text-align: center;
 }
 
 .reaction-status-text {
-  font-size: 2.5rem;
-  font-weight: bold;
+  font-size: var(--text-4xl);
+  font-weight: 900;
   margin: 0;
-  color: var(--text-primary, #ffffff);
+  color: var(--text);
+  text-transform: uppercase;
+  letter-spacing: 2px;
 }
 
 .reaction-status-go {
-  color: var(--success-color, #00ff88);
-  text-shadow: 0 0 20px var(--success-color, #00ff88);
+  color: var(--neon-green);
+  text-shadow: 0 0 30px var(--neon-green), 0 0 60px var(--neon-green);
   animation: pulse-glow 0.5s ease-in-out infinite alternate;
 }
 
 .reaction-opponent {
-  font-size: 1rem;
-  color: var(--text-dim, #888888);
-  margin-top: 8px;
+  font-size: var(--text-base);
+  color: var(--text-secondary);
+  margin-top: var(--space-sm);
+  letter-spacing: 1px;
 }
 
 /* Countdown Display */
@@ -53,13 +80,15 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  min-height: 150px;
 }
 
 .reaction-countdown-number {
-  font-size: 6rem;
-  font-weight: bold;
+  font-size: 8rem;
+  font-weight: 900;
   line-height: 1;
-  color: var(--secondary-color, #ff6b35);
+  color: var(--neon-pink);
+  text-shadow: 0 0 40px var(--neon-pink), 0 0 80px var(--neon-pink);
 }
 
 /* Warning Text */
@@ -68,25 +97,43 @@
 }
 
 .reaction-warning-text {
-  font-size: 1.5rem;
-  color: var(--warning-color, #ffaa00);
+  font-size: var(--text-xl);
+  color: var(--warning);
   margin: 0;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  font-weight: 700;
+  animation: pulse 2s ease-in-out infinite;
 }
 
 /* Tap Button */
 .reaction-tap-button {
-  width: 280px;
-  height: 280px;
+  width: 300px;
+  height: 300px;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, var(--success-color, #00ff88) 0%, var(--success-dark, #00cc66) 100%);
-  box-shadow: 0 8px 32px rgba(0, 255, 136, 0.4);
+  background: linear-gradient(135deg, var(--neon-green) 0%, #00cc66 100%);
+  box-shadow: 0 8px 32px rgba(0, 255, 136, 0.4), 0 0 80px rgba(0, 255, 136, 0.3);
   cursor: pointer;
   transition: transform 0.1s ease, box-shadow 0.1s ease;
   user-select: none;
   -webkit-user-select: none;
+  position: relative;
+  overflow: hidden;
+}
+
+.reaction-tap-button::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 90%;
+  height: 90%;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.2) 0%, transparent 70%);
 }
 
 .reaction-tap-button:active:not(.reaction-tap-button-disabled) {
@@ -94,7 +141,7 @@
 }
 
 .reaction-tap-button-tapped {
-  background: linear-gradient(135deg, #888888 0%, #666666 100%);
+  background: linear-gradient(135deg, #666666 0%, #444444 100%);
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
   cursor: default;
 }
@@ -106,19 +153,23 @@
 
 .reaction-tap-button-inner {
   text-align: center;
+  position: relative;
+  z-index: 1;
 }
 
 .reaction-tap-text {
-  font-size: 2.5rem;
-  font-weight: bold;
-  color: #000000;
-  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  font-size: var(--text-4xl);
+  font-weight: 900;
+  color: #000;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  letter-spacing: 2px;
 }
 
 .reaction-tapped-text {
-  font-size: 2.5rem;
-  font-weight: bold;
+  font-size: var(--text-4xl);
+  font-weight: 900;
   color: #ffffff;
+  letter-spacing: 2px;
 }
 
 /* Reaction Time Display */
@@ -126,34 +177,79 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8px;
-  padding: 20px;
-  background: rgba(255, 255, 255, 0.05);
-  border-radius: 16px;
-  border: 2px solid rgba(255, 255, 255, 0.1);
+  gap: var(--space-sm);
+  padding: var(--space-xl);
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--glass-blur));
+  border-radius: var(--radius-lg);
+  border: 2px solid var(--glass-border);
+  box-shadow: var(--glass-shadow);
 }
 
 .reaction-time-value {
-  font-size: 3rem;
-  font-weight: bold;
-  color: var(--primary-color, #00d4ff);
+  font-size: var(--text-5xl);
+  font-weight: 900;
+  color: var(--neon-cyan);
+  text-shadow: 0 0 30px var(--neon-cyan);
+  letter-spacing: -1px;
 }
 
 .reaction-time-label {
-  font-size: 1rem;
-  color: var(--text-dim, #888888);
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
   text-transform: uppercase;
-  letter-spacing: 1px;
+  letter-spacing: 2px;
+  font-weight: 700;
 }
 
 /* Responsive Design */
 @media (max-width: 768px) {
+  .reaction-test-ui {
+    padding: var(--space-md);
+  }
+
+  .reaction-test-content {
+    gap: var(--space-xl);
+  }
+
   .reaction-status-text {
-    font-size: 2rem;
+    font-size: var(--text-3xl);
+  }
+
+  .reaction-countdown-number {
+    font-size: 6rem;
+  }
+
+  .reaction-tap-button {
+    width: 250px;
+    height: 250px;
+  }
+
+  .reaction-tap-text,
+  .reaction-tapped-text {
+    font-size: var(--text-3xl);
+  }
+
+  .reaction-time-value {
+    font-size: var(--text-4xl);
+  }
+}
+
+@media (max-width: 480px) {
+  .reaction-test-content {
+    gap: var(--space-lg);
+  }
+
+  .reaction-status-text {
+    font-size: var(--text-2xl);
   }
 
   .reaction-countdown-number {
     font-size: 5rem;
+  }
+
+  .reaction-warning-text {
+    font-size: var(--text-base);
   }
 
   .reaction-tap-button {
@@ -163,53 +259,34 @@
 
   .reaction-tap-text,
   .reaction-tapped-text {
-    font-size: 2rem;
+    font-size: var(--text-2xl);
   }
 
   .reaction-time-value {
-    font-size: 2.5rem;
-  }
-}
-
-@media (max-width: 480px) {
-  .reaction-test-content {
-    gap: 30px;
+    font-size: var(--text-3xl);
   }
 
-  .reaction-status-text {
-    font-size: 1.75rem;
-  }
-
-  .reaction-countdown-number {
-    font-size: 4rem;
-  }
-
-  .reaction-warning-text {
-    font-size: 1.25rem;
-  }
-
-  .reaction-tap-button {
-    width: 200px;
-    height: 200px;
-  }
-
-  .reaction-tap-text,
-  .reaction-tapped-text {
-    font-size: 1.75rem;
-  }
-
-  .reaction-time-value {
-    font-size: 2rem;
+  .reaction-time-display {
+    padding: var(--space-lg);
   }
 }
 
 /* Animations */
 @keyframes pulse-glow {
   from {
-    text-shadow: 0 0 20px var(--success-color, #00ff88);
+    text-shadow: 0 0 30px var(--neon-green), 0 0 60px var(--neon-green);
   }
   to {
-    text-shadow: 0 0 30px var(--success-color, #00ff88), 0 0 40px var(--success-color, #00ff88);
+    text-shadow: 0 0 50px var(--neon-green), 0 0 100px var(--neon-green);
+  }
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.6;
   }
 }
 
@@ -228,25 +305,10 @@
   }
 }
 
-.pulse {
-  animation: pulse 1s ease-in-out infinite;
-}
-
-@keyframes pulse {
-  0%, 100% {
-    transform: scale(1);
-  }
-  50% {
-    transform: scale(1.05);
-  }
-}
-
 .glow-green {
-  box-shadow: 0 0 20px var(--success-color, #00ff88),
-              0 0 40px var(--success-color, #00ff88);
+  box-shadow: 0 0 30px var(--neon-green), 0 0 60px var(--neon-green);
 }
 
 .glow-secondary {
-  text-shadow: 0 0 20px var(--secondary-color, #ff6b35),
-               0 0 40px var(--secondary-color, #ff6b35);
+  text-shadow: 0 0 30px var(--neon-pink), 0 0 60px var(--neon-pink);
 }

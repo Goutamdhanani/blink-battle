@@ -1,169 +1,230 @@
 .dashboard {
   min-height: 100vh;
-  padding: 20px;
-  background: linear-gradient(135deg, #0a0a0f 0%, #1a1a2e 100%);
+  padding: var(--space-lg) var(--space-md);
+  padding-bottom: 100px; /* Space for bottom tab bar */
 }
 
 .dashboard-container {
-  max-width: 1200px;
+  max-width: 600px;
   margin: 0 auto;
 }
 
+/* Header */
 .dashboard-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 40px;
-  padding-bottom: 20px;
-  border-bottom: 2px solid var(--surface);
-}
-
-.dashboard-header h1 {
-  font-size: 2rem;
-  margin: 0;
-}
-
-.wallet-info {
-  display: flex;
-  align-items: center;
-  gap: 15px;
-}
-
-.wallet-address {
-  background: var(--surface);
-  padding: 10px 20px;
-  border-radius: 10px;
-  font-family: monospace;
-  font-size: 0.9rem;
-}
-
-.stats-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 20px;
-  margin-bottom: 40px;
-}
-
-.stat-card {
-  background: var(--surface);
-  padding: 30px;
-  border-radius: 15px;
-  text-align: center;
-  box-shadow: 0 5px 20px rgba(0, 0, 0, 0.3);
-}
-
-.stat-value {
-  font-size: 2.5rem;
-  font-weight: 700;
-  margin-bottom: 10px;
-}
-
-.stat-label {
-  color: var(--text-dim);
-  font-size: 0.9rem;
-  text-transform: uppercase;
-  letter-spacing: 1px;
-}
-
-.game-modes {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  gap: 30px;
-  margin-bottom: 40px;
-}
-
-.mode-card {
-  background: var(--surface);
-  padding: 40px;
-  border-radius: 20px;
-  text-align: center;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  box-shadow: 0 5px 20px rgba(0, 0, 0, 0.3);
-}
-
-.mode-card:hover {
-  transform: translateY(-5px);
-  box-shadow: 0 10px 30px rgba(0, 255, 136, 0.3);
-}
-
-.mode-card.featured {
-  border: 2px solid var(--primary);
-}
-
-.mode-card.featured:hover {
-  box-shadow: 0 10px 40px rgba(0, 255, 136, 0.5);
-}
-
-.mode-icon {
-  font-size: 4rem;
-  margin-bottom: 20px;
-}
-
-.mode-card h2 {
-  font-size: 1.8rem;
-  margin-bottom: 15px;
-}
-
-.mode-card p {
-  color: var(--text-dim);
-  margin-bottom: 25px;
-  font-size: 1rem;
-}
-
-.mode-card .btn {
-  width: 100%;
-  padding: 15px 30px;
-  font-size: 1.1rem;
-  font-weight: 600;
-  border-radius: 10px;
-  transition: all 0.3s ease;
-}
-
-.quick-actions {
-  display: flex;
-  gap: 20px;
-  justify-content: center;
+  margin-bottom: var(--space-2xl);
+  gap: var(--space-md);
   flex-wrap: wrap;
 }
 
-.action-btn {
-  background: var(--surface);
+.dashboard-title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+}
+
+.app-icon {
+  font-size: var(--text-4xl);
+  filter: drop-shadow(0 0 20px var(--neon-cyan));
+  animation: pulse-glow 2s ease-in-out infinite;
+}
+
+.app-title {
+  font-size: var(--text-3xl);
+  font-weight: 900;
+  margin: 0;
+  background: linear-gradient(135deg, var(--neon-cyan) 0%, var(--neon-purple) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  letter-spacing: 1px;
+  text-shadow: 0 0 40px rgba(0, 255, 255, 0.5);
+}
+
+.user-pill {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--glass-blur));
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-full);
+  padding: var(--space-sm) var(--space-md);
+  box-shadow: var(--glass-shadow);
+}
+
+.user-address {
+  font-family: 'Courier New', monospace;
+  font-size: var(--text-sm);
   color: var(--text);
-  padding: 15px 30px;
-  border-radius: 10px;
-  font-size: 1rem;
-  font-weight: 500;
-  border: 2px solid transparent;
-  transition: all 0.3s ease;
+  font-weight: 600;
 }
 
-.action-btn:hover {
-  border-color: var(--primary);
-  color: var(--primary);
-  transform: translateY(-2px);
+.user-status {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
 }
 
+.status-indicator {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  animation: pulse-status 2s ease-in-out infinite;
+}
+
+.status-indicator.online {
+  background: var(--neon-green);
+  box-shadow: 0 0 10px var(--neon-green);
+}
+
+.status-text {
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  font-weight: 600;
+}
+
+/* Stats Grid */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--space-md);
+  margin-bottom: var(--space-2xl);
+}
+
+/* Game Modes */
+.game-modes {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-lg);
+  margin-bottom: var(--space-2xl);
+}
+
+.mode-card {
+  padding: var(--space-2xl) var(--space-xl);
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+}
+
+.mode-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(135deg, transparent 0%, rgba(0, 255, 255, 0.05) 100%);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  pointer-events: none;
+}
+
+.mode-card:hover::before {
+  opacity: 1;
+}
+
+.mode-card-featured {
+  border: 2px solid var(--neon-cyan);
+  box-shadow: var(--glass-shadow), 0 0 30px rgba(0, 255, 255, 0.2);
+}
+
+.mode-icon {
+  font-size: var(--text-5xl);
+  margin-bottom: var(--space-lg);
+  filter: drop-shadow(0 0 10px rgba(0, 255, 255, 0.5));
+}
+
+.mode-title {
+  font-size: var(--text-2xl);
+  font-weight: 800;
+  margin: 0 0 var(--space-md) 0;
+  color: var(--neon-cyan);
+  text-shadow: 0 0 20px rgba(0, 255, 255, 0.5);
+}
+
+.mode-description {
+  color: var(--text-secondary);
+  margin-bottom: var(--space-xl);
+  font-size: var(--text-base);
+  line-height: 1.6;
+}
+
+/* Animations */
+@keyframes pulse-glow {
+  0%, 100% {
+    filter: drop-shadow(0 0 20px var(--neon-cyan));
+  }
+  50% {
+    filter: drop-shadow(0 0 40px var(--neon-cyan));
+  }
+}
+
+@keyframes pulse-status {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+/* Responsive Design */
 @media (max-width: 768px) {
+  .dashboard {
+    padding: var(--space-md) var(--space-sm);
+    padding-bottom: 100px;
+  }
+  
   .dashboard-header {
     flex-direction: column;
-    gap: 20px;
-    text-align: center;
+    align-items: flex-start;
+    margin-bottom: var(--space-xl);
   }
-
+  
+  .app-title {
+    font-size: var(--text-2xl);
+  }
+  
   .stats-grid {
-    grid-template-columns: repeat(2, 1fr);
+    gap: var(--space-sm);
   }
-
-  .game-modes {
-    grid-template-columns: 1fr;
+  
+  .mode-card {
+    padding: var(--space-xl) var(--space-lg);
   }
-
-  .quick-actions {
-    flex-direction: column;
+  
+  .mode-icon {
+    font-size: var(--text-4xl);
   }
+  
+  .mode-title {
+    font-size: var(--text-xl);
+  }
+}
 
-  .action-btn {
-    width: 100%;
+@media (max-width: 480px) {
+  .app-icon {
+    font-size: var(--text-3xl);
+  }
+  
+  .app-title {
+    font-size: var(--text-xl);
+  }
+  
+  .user-pill {
+    padding: var(--space-xs) var(--space-sm);
+  }
+  
+  .user-address {
+    font-size: 0.7rem;
+  }
+  
+  .mode-card {
+    padding: var(--space-lg) var(--space-md);
   }
 }
