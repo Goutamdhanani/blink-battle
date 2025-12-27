@@ -171,8 +171,9 @@ describe('AuthController', () => {
 
     it('should return 401 error when nonce is expired', async () => {
       const redis = (redisClient as any).default;
-      // Nonce from 10 minutes ago (expired, max age is 5 minutes)
-      const expiredTimestamp = Date.now() - 10 * 60 * 1000;
+      // Nonce from 10 minutes ago (expired, max age is 5 minutes = 300000ms)
+      const NONCE_MAX_AGE_MS = 5 * 60 * 1000;
+      const expiredTimestamp = Date.now() - (NONCE_MAX_AGE_MS * 2);
       redis.get.mockResolvedValue(expiredTimestamp.toString());
 
       mockRequest.body = {
