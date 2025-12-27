@@ -56,25 +56,35 @@ export const minikit = {
       const res = await axios.get(`${API_URL}/api/auth/nonce`);
       const { nonce } = res.data;
 
+      // Store the nonce for later verification
+      const originalNonce = nonce;
+
       // Use MiniKit walletAuth command
       const { finalPayload } = await MiniKit.commandsAsync.walletAuth({
-        nonce: nonce,
+        nonce: originalNonce,
         expirationTime: new Date(new Date().getTime() + 7 * 24 * 60 * 60 * 1000),
         statement: 'Sign in to Blink Battle',
       });
 
       if (finalPayload.status === 'error') {
-        throw new Error(finalPayload.error_code || 'Wallet authentication failed');
+        const errorCode = finalPayload.error_code || 'unknown_error';
+        console.error('[MiniKit] Wallet auth error:', errorCode);
+        throw new Error(`Wallet authentication failed: ${errorCode}`);
       }
 
-      // Verify SIWE message on backend
+      // Verify SIWE message on backend with both payload and original nonce
       const verifyRes = await axios.post(`${API_URL}/api/auth/verify-siwe`, {
         payload: finalPayload,
+        nonce: originalNonce,
       });
 
       return verifyRes.data;
-    } catch (error) {
+    } catch (error: any) {
       console.error('[MiniKit] Sign in error:', error);
+      // Provide more context for debugging
+      if (error.response?.data?.errorCode) {
+        throw new Error(`Authentication failed: ${error.response.data.errorCode}`);
+      }
       throw error;
     }
   },
