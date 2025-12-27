@@ -59,10 +59,11 @@ const Dashboard: React.FC = () => {
             <button 
               className="logout-btn" 
               onClick={handleLogout}
-              title="Logout"
-              aria-label="Logout"
+              title="Sign out of your account"
+              aria-label="Sign out of your account"
             >
-              🚪
+              <span className="logout-icon">🚪</span>
+              <span className="logout-text">Logout</span>
             </button>
           </div>
         </header>
