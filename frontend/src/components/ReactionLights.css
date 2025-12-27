@@ -1,0 +1,115 @@
+.reaction-lights {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 16px;
+  margin: 32px 0;
+  padding: 24px;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 16px;
+  border: 2px solid rgba(255, 255, 255, 0.1);
+}
+
+.light {
+  position: relative;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.05);
+  border: 2px solid rgba(255, 255, 255, 0.1);
+  transition: all 0.3s ease;
+}
+
+.light-glow {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: transparent;
+  transition: all 0.3s ease;
+}
+
+/* Red state - during countdown */
+.light-red {
+  background: #ff4444;
+  border-color: #ff6666;
+  box-shadow: 0 0 20px rgba(255, 68, 68, 0.6),
+              0 0 40px rgba(255, 68, 68, 0.4),
+              inset 0 0 10px rgba(255, 255, 255, 0.2);
+}
+
+.light-red .light-glow {
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.3) 0%, transparent 70%);
+}
+
+/* Green state - GO signal */
+.light-green {
+  background: #00ff88;
+  border-color: #00ffaa;
+  animation: pulse-green 0.5s ease-in-out;
+  box-shadow: 0 0 30px rgba(0, 255, 136, 0.8),
+              0 0 60px rgba(0, 255, 136, 0.5),
+              inset 0 0 15px rgba(255, 255, 255, 0.3);
+}
+
+.light-green .light-glow {
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.5) 0%, transparent 70%);
+}
+
+@keyframes pulse-green {
+  0% {
+    transform: scale(1);
+    box-shadow: 0 0 20px rgba(0, 255, 136, 0.6),
+                0 0 40px rgba(0, 255, 136, 0.4);
+  }
+  50% {
+    transform: scale(1.1);
+    box-shadow: 0 0 40px rgba(0, 255, 136, 0.8),
+                0 0 80px rgba(0, 255, 136, 0.6);
+  }
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 30px rgba(0, 255, 136, 0.8),
+                0 0 60px rgba(0, 255, 136, 0.5);
+  }
+}
+
+/* Mobile optimization */
+@media (max-width: 768px) {
+  .reaction-lights {
+    gap: 12px;
+    padding: 20px;
+    margin: 24px 0;
+  }
+  
+  .light {
+    width: 40px;
+    height: 40px;
+  }
+  
+  .light-glow {
+    width: 30px;
+    height: 30px;
+  }
+}
+
+@media (max-width: 480px) {
+  .reaction-lights {
+    gap: 8px;
+    padding: 16px;
+    margin: 20px 0;
+  }
+  
+  .light {
+    width: 32px;
+    height: 32px;
+  }
+  
+  .light-glow {
+    width: 24px;
+    height: 24px;
+  }
+}

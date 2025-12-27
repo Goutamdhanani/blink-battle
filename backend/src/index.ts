@@ -16,6 +16,38 @@ import pool from './config/database';
 
 dotenv.config();
 
+// Validate critical environment variables on startup
+const validateEnvVars = () => {
+  const required = [
+    'APP_ID',
+    'DEV_PORTAL_API_KEY',
+    'PLATFORM_WALLET_ADDRESS',
+    'JWT_SECRET',
+    'DATABASE_URL',
+  ];
+  
+  const missing = required.filter(key => !process.env[key]);
+  
+  if (missing.length > 0) {
+    console.error('❌ Missing required environment variables:');
+    missing.forEach(key => console.error(`   - ${key}`));
+    console.error('\nPlease check your .env file and ensure all required variables are set.');
+    console.error('See .env.example for reference.');
+    process.exit(1);
+  }
+  
+  // Validate wallet address format
+  const walletAddr = process.env.PLATFORM_WALLET_ADDRESS;
+  if (walletAddr && !walletAddr.match(/^0x[a-fA-F0-9]{40}$/)) {
+    console.error('❌ Invalid PLATFORM_WALLET_ADDRESS format. Must be a valid Ethereum address (0x...)');
+    process.exit(1);
+  }
+  
+  console.log('✅ Environment variables validated');
+};
+
+validateEnvVars();
+
 const app = express();
 const httpServer = createServer(app);
 const io = new Server(httpServer, {

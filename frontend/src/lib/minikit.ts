@@ -6,9 +6,7 @@ import {
   Tokens,
   tokenToDecimals 
 } from '@worldcoin/minikit-js';
-import axios from 'axios';
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+import { apiClient, API_URL } from './api';
 
 /**
  * MiniKit utility functions for World App integration
@@ -52,8 +50,8 @@ export const minikit = {
     }
 
     try {
-      // Get nonce from backend
-      const res = await axios.get(`${API_URL}/api/auth/nonce`);
+      // Get nonce from backend (no auth required for nonce generation)
+      const res = await apiClient.get('/api/auth/nonce');
       const { nonce } = res.data;
 
       // Store the nonce for later verification
@@ -73,7 +71,7 @@ export const minikit = {
       }
 
       // Verify SIWE message on backend with both payload and original nonce
-      const verifyRes = await axios.post(`${API_URL}/api/auth/verify-siwe`, {
+      const verifyRes = await apiClient.post('/api/auth/verify-siwe', {
         payload: finalPayload,
         nonce: originalNonce,
       });
@@ -100,16 +98,21 @@ export const minikit = {
 
     try {
       // First, initiate payment on backend to get reference ID
-      const res = await axios.post(`${API_URL}/api/initiate-payment`, {
+      // This call now includes auth token via axios interceptor
+      const res = await apiClient.post('/api/initiate-payment', {
         amount,
       });
       const { id } = res.data;
 
       const platformWallet = import.meta.env.VITE_PLATFORM_WALLET_ADDRESS;
 
+      if (!platformWallet) {
+        throw new Error('Platform wallet address not configured');
+      }
+
       const payload: PayCommandInput = {
         reference: id,
-        to: platformWallet || '0x0000000000000000000000000000000000000000',
+        to: platformWallet,
         tokens: [
           {
             symbol: Tokens.WLD,
@@ -122,8 +125,8 @@ export const minikit = {
       const { finalPayload } = await MiniKit.commandsAsync.pay(payload);
 
       if (finalPayload.status === 'success') {
-        // Verify payment on backend
-        const confirmRes = await axios.post(`${API_URL}/api/confirm-payment`, {
+        // Verify payment on backend (includes auth token via axios interceptor)
+        const confirmRes = await apiClient.post('/api/confirm-payment', {
           payload: finalPayload,
         });
 
@@ -138,8 +141,18 @@ export const minikit = {
         success: false,
         error: finalPayload.error_code || 'Payment failed',
       };
-    } catch (error) {
+    } catch (error: any) {
       console.error('[MiniKit] Payment error:', error);
+      
+      // Provide better error messages for common issues
+      if (error.response?.status === 401) {
+        throw new Error('Authentication required. Please sign in again.');
+      }
+      
+      if (error.response?.data?.error) {
+        throw new Error(error.response.data.error);
+      }
+      
       throw error;
     }
   },
@@ -162,8 +175,8 @@ export const minikit = {
       const { finalPayload } = await MiniKit.commandsAsync.verify(verifyPayload);
 
       if (finalPayload.status === 'success') {
-        // Send proof to backend for verification
-        const res = await axios.post(`${API_URL}/api/verify-world-id`, {
+        // Send proof to backend for verification (includes auth token via axios interceptor)
+        const res = await apiClient.post('/api/verify-world-id', {
           payload: finalPayload,
           action: action,
         });
