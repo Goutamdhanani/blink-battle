@@ -816,7 +816,15 @@ Verify:
 2. Database user has proper permissions
 3. Database exists and is accessible
 
+**SIWE Login Issues**
+
+If authentication is failing in World App:
+1. Enable debug panel by adding `?debug=1` to your URL
+2. Check for configuration warnings (red/yellow boxes at top)
+3. Follow step-by-step diagnostic process
+
 For detailed debugging instructions, see:
+- **[TROUBLESHOOTING_SIWE_LOGIN.md](./TROUBLESHOOTING_SIWE_LOGIN.md)** - **NEW** Comprehensive SIWE troubleshooting guide
 - **[AUTH_DEBUGGING.md](./AUTH_DEBUGGING.md)** - Complete debugging guide
 - **[DEBUG_PANEL_REFERENCE.md](./DEBUG_PANEL_REFERENCE.md)** - Visual reference
 
