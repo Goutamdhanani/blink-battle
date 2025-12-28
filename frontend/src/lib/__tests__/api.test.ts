@@ -152,7 +152,7 @@ describe('API Client', () => {
       // Note: This test would need environment variable mocking
       // which is complex in Vitest. Documenting expected behavior:
       // - VITE_API_URL environment variable should be used as baseURL
-      // - Falls back to window.location.origin in production
+      // - Falls back to https://blink-battle-7dcdf0aa361a.herokuapp.com in production
       // - Falls back to http://localhost:3001 in development
       
       const client = createApiClient();

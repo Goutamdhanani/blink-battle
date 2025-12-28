@@ -77,6 +77,19 @@ const buildAllowedOrigins = (): string[] => {
     origins.push(...additionalOrigins);
   }
   
+  // Production hardcoded origins (Worldcoin allowed domains and Vercel deployments)
+  // These are always allowed in addition to environment variables
+  const productionOrigins = [
+    'https://www.blumea.me',
+    'https://blumea.me',
+    'https://api.blumea.me',
+    'https://blink-battle.vercel.app',
+    'https://blink-battle-git-main-blumeame.vercel.app',
+    'https://blink-battle-61ey1k4bm-blumeame.vercel.app',
+  ];
+  
+  origins.push(...productionOrigins);
+  
   // Always allow localhost in development (avoid duplicates)
   if (process.env.NODE_ENV !== 'production') {
     if (!origins.includes(LOCALHOST_URL)) {
