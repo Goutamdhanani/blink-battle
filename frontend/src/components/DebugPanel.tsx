@@ -70,7 +70,8 @@ const DebugPanel: React.FC = () => {
       let miniKitVersion = 'unknown';
       try {
         // MiniKit version might be available in different ways
-        miniKitVersion = (MiniKit as any).version || worldApp?.minikit_version || 'unknown';
+        const miniKitAny = MiniKit as any;
+        miniKitVersion = miniKitAny.version || worldApp?.minikit_version || 'unknown';
       } catch (e) {
         // Ignore
       }

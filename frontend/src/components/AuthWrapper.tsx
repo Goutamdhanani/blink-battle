@@ -189,7 +189,7 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
             break;
           case 'origin_not_allowed':
           case 'domain_not_allowed':
-            userMessage = 'Authentication blocked: This app\'s domain is not allowed.\n\nTo fix:\n1. Go to Worldcoin Dev Portal (https://developer.worldcoin.org)\n2. Select your app\n3. Add this origin to "Allowed Origins" under MiniKit settings\n4. Current origin: ' + window.location.origin;
+            userMessage = `Authentication blocked: This app's domain is not allowed.\n\nTo fix:\n1. Go to Worldcoin Dev Portal (https://developer.worldcoin.org)\n2. Select your app\n3. Add this origin to "Allowed Origins" under MiniKit settings\n4. Current origin: ${window.location.origin}`;
             break;
           case 'unsupported_command':
           case 'command_not_supported':

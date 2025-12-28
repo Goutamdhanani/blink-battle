@@ -49,7 +49,7 @@ const getApiUrl = (): string => {
     
     // Store error in window for debug panel
     if (typeof window !== 'undefined') {
-      (window as any).__apiConfigError = {
+      window.__apiConfigError = {
         error: 'VITE_API_URL not set in production',
         fallbackUrl: window.location.origin,
         timestamp: Date.now(),
@@ -78,6 +78,25 @@ if (import.meta.env.PROD && !import.meta.env.VITE_API_URL) {
 interface AuthenticationError extends Error {
   response?: any;
   isAuthError: boolean;
+}
+
+/**
+ * API configuration error stored in window for debug panel
+ */
+interface ApiConfigError {
+  error: string;
+  fallbackUrl: string;
+  timestamp: number;
+}
+
+/**
+ * Extend window interface for custom properties
+ */
+declare global {
+  interface Window {
+    __apiConfigError?: ApiConfigError;
+    __authDebugData?: any;
+  }
 }
 
 /**
