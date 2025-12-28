@@ -131,6 +131,7 @@ const io = new Server(httpServer, {
     },
     credentials: true,
     methods: ['GET', 'POST'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Request-Id'],
   },
 });
 
@@ -178,7 +179,7 @@ app.use(cors({
   },
   credentials: true, // Allow credentials (cookies, authorization headers)
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Request-Id'],
   optionsSuccessStatus: 204, // Standard status for successful OPTIONS with no content
   preflightContinue: false, // Handle CORS preflight response directly without passing to next handler
 }));

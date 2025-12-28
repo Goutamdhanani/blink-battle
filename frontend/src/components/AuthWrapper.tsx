@@ -83,6 +83,37 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
     }
   };
 
+  // Helper function to retry a request
+  const withRetry = async <T,>(
+    fn: () => Promise<T>,
+    maxRetries = 3,
+    delayMs = 1000
+  ): Promise<T> => {
+    let lastError: Error | null = null;
+    
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        return await fn();
+      } catch (error: any) {
+        lastError = error;
+        authLog(`[Auth] Request attempt ${attempt}/${maxRetries} failed:`, error.message);
+        
+        // Don't retry on non-network errors
+        if (error.response?.status && error.response.status < 500) {
+          throw error;
+        }
+        
+        if (attempt < maxRetries) {
+          authLog(`[Auth] Retrying in ${delayMs}ms...`);
+          await new Promise(resolve => setTimeout(resolve, delayMs));
+          delayMs *= 2; // Exponential backoff
+        }
+      }
+    }
+    
+    throw lastError;
+  };
+
   const authenticate = async () => {
     setLoading(true);
     setError(null);
@@ -100,7 +131,7 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
     }, AUTH_TIMEOUT_MS);
 
     try {
-      // Step 1: Get nonce from backend
+      // Step 1: Get nonce from backend (with retry)
       const nonceRequestId = generateRequestId();
       const nonceTimestamp = Date.now();
       
@@ -109,11 +140,15 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
         timestamp: nonceTimestamp,
       };
 
-      const nonceRes = await apiClient.get('/api/auth/nonce', {
-        headers: {
-          'X-Request-Id': nonceRequestId,
-        },
-      });
+      const nonceRes = await withRetry(() => 
+        apiClient.get('/api/auth/nonce', {
+          headers: {
+            'X-Request-Id': nonceRequestId,
+          },
+        }),
+        3, // max 3 retries
+        1000 // start with 1 second delay
+      );
       
       const nonceData = nonceRes.data;
       const { nonce } = nonceData;
