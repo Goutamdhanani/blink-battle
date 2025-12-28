@@ -115,10 +115,7 @@ const Matchmaking: React.FC = () => {
         setToken(null);
       } else {
         // Extract meaningful error message
-        let errorMessage = 'Failed to process payment';
-        if (error.message) {
-          errorMessage = error.message;
-        }
+        const errorMessage = error.message || 'Failed to process payment';
         console.error('[Matchmaking] Setting error message:', errorMessage);
         setPaymentError(errorMessage);
       }

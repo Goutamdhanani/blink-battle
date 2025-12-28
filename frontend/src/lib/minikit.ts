@@ -194,8 +194,15 @@ export const minikit = {
       if (error.response?.data?.error) {
         const backendError = error.response.data.error;
         const errorDetails = error.response.data.details;
-        console.error('[MiniKit] Backend error:', backendError, 'details:', errorDetails);
-        throw new Error(`${backendError}${errorDetails ? ': ' + JSON.stringify(errorDetails) : ''}`);
+        console.error('[MiniKit] Backend error:', backendError);
+        if (!import.meta.env.PROD && errorDetails) {
+          console.error('[MiniKit] Error details:', errorDetails);
+        }
+        // Provide user-friendly error message
+        const userMessage = typeof errorDetails === 'string' 
+          ? `${backendError}: ${errorDetails}`
+          : backendError;
+        throw new Error(userMessage);
       }
       
       throw error;

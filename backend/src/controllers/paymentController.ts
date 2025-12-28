@@ -201,7 +201,8 @@ export class PaymentController {
       console.error('[Payment] Error confirming payment:', {
         message: errorMessage,
         stack: errorStack,
-        payload: req.body?.payload,
+        reference: req.body?.payload?.reference,
+        status: req.body?.payload?.status,
       });
       return res.status(500).json({ 
         error: 'Failed to confirm payment',
