@@ -45,14 +45,24 @@ export class PaymentController {
       const { payload } = req.body;
       const userId = (req as any).userId; // From auth middleware
 
+      console.log('[Payment] confirmPayment called with payload:', JSON.stringify(payload, null, 2));
+
       if (!payload || payload.status !== 'success') {
-        return res.status(400).json({ error: 'Invalid payment payload' });
+        console.error('[Payment] Invalid payload status:', payload?.status || 'missing payload');
+        return res.status(400).json({ 
+          error: 'Invalid payment payload',
+          details: `Expected status 'success', got '${payload?.status || 'missing'}'`
+        });
       }
 
       const { transaction_id, reference } = payload;
 
       if (!reference || !transaction_id) {
-        return res.status(400).json({ error: 'Missing reference or transaction_id' });
+        console.error('[Payment] Missing required fields:', { reference, transaction_id });
+        return res.status(400).json({ 
+          error: 'Missing reference or transaction_id',
+          details: { hasReference: !!reference, hasTransactionId: !!transaction_id }
+        });
       }
 
       // Get payment details from database
@@ -91,26 +101,41 @@ export class PaymentController {
         return res.status(500).json({ error: 'Server configuration error' });
       }
 
+      const apiUrl = `https://developer.worldcoin.org/api/v2/minikit/transaction/${transaction_id}?app_id=${APP_ID}`;
       console.log(`[Payment] Verifying transaction reference=${reference} transactionId=${transaction_id}`);
+      console.log(`[Payment] Developer Portal API URL: ${apiUrl}`);
 
       let transaction;
       try {
-        const response = await axios.get(
-          `https://developer.worldcoin.org/api/v2/minikit/transaction/${transaction_id}?app_id=${APP_ID}`,
-          {
-            headers: {
-              Authorization: `Bearer ${DEV_PORTAL_API_KEY}`,
-            },
-          }
-        );
+        const response = await axios.get(apiUrl, {
+          headers: {
+            Authorization: `Bearer ${DEV_PORTAL_API_KEY}`,
+          },
+        });
         transaction = response.data;
+        console.log(`[Payment] Developer Portal API response:`, JSON.stringify(transaction, null, 2));
       } catch (apiError: unknown) {
         const errorMessage = apiError instanceof Error ? apiError.message : 'Unknown error';
-        const errorDetails = (apiError as any)?.response?.data || errorMessage;
-        console.error(`[Payment] Developer Portal API error:`, errorDetails);
+        const axiosError = apiError as any;
+        const errorDetails = {
+          message: errorMessage,
+          status: axiosError?.response?.status,
+          statusText: axiosError?.response?.statusText,
+          data: axiosError?.response?.data,
+          headers: axiosError?.response?.headers,
+        };
+        console.error(`[Payment] Developer Portal API error:`, JSON.stringify(errorDetails, null, 2));
         return res.status(500).json({ 
           error: 'Failed to verify transaction with Developer Portal',
           details: errorDetails,
+        });
+      }
+
+      if (!transaction) {
+        console.error('[Payment] Developer Portal returned null/undefined transaction');
+        return res.status(500).json({ 
+          error: 'Invalid response from Developer Portal',
+          details: 'Transaction data is missing'
         });
       }
 
@@ -118,6 +143,7 @@ export class PaymentController {
 
       // Handle different transaction statuses
       if (transaction.status === 'failed') {
+        console.error('[Payment] Transaction failed on-chain:', JSON.stringify(transaction, null, 2));
         await PaymentModel.updateStatus(reference, PaymentStatus.FAILED, transaction_id);
         return res.status(400).json({ 
           error: 'Transaction failed',
@@ -160,7 +186,12 @@ export class PaymentController {
       });
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      console.error('[Payment] Error confirming payment:', errorMessage);
+      const errorStack = error instanceof Error ? error.stack : undefined;
+      console.error('[Payment] Error confirming payment:', {
+        message: errorMessage,
+        stack: errorStack,
+        payload: req.body?.payload,
+      });
       return res.status(500).json({ 
         error: 'Failed to confirm payment',
         details: errorMessage,
