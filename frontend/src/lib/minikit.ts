@@ -97,6 +97,8 @@ export const minikit = {
     }
 
     try {
+      const isDev = !import.meta.env.PROD;
+      
       console.log('[MiniKit] Initiating payment:', { amount });
       
       // First, initiate payment on backend to get reference ID
@@ -126,9 +128,19 @@ export const minikit = {
         description: `Stake ${amount} WLD for reaction battle`,
       };
 
-      console.log('[MiniKit] Requesting MiniKit Pay command with payload:', JSON.stringify(payload, null, 2));
+      if (isDev) {
+        console.log('[MiniKit] Requesting MiniKit Pay command with payload:', JSON.stringify(payload, null, 2));
+      } else {
+        console.log('[MiniKit] Requesting MiniKit Pay command for reference:', id);
+      }
+      
       const { finalPayload } = await MiniKit.commandsAsync.pay(payload);
-      console.log('[MiniKit] MiniKit Pay finalPayload received:', JSON.stringify(finalPayload, null, 2));
+      
+      if (isDev) {
+        console.log('[MiniKit] MiniKit Pay finalPayload received:', JSON.stringify(finalPayload, null, 2));
+      } else {
+        console.log('[MiniKit] MiniKit Pay finalPayload status:', finalPayload?.status);
+      }
 
       if (finalPayload.status === 'success') {
         console.log('[MiniKit] Payment approved by user, confirming with backend');

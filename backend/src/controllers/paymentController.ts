@@ -45,7 +45,13 @@ export class PaymentController {
       const { payload } = req.body;
       const userId = (req as any).userId; // From auth middleware
 
-      console.log('[Payment] confirmPayment called with payload:', JSON.stringify(payload, null, 2));
+      const isDev = process.env.NODE_ENV !== 'production' || process.env.DEBUG_AUTH === 'true';
+      
+      if (isDev) {
+        console.log('[Payment] confirmPayment called with payload:', JSON.stringify(payload, null, 2));
+      } else {
+        console.log('[Payment] confirmPayment called for reference:', payload?.reference);
+      }
 
       if (!payload || payload.status !== 'success') {
         console.error('[Payment] Invalid payload status:', payload?.status || 'missing payload');
@@ -113,7 +119,12 @@ export class PaymentController {
           },
         });
         transaction = response.data;
-        console.log(`[Payment] Developer Portal API response:`, JSON.stringify(transaction, null, 2));
+        
+        if (isDev) {
+          console.log(`[Payment] Developer Portal API response:`, JSON.stringify(transaction, null, 2));
+        } else {
+          console.log(`[Payment] Developer Portal API response status:`, transaction?.status);
+        }
       } catch (apiError: unknown) {
         const errorMessage = apiError instanceof Error ? apiError.message : 'Unknown error';
         const axiosError = apiError as any;
