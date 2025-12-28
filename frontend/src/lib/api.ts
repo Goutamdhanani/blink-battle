@@ -26,37 +26,14 @@ const logAuthError = (message: string, ...args: unknown[]) => {
 
 // Determine API URL with production-safe defaults
 const getApiUrl = (): string => {
-  // If explicitly set, use it
+  // If explicitly set via environment variable, use it
   if (import.meta.env.VITE_API_URL) {
     return import.meta.env.VITE_API_URL;
   }
   
-  // In production, try to use same origin (works if frontend and backend are on same domain)
-  // WARNING: This only works if your backend is accessible from the same domain as the frontend
-  // For separate domains, you MUST set VITE_API_URL explicitly
+  // Production fallback - use the known backend URL
   if (import.meta.env.PROD) {
-    console.error('⚠️ CRITICAL CONFIGURATION ERROR ⚠️');
-    console.error('[API] VITE_API_URL is not set in production!');
-    console.error('[API] Falling back to window.location.origin:', window.location.origin);
-    console.error('[API] If your backend is on a different domain, authentication WILL FAIL!');
-    console.error('[API] ');
-    console.error('[API] TO FIX:');
-    console.error('[API] 1. Go to your deployment platform (Vercel/Netlify/etc.)');
-    console.error('[API] 2. Set environment variable: VITE_API_URL=https://your-backend.herokuapp.com');
-    console.error('[API] 3. Redeploy your frontend');
-    console.error('[API] ');
-    console.error('[API] Without this, POST /api/auth/verify-siwe will fail!');
-    
-    // Store error in window for debug panel
-    if (typeof window !== 'undefined') {
-      window.__apiConfigError = {
-        error: 'VITE_API_URL not set in production',
-        fallbackUrl: window.location.origin,
-        timestamp: Date.now(),
-      };
-    }
-    
-    return window.location.origin;
+    return 'https://blink-battle-7dcdf0aa361a.herokuapp.com';
   }
   
   // Development default
@@ -67,10 +44,6 @@ const API_URL = getApiUrl();
 
 // Log API URL on startup for debugging
 authLog('[API] Using API URL:', API_URL);
-if (import.meta.env.PROD && !import.meta.env.VITE_API_URL) {
-  // Make the error very visible
-  authLog('[API] ⚠️  WARNING: Using fallback URL in production - authentication may fail!');
-}
 
 /**
  * Custom error type for authentication failures
