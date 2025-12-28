@@ -98,8 +98,8 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
         lastError = error;
         authLog(`[Auth] Request attempt ${attempt}/${maxRetries} failed:`, error.message);
         
-        // Don't retry on non-network errors
-        if (error.response?.status && error.response.status < 500) {
+        // Don't retry on client errors (4xx), but do retry on network errors and 5xx
+        if (error.response?.status && error.response.status >= 400 && error.response.status < 500) {
           throw error;
         }
         
