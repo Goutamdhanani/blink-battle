@@ -145,6 +145,45 @@ describe('API Client', () => {
       await expect(responseInterceptor.rejected(mockError)).rejects.toThrow();
       expect(global.localStorage.removeItem).not.toHaveBeenCalled();
     });
+
+    it('should handle timeout errors with ECONNABORTED code', async () => {
+      // Arrange
+      const client = createApiClient();
+      
+      // Access the response interceptor
+      const responseInterceptor = (client.interceptors.response as any).handlers[0];
+      const mockError: any = {
+        code: 'ECONNABORTED',
+        config: {
+          url: '/api/test',
+        },
+      };
+
+      // Act & Assert
+      await expect(responseInterceptor.rejected(mockError)).rejects.toThrow(
+        'Request timed out. Please check your connection and try again.'
+      );
+    });
+
+    it('should handle ERR_NETWORK errors', async () => {
+      // Arrange
+      const client = createApiClient();
+      
+      // Access the response interceptor
+      const responseInterceptor = (client.interceptors.response as any).handlers[0];
+      const mockError: any = {
+        code: 'ERR_NETWORK',
+        config: {
+          url: '/api/test',
+          baseURL: 'http://localhost:3001',
+        },
+      };
+
+      // Act & Assert
+      await expect(responseInterceptor.rejected(mockError)).rejects.toThrow(
+        /Network error: Unable to reach/
+      );
+    });
   });
 
   describe('API URL Configuration', () => {
@@ -167,6 +206,11 @@ describe('API Client', () => {
     it('should enable credentials', () => {
       const client = createApiClient();
       expect(client.defaults.withCredentials).toBe(true);
+    });
+
+    it('should set timeout to 30 seconds', () => {
+      const client = createApiClient();
+      expect(client.defaults.timeout).toBe(30000);
     });
   });
 });

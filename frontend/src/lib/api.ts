@@ -83,6 +83,7 @@ export const createApiClient = (): AxiosInstance => {
       'Content-Type': 'application/json',
     },
     withCredentials: true, // Include credentials (cookies, authorization headers)
+    timeout: 30000, // 30 second timeout
   });
 
   // Add request interceptor to include auth token
@@ -99,8 +100,8 @@ export const createApiClient = (): AxiosInstance => {
       authLog('[API] Outgoing request:', {
         method: config.method?.toUpperCase(),
         url: config.url,
+        baseURL: config.baseURL,
         hasAuth: !!token,
-        hasData: !!config.data,
       });
       
       return config;
@@ -118,18 +119,22 @@ export const createApiClient = (): AxiosInstance => {
       authLog('[API] Response received:', {
         status: response.status,
         url: response.config.url,
-        method: response.config.method?.toUpperCase(),
       });
       return response;
     },
     (error: AxiosError) => {
-      logAuthError('[API] Response error:', {
-        status: error.response?.status,
-        url: error.config?.url,
-        method: error.config?.method?.toUpperCase(),
-        hasResponse: !!error.response,
-        hasRequest: !!error.request,
-      });
+      // Provide detailed error information
+      if (error.code === 'ECONNABORTED') {
+        logAuthError('[API] Request timed out:', error.config?.url);
+        error.message = 'Request timed out. Please check your connection and try again.';
+      } else if (error.code === 'ERR_NETWORK' || !error.response) {
+        logAuthError('[API] Network error:', {
+          url: error.config?.url,
+          baseURL: error.config?.baseURL,
+          code: error.code,
+        });
+        error.message = `Network error: Unable to reach ${API_URL}. Please check your connection.`;
+      }
       
       if (error.response?.status === 401) {
         logAuthError('[API] Authentication error - token may be invalid or expired');
@@ -143,6 +148,7 @@ export const createApiClient = (): AxiosInstance => {
         enhancedError.isAuthError = true;
         return Promise.reject(enhancedError);
       }
+      
       return Promise.reject(error);
     }
   );
