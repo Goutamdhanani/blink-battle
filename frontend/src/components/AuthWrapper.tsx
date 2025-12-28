@@ -155,7 +155,14 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
         const errorMsg = 'MiniKit walletAuth returned undefined payload';
         logAuthError('[Auth]', errorMsg);
         (window as any).__authDebugData.lastWalletAuth!.error = errorMsg;
-        throw new Error('Authentication failed: No response from wallet. Please ensure you are using World App and try again.');
+        throw new Error(
+          'Authentication failed: No response from wallet.\n\n' +
+          'Possible causes:\n' +
+          '• Not running in World App (open this app in World App)\n' +
+          '• MiniKit API version incompatibility\n' +
+          '• Origin not allowed in Worldcoin Dev Portal\n\n' +
+          'Check the debug panel (?debug=1) for more details.'
+        );
       }
 
       authLog('[Auth] finalPayload.status:', finalPayload.status);
@@ -169,14 +176,37 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
 
       // Check for errors in payload
       if (finalPayload.status === 'error') {
-        const errorCode = finalPayload.error_code || 'unknown_error';
-        logAuthError('[Auth] MiniKit error:', errorCode);
-        (window as any).__authDebugData.lastWalletAuth!.error = `${errorCode}: ${(finalPayload as any).error_message || 'Unknown error'}`;
-        throw new Error(
-          errorCode === 'user_rejected'
-            ? 'Sign-in was cancelled'
-            : `Authentication failed: ${errorCode}`
-        );
+        const errorCode = (finalPayload.error_code as string) || 'unknown_error';
+        const errorMessage = (finalPayload as any).error_message || 'Unknown error';
+        logAuthError('[Auth] MiniKit error:', errorCode, errorMessage);
+        (window as any).__authDebugData.lastWalletAuth!.error = `${errorCode}: ${errorMessage}`;
+        
+        // Provide actionable error messages based on error code
+        let userMessage = '';
+        switch (errorCode) {
+          case 'user_rejected':
+            userMessage = 'Sign-in was cancelled. Please try again when ready.';
+            break;
+          case 'origin_not_allowed':
+          case 'domain_not_allowed':
+            userMessage = 'Authentication blocked: This app\'s domain is not allowed.\n\nTo fix:\n1. Go to Worldcoin Dev Portal (https://developer.worldcoin.org)\n2. Select your app\n3. Add this origin to "Allowed Origins" under MiniKit settings\n4. Current origin: ' + window.location.origin;
+            break;
+          case 'unsupported_command':
+          case 'command_not_supported':
+            userMessage = 'Authentication failed: MiniKit command not supported.\n\nThis may indicate:\n- World App version is outdated (update required)\n- MiniKit API version mismatch\n- App configuration issue\n\nPlease update World App or contact support.';
+            break;
+          case 'network_error':
+            userMessage = 'Network error during authentication. Please check your connection and try again.';
+            break;
+          case 'invalid_payload':
+          case 'invalid_request':
+            userMessage = 'Authentication request invalid. This may be a configuration issue. Please contact support.';
+            break;
+          default:
+            userMessage = `Authentication failed: ${errorCode}\n\nError: ${errorMessage}`;
+        }
+        
+        throw new Error(userMessage);
       }
 
       // Explicitly check for success status before proceeding

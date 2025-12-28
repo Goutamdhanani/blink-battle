@@ -17,6 +17,9 @@ const DebugPanel: React.FC = () => {
     worldAppVersion: 'unknown',
     apiUrl: '',
     errors: [] as string[],
+    warnings: [] as string[],
+    hasApiConfigError: false,
+    miniKitVersion: 'unknown',
   });
   const [authDebugData, setAuthDebugData] = useState<AuthDebugData | null>(null);
 
@@ -39,14 +42,49 @@ const DebugPanel: React.FC = () => {
     try {
       const worldApp = (window as any).WorldApp;
       const authData = (window as any).__authDebugData as AuthDebugData | undefined;
+      const apiConfigError = (window as any).__apiConfigError;
+      const warnings: string[] = [];
+      const errors: string[] = [];
+      
+      // Check for API configuration error
+      const hasApiConfigError = !!apiConfigError;
+      if (hasApiConfigError) {
+        errors.push(`VITE_API_URL not configured - using fallback: ${apiConfigError.fallbackUrl}`);
+        warnings.push('POST /api/auth/verify-siwe will likely fail if backend is on different domain!');
+      }
+      
+      // Check if MiniKit is installed
+      const isInstalled = MiniKit.isInstalled();
+      if (!isInstalled) {
+        warnings.push('MiniKit not installed - must open in World App');
+      }
+      
+      // Check if walletAuth is supported
+      const supportedCommands = worldApp?.supported_commands || [];
+      if (isInstalled && supportedCommands.length > 0 && !supportedCommands.includes('walletAuth')) {
+        errors.push('walletAuth command not supported by this World App version');
+        warnings.push('Update World App to the latest version');
+      }
+      
+      // Try to get MiniKit version
+      let miniKitVersion = 'unknown';
+      try {
+        // MiniKit version might be available in different ways
+        miniKitVersion = (MiniKit as any).version || worldApp?.minikit_version || 'unknown';
+      } catch (e) {
+        // Ignore
+      }
       
       setDiagnostics({
-        isInstalled: MiniKit.isInstalled(),
-        isReady: MiniKit.isInstalled() && worldApp !== undefined,
-        supportedCommands: worldApp?.supported_commands || [],
+        isInstalled,
+        isReady: isInstalled && worldApp !== undefined,
+        supportedCommands,
         worldAppVersion: worldApp?.version || 'unknown',
-        apiUrl: authData?.apiUrl || import.meta.env.VITE_API_URL || 'http://localhost:3001',
-        errors: [],
+        apiUrl: authData?.apiUrl || import.meta.env.VITE_API_URL || window.location.origin,
+        errors,
+        warnings,
+        hasApiConfigError,
+        miniKitVersion,
       });
 
       setAuthDebugData(authData || null);
@@ -83,15 +121,68 @@ const DebugPanel: React.FC = () => {
       
       {isExpanded && (
         <div className="debug-content">
+          {/* Critical Warnings/Errors Section - shown first */}
+          {(diagnostics.errors.length > 0 || diagnostics.warnings.length > 0) && (
+            <div className="debug-section" style={{ border: '2px solid #ff4444', backgroundColor: 'rgba(255, 68, 68, 0.1)' }}>
+              <div className="debug-section-title" style={{ color: '#ff4444' }}>
+                ⚠️ Configuration Issues
+              </div>
+              {diagnostics.errors.length > 0 && (
+                <div className="debug-item">
+                  <span className="debug-label" style={{ color: '#ff4444' }}>Errors:</span>
+                  <div className="debug-errors">
+                    {diagnostics.errors.map((err, idx) => (
+                      <div key={idx} className="debug-error" style={{ color: '#ff4444', marginTop: '4px' }}>
+                        🚫 {err}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {diagnostics.warnings.length > 0 && (
+                <div className="debug-item">
+                  <span className="debug-label" style={{ color: '#ffaa00' }}>Warnings:</span>
+                  <div className="debug-warnings">
+                    {diagnostics.warnings.map((warn, idx) => (
+                      <div key={idx} className="debug-warning" style={{ color: '#ffaa00', marginTop: '4px' }}>
+                        ⚠️ {warn}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {diagnostics.hasApiConfigError && (
+                <div className="debug-item" style={{ marginTop: '8px', padding: '8px', backgroundColor: 'rgba(255, 170, 0, 0.1)', borderRadius: '4px' }}>
+                  <div style={{ fontWeight: 'bold', color: '#ffaa00', marginBottom: '4px' }}>
+                    📝 How to fix VITE_API_URL:
+                  </div>
+                  <div style={{ fontSize: '12px', lineHeight: '1.4' }}>
+                    1. Go to deployment settings (Vercel/Netlify)<br/>
+                    2. Add environment variable: VITE_API_URL<br/>
+                    3. Set value to your backend URL (e.g., https://your-app.herokuapp.com)<br/>
+                    4. Redeploy frontend
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
           <div className="debug-section">
             <div className="debug-section-title">Environment</div>
             <div className="debug-item">
               <span className="debug-label">API URL:</span>
-              <span className="debug-value">{diagnostics.apiUrl}</span>
+              <span className={`debug-value ${diagnostics.hasApiConfigError ? 'error' : ''}`}>
+                {diagnostics.apiUrl}
+                {diagnostics.hasApiConfigError && ' ⚠️'}
+              </span>
             </div>
             <div className="debug-item">
               <span className="debug-label">Mode:</span>
               <span className="debug-value">{import.meta.env.DEV ? 'Development' : 'Production'}</span>
+            </div>
+            <div className="debug-item">
+              <span className="debug-label">Current Origin:</span>
+              <span className="debug-value">{window.location.origin}</span>
             </div>
           </div>
 
@@ -109,6 +200,11 @@ const DebugPanel: React.FC = () => {
               <span className={`debug-value ${diagnostics.isReady ? 'success' : 'error'}`}>
                 {diagnostics.isReady ? '✅ Yes' : '❌ No'}
               </span>
+            </div>
+
+            <div className="debug-item">
+              <span className="debug-label">MiniKit Version:</span>
+              <span className="debug-value">{diagnostics.miniKitVersion}</span>
             </div>
 
             <div className="debug-item">
@@ -239,19 +335,6 @@ const DebugPanel: React.FC = () => {
                   <span className="debug-value error">{authDebugData.lastVerifyRequest.error}</span>
                 </div>
               )}
-            </div>
-          )}
-
-          {diagnostics.errors.length > 0 && (
-            <div className="debug-section">
-              <div className="debug-section-title">Errors</div>
-              <div className="debug-errors">
-                {diagnostics.errors.map((err, idx) => (
-                  <div key={idx} className="debug-error">
-                    {err}
-                  </div>
-                ))}
-              </div>
             </div>
           )}
         </div>
