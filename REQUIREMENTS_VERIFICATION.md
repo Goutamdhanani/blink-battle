@@ -113,13 +113,7 @@ All required debug information is captured:
 - **✅ Ensure axios attaches `Authorization: Bearer <token>`**
   - **Location:** `frontend/src/lib/api.ts:116-139`
   - **Implementation:** Axios request interceptor reads token from localStorage and adds header
-  - **Code:**
-    ```typescript
-    const token = localStorage.getItem('token');
-    if (token && config.headers) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
-    ```
+  - **Code:** The actual implementation properly checks for config and config.headers existence before setting Authorization header (see api.ts lines 116-125 for full type-safe implementation)
 
 - **✅ Ensure `/api/auth/me` works after successful login**
   - **Location:** `frontend/src/components/AuthWrapper.tsx:323-349`
@@ -142,9 +136,9 @@ All required debug information is captured:
   - **How to confirm whether `POST /api/auth/verify-siwe` is being blocked (World App developer logs + Heroku logs)**
     - **Location:** `TROUBLESHOOTING_SIWE_LOGIN.md:19-25, 280-290`
     - **Content:**
-      - Symptoms section describes exactly what "never sent" looks like
-      - Backend troubleshooting section shows how to check Heroku logs
-      - Debug panel usage explains how to see if POST was attempted
+        - Symptoms section describes exactly what "never sent" looks like
+        - Backend troubleshooting section shows how to check Heroku logs
+        - Debug panel usage explains how to see if POST was attempted
 
 ## Additional Features Beyond Requirements
 
@@ -249,14 +243,14 @@ No additional code changes are required. The codebase is ready for production de
 ## Files Modified/Created
 
 ### Frontend
-- `src/components/AuthWrapper.tsx` - Main authentication flow with comprehensive error handling
-- `src/components/DebugPanel.tsx` - Visual debug panel for diagnostics
-- `src/lib/api.ts` - API client with JWT interceptor and VITE_API_URL validation
-- `src/context/GameContext.tsx` - Token persistence in localStorage
+- `frontend/src/components/AuthWrapper.tsx` - Main authentication flow with comprehensive error handling
+- `frontend/src/components/DebugPanel.tsx` - Visual debug panel for diagnostics
+- `frontend/src/lib/api.ts` - API client with JWT interceptor and VITE_API_URL validation
+- `frontend/src/context/GameContext.tsx` - Token persistence in localStorage
 
 ### Backend
-- `src/controllers/authController.ts` - SIWE authentication endpoints
-- `src/middleware/auth.ts` - JWT authentication middleware
+- `backend/src/controllers/authController.ts` - SIWE authentication endpoints
+- `backend/src/middleware/auth.ts` - JWT authentication middleware
 
 ### Documentation
 - `TROUBLESHOOTING_SIWE_LOGIN.md` - Comprehensive troubleshooting guide
