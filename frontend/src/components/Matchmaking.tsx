@@ -70,8 +70,11 @@ const Matchmaking: React.FC = () => {
     setPaymentError(null);
 
     try {
+      console.log('[Matchmaking] Initiating MiniKit payment for stake:', selectedStake);
       // Initiate payment via MiniKit Pay command
       const result = await minikit.initiatePayment(selectedStake);
+
+      console.log('[Matchmaking] Payment result:', result);
 
       if (result.success) {
         // Check if transaction is still pending
@@ -95,11 +98,13 @@ const Matchmaking: React.FC = () => {
         );
       } else {
         minikit.sendHaptic('error');
-        setPaymentError(result.error || 'Payment failed');
+        const errorMsg = result.error || 'Payment failed';
+        console.error('[Matchmaking] Payment failed:', errorMsg, 'errorCode:', result.errorCode);
+        setPaymentError(errorMsg);
         resetPaymentState();
       }
     } catch (error: any) {
-      console.error('Payment error:', error);
+      console.error('[Matchmaking] Payment error:', error);
       minikit.sendHaptic('error');
       
       // Check if it's an authentication error (using isAuthError flag from API client)
@@ -109,7 +114,10 @@ const Matchmaking: React.FC = () => {
         // Update React state to reflect cleared authentication (localStorage already cleared by API interceptor)
         setToken(null);
       } else {
-        setPaymentError(error.message || 'Failed to process payment');
+        // Extract meaningful error message
+        const errorMessage = error.message || 'Failed to process payment';
+        console.error('[Matchmaking] Setting error message:', errorMessage);
+        setPaymentError(errorMessage);
       }
       
       resetPaymentState();

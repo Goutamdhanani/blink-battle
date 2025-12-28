@@ -97,6 +97,8 @@ export const minikit = {
     }
 
     try {
+      const isDev = !import.meta.env.PROD;
+      
       console.log('[MiniKit] Initiating payment:', { amount });
       
       // First, initiate payment on backend to get reference ID
@@ -126,8 +128,19 @@ export const minikit = {
         description: `Stake ${amount} WLD for reaction battle`,
       };
 
-      console.log('[MiniKit] Requesting MiniKit Pay command');
+      if (isDev) {
+        console.log('[MiniKit] Requesting MiniKit Pay command with payload:', JSON.stringify(payload, null, 2));
+      } else {
+        console.log('[MiniKit] Requesting MiniKit Pay command for reference:', id);
+      }
+      
       const { finalPayload } = await MiniKit.commandsAsync.pay(payload);
+      
+      if (isDev) {
+        console.log('[MiniKit] MiniKit Pay finalPayload received:', JSON.stringify(finalPayload, null, 2));
+      } else {
+        console.log('[MiniKit] MiniKit Pay finalPayload status:', finalPayload?.status);
+      }
 
       if (finalPayload.status === 'success') {
         console.log('[MiniKit] Payment approved by user, confirming with backend');
@@ -156,13 +169,19 @@ export const minikit = {
         };
       }
 
-      console.log('[MiniKit] Payment not successful:', finalPayload.error_code);
+      console.error('[MiniKit] Payment not successful:', finalPayload.error_code);
       return {
         success: false,
         error: minikit.getPaymentErrorMessage(finalPayload.error_code),
+        errorCode: finalPayload.error_code,
       };
     } catch (error: any) {
       console.error('[MiniKit] Payment error:', error);
+      console.error('[MiniKit] Error details:', {
+        message: error.message,
+        response: error.response?.data,
+        status: error.response?.status,
+      });
       
       // Provide better error messages for common issues
       if (error.response?.status === 401) {
@@ -173,7 +192,17 @@ export const minikit = {
       }
       
       if (error.response?.data?.error) {
-        throw new Error(error.response.data.error);
+        const backendError = error.response.data.error;
+        const errorDetails = error.response.data.details;
+        console.error('[MiniKit] Backend error:', backendError);
+        if (!import.meta.env.PROD && errorDetails) {
+          console.error('[MiniKit] Error details:', errorDetails);
+        }
+        // Provide user-friendly error message
+        const userMessage = typeof errorDetails === 'string' 
+          ? `${backendError}: ${errorDetails}`
+          : backendError;
+        throw new Error(userMessage);
       }
       
       throw error;
