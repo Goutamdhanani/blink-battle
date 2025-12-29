@@ -32,12 +32,20 @@ interface ActiveMatch {
   player2Reaction?: number;
   player1TapTime?: number;
   player2TapTime?: number;
+
+  // RECONNECTION SUPPORT
+  disconnectedUsers?: Set<string>;
+  disconnectTimestamps?: Map<string, number>;
+  cancelTimeout?: NodeJS.Timeout;
 }
 
 export class GameSocketHandler {
   private io: Server;
   private activeMatches: Map<string, ActiveMatch> = new Map();
   private playerToMatch: Map<string, string> = new Map(); // socketId -> matchId
+  private userToMatch: Map<string, string> = new Map(); // userId -> matchId
+
+  private readonly RECONNECT_GRACE_PERIOD_MS = 30000; // 30 seconds
 
   constructor(io: Server) {
     this.io = io;
@@ -52,6 +60,7 @@ export class GameSocketHandler {
       socket.on('cancel_matchmaking', (data) => this.handleCancelMatchmaking(socket, data));
       socket.on('player_ready', (data) => this.handlePlayerReady(socket, data));
       socket.on('player_tap', (data) => this.handlePlayerTap(socket, data));
+      socket.on('rejoin_match', (data) => this.handleRejoinMatch(socket, data));
       socket.on('disconnect', () => this.handleDisconnect(socket));
     });
   }
@@ -64,6 +73,17 @@ export class GameSocketHandler {
       const { userId, stake, walletAddress } = data;
 
       console.log(`Multiplayer matchmaking: Player ${userId} joining queue for stake ${stake} WLD`);
+
+      // Check if user already has an active match
+      const existingMatchId = this.userToMatch.get(userId);
+      if (existingMatchId) {
+        const existingMatch = this.activeMatches.get(existingMatchId);
+        if (existingMatch) {
+          console.log(`Player ${userId} already in match ${existingMatchId}, reconnecting...`);
+          await this.reconnectPlayerToMatch(socket, userId, existingMatch);
+          return;
+        }
+      }
 
       const user = await UserModel.findById(userId);
       if (!user) {
@@ -98,6 +118,89 @@ export class GameSocketHandler {
       console.error('Error in join_matchmaking:', error);
       socket.emit('error', { message: 'Failed to join matchmaking' });
     }
+  }
+
+  private async handleRejoinMatch(
+    socket: Socket,
+    data: { userId: string; matchId?: string }
+  ) {
+    try {
+      const { userId, matchId } = data;
+      
+      // Try to find match by matchId or userId
+      let activeMatch: ActiveMatch | undefined;
+      
+      if (matchId) {
+        activeMatch = this.activeMatches.get(matchId);
+      } else {
+        const foundMatchId = this.userToMatch.get(userId);
+        if (foundMatchId) {
+          activeMatch = this.activeMatches.get(foundMatchId);
+        }
+      }
+
+      if (!activeMatch) {
+        socket.emit('rejoin_failed', { reason: 'match_not_found' });
+        return;
+      }
+
+      await this.reconnectPlayerToMatch(socket, userId, activeMatch);
+    } catch (error) {
+      console.error('Error in rejoin_match:', error);
+      socket.emit('error', { message: 'Failed to rejoin match' });
+    }
+  }
+
+  private async reconnectPlayerToMatch(
+    socket: Socket,
+    userId: string,
+    activeMatch: ActiveMatch
+  ) {
+    const isPlayer1 = activeMatch.player1.userId === userId;
+    const playerData = isPlayer1 ? activeMatch.player1 : activeMatch.player2;
+    const opponent = isPlayer1 ? activeMatch.player2 : activeMatch.player1;
+
+    // Update socket ID
+    playerData.socketId = socket.id;
+    this.playerToMatch.set(socket.id, activeMatch.matchId);
+
+    // Remove from disconnected users
+    if (activeMatch.disconnectedUsers?.has(userId)) {
+      activeMatch.disconnectedUsers.delete(userId);
+      console.log(`Player ${userId} reconnected to match ${activeMatch.matchId}`);
+
+      // Cancel the timeout if both players are now connected
+      if (activeMatch.disconnectedUsers.size === 0 && activeMatch.cancelTimeout) {
+        clearTimeout(activeMatch.cancelTimeout);
+        activeMatch.cancelTimeout = undefined;
+        console.log(`Cancelled match timeout for ${activeMatch.matchId}`);
+      }
+    }
+
+    // Send current match state
+    socket.emit('match_found', {
+      matchId: activeMatch.matchId,
+      opponent: { 
+        userId: opponent.userId, 
+        wallet: opponent.walletAddress 
+      },
+      stake: activeMatch.stake,
+      reconnected: true,
+      hasStarted: activeMatch.hasStarted,
+      signalSent: !!activeMatch.signalTimestamp,
+    });
+
+    // If game has started, resync state
+    if (activeMatch.hasStarted && !activeMatch.signalTimestamp) {
+      socket.emit('game_start', { countdown: true, reconnected: true });
+    } else if (activeMatch.signalTimestamp) {
+      socket.emit('signal', { 
+        timestamp: activeMatch.signalTimestamp,
+        reconnected: true 
+      });
+    }
+
+    console.log(`Successfully reconnected player ${userId} to match ${activeMatch.matchId}`);
   }
 
   private async handleCancelMatchmaking(
@@ -152,11 +255,17 @@ export class GameSocketHandler {
         player1Ready: false,
         player2Ready: false,
         hasStarted: false,
+
+        // Initialize reconnection tracking
+        disconnectedUsers: new Set(),
+        disconnectTimestamps: new Map(),
       };
 
       this.activeMatches.set(match.match_id, activeMatch);
       this.playerToMatch.set(player1Request.socketId, match.match_id);
       this.playerToMatch.set(player2Request.socketId, match.match_id);
+      this.userToMatch.set(player1.user_id, match.match_id);
+      this.userToMatch.set(player2.user_id, match.match_id);
 
       this.io.to(player1Request.socketId).emit('match_found', {
         matchId: match.match_id,
@@ -188,10 +297,13 @@ export class GameSocketHandler {
       if (isPlayer1) activeMatch.player1Ready = true;
       else activeMatch.player2Ready = true;
 
+      console.log(`Player ready: ${isPlayer1 ? 'Player1' : 'Player2'} in match ${data.matchId}`);
+
       if (activeMatch.hasStarted) return;
 
       if (activeMatch.player1Ready && activeMatch.player2Ready) {
         activeMatch.hasStarted = true;
+        console.log(`Both players ready, starting match ${data.matchId}`);
 
         await this.startGame(activeMatch);
 
@@ -519,51 +631,92 @@ export class GameSocketHandler {
     if (!activeMatch) return;
 
     const isPlayer1 = activeMatch.player1.socketId === socket.id;
+    const disconnectedUserId = isPlayer1 ? activeMatch.player1.userId : activeMatch.player2.userId;
     const otherPlayer = isPlayer1 ? activeMatch.player2 : activeMatch.player1;
 
-    if (!activeMatch.signalTimestamp) {
-      await EscrowService.refundBothPlayers(
-        activeMatch.matchId,
-        activeMatch.player1.walletAddress,
-        activeMatch.player2.walletAddress,
-        activeMatch.stake
-      );
-      await MatchModel.updateStatus(activeMatch.matchId, MatchStatus.CANCELLED);
+    // Mark player as disconnected
+    activeMatch.disconnectedUsers = activeMatch.disconnectedUsers || new Set();
+    activeMatch.disconnectedUsers.add(disconnectedUserId);
+    
+    activeMatch.disconnectTimestamps = activeMatch.disconnectTimestamps || new Map();
+    activeMatch.disconnectTimestamps.set(disconnectedUserId, Date.now());
 
-      this.io.to(otherPlayer.socketId).emit('opponent_disconnected', {
-        refund: true,
-        reason: 'before_signal',
-      });
-    } else {
-      await EscrowService.distributeWinnings(
-        activeMatch.matchId,
-        otherPlayer.walletAddress,
-        activeMatch.stake
-      );
+    console.log(`Player ${disconnectedUserId} disconnected from match ${matchId}, grace period: ${this.RECONNECT_GRACE_PERIOD_MS}ms`);
 
-      await MatchModel.completeMatch({
-        matchId: activeMatch.matchId,
-        winnerId: otherPlayer.userId,
-        player1ReactionMs: activeMatch.player1Reaction,
-        player2ReactionMs: activeMatch.player2Reaction,
-        reason: 'disconnect',
-      });
+    // Notify other player
+    this.io.to(otherPlayer.socketId).emit('opponent_disconnected', {
+      temporary: true,
+      gracePeriodMs: this.RECONNECT_GRACE_PERIOD_MS,
+    });
 
-      this.io.to(otherPlayer.socketId).emit('opponent_disconnected', {
-        win: true,
-        reason: 'after_signal',
-      });
-    }
+    // Set timeout to cancel match if player doesn't reconnect
+    activeMatch.cancelTimeout = setTimeout(async () => {
+      const match = this.activeMatches.get(matchId);
+      if (!match || !match.disconnectedUsers?.has(disconnectedUserId)) {
+        return; // Player reconnected or match already cleaned up
+      }
 
-    this.cleanupMatch(matchId);
+      console.log(`Player ${disconnectedUserId} did not reconnect within grace period, handling match cancellation`);
+
+      // Handle based on game state
+      if (!match.signalTimestamp) {
+        // Disconnected before signal - refund both
+        console.log(`Refunding both players for match ${matchId} (disconnect before signal)`);
+        await EscrowService.refundBothPlayers(
+          match.matchId,
+          match.player1.walletAddress,
+          match.player2.walletAddress,
+          match.stake
+        );
+        await MatchModel.updateStatus(match.matchId, MatchStatus.CANCELLED);
+
+        this.io.to(otherPlayer.socketId).emit('opponent_disconnected', {
+          refund: true,
+          reason: 'before_signal',
+        });
+      } else {
+        // Disconnected after signal - other player wins
+        console.log(`Awarding win to ${otherPlayer.userId} for match ${matchId} (opponent disconnect after signal)`);
+        await EscrowService.distributeWinnings(
+          match.matchId,
+          otherPlayer.walletAddress,
+          match.stake
+        );
+
+        await MatchModel.completeMatch({
+          matchId: match.matchId,
+          winnerId: otherPlayer.userId,
+          player1ReactionMs: match.player1Reaction,
+          player2ReactionMs: match.player2Reaction,
+          reason: 'disconnect',
+        });
+
+        this.io.to(otherPlayer.socketId).emit('opponent_disconnected', {
+          win: true,
+          reason: 'after_signal',
+        });
+      }
+
+      this.cleanupMatch(matchId);
+    }, this.RECONNECT_GRACE_PERIOD_MS);
   }
 
   private cleanupMatch(matchId: string) {
     const activeMatch = this.activeMatches.get(matchId);
     if (activeMatch) {
+      // Clear any pending timeouts
+      if (activeMatch.cancelTimeout) {
+        clearTimeout(activeMatch.cancelTimeout);
+      }
+
+      // Remove from all tracking maps
       this.playerToMatch.delete(activeMatch.player1.socketId);
       this.playerToMatch.delete(activeMatch.player2.socketId);
+      this.userToMatch.delete(activeMatch.player1.userId);
+      this.userToMatch.delete(activeMatch.player2.userId);
       this.activeMatches.delete(matchId);
+      
+      console.log(`Cleaned up match ${matchId}`);
     }
   }
 

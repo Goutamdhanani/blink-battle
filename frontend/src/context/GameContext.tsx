@@ -55,10 +55,11 @@ const initialState: GameState = {
 
 export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [state, setState] = useState<GameState>(() => {
-    // Try to restore token and user from localStorage on initial load
+    // Restore token + user
     const storedToken = localStorage.getItem('token');
     const storedUser = localStorage.getItem('user');
-    
+    const storedMatchId = localStorage.getItem('activeMatchId');
+
     let initialUser = null;
     if (storedUser) {
       try {
@@ -68,11 +69,12 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         localStorage.removeItem('user');
       }
     }
-    
+
     return {
       ...initialState,
       token: storedToken,
       user: initialUser,
+      matchId: storedMatchId,
     };
   });
 
@@ -91,11 +93,14 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       localStorage.setItem('token', token);
     } else {
       localStorage.removeItem('token');
-      localStorage.removeItem('user'); // Clear user when token is cleared
+      localStorage.removeItem('user');
+      localStorage.removeItem('activeMatchId');
     }
   };
 
   const setMatch = (matchId: string, opponentWallet: string, stake: number) => {
+    localStorage.setItem('activeMatchId', matchId);
+
     setState((prev) => ({
       ...prev,
       matchId,
@@ -131,6 +136,8 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   const resetGame = () => {
+    localStorage.removeItem('activeMatchId');
+
     setState((prev) => ({
       ...initialState,
       user: prev.user,
