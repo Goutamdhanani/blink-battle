@@ -18,7 +18,16 @@ interface ActiveMatch {
   player1: PlayerData;
   player2: PlayerData;
   stake: number;
+
+  // readiness
+  player1Ready: boolean;
+  player2Ready: boolean;
+
+  // game state
+  hasStarted: boolean;
   signalTimestamp?: number;
+
+  // gameplay
   player1Reaction?: number;
   player2Reaction?: number;
   player1TapTime?: number;
@@ -56,7 +65,6 @@ export class GameSocketHandler {
 
       console.log(`Multiplayer matchmaking: Player ${userId} joining queue for stake ${stake} WLD`);
 
-      // Validate user
       const user = await UserModel.findById(userId);
       if (!user) {
         socket.emit('error', { message: 'User not found' });
@@ -69,23 +77,16 @@ export class GameSocketHandler {
         socketId: socket.id,
       };
 
-      // Try to find a match immediately
       const matchedPlayer = await MatchmakingService.findMatch(request);
 
       if (matchedPlayer) {
-        // Found a match! Create the game
         await this.createMatch(socket, request, matchedPlayer, walletAddress);
       } else {
-        // Add to queue and wait
         await MatchmakingService.addToQueue(request);
         socket.emit('matchmaking_queued', { stake });
 
-        // Set timeout for matchmaking
         setTimeout(async () => {
-          // Check if still in queue
           await MatchmakingService.removeFromQueue(userId, stake);
-          
-          // Suggest alternative stakes
           const availableStakes = await MatchmakingService.getAvailableStakes();
           socket.emit('matchmaking_timeout', { 
             message: 'No opponent found',
@@ -115,10 +116,9 @@ export class GameSocketHandler {
     socket: Socket,
     player1Request: MatchmakingRequest,
     player2Request: MatchmakingRequest,
-    _player1Wallet: string // Kept for API compatibility
+    _player1Wallet: string
   ) {
     try {
-      // Get player data
       const player1 = await UserModel.findById(player1Request.userId);
       const player2 = await UserModel.findById(player2Request.userId);
 
@@ -127,7 +127,6 @@ export class GameSocketHandler {
         return;
       }
 
-      // Create match in database
       const match = await MatchModel.create(
         player1.user_id,
         player2.user_id,
@@ -136,7 +135,6 @@ export class GameSocketHandler {
 
       console.log(`Multiplayer match created: ${match.match_id} between ${player1.user_id} and ${player2.user_id}, stake: ${player1Request.stake} WLD`);
 
-      // Store active match data
       const activeMatch: ActiveMatch = {
         matchId: match.match_id,
         player1: {
@@ -150,13 +148,16 @@ export class GameSocketHandler {
           walletAddress: player2.wallet_address,
         },
         stake: player1Request.stake,
+
+        player1Ready: false,
+        player2Ready: false,
+        hasStarted: false,
       };
 
       this.activeMatches.set(match.match_id, activeMatch);
       this.playerToMatch.set(player1Request.socketId, match.match_id);
       this.playerToMatch.set(player2Request.socketId, match.match_id);
 
-      // Notify both players
       this.io.to(player1Request.socketId).emit('match_found', {
         matchId: match.match_id,
         opponent: { userId: player2.user_id, wallet: player2.wallet_address },
@@ -182,20 +183,42 @@ export class GameSocketHandler {
         return;
       }
 
-      // Mark player as ready
       const isPlayer1 = activeMatch.player1.socketId === socket.id;
-      
-      if (isPlayer1) {
-        activeMatch.player1Reaction = -1; // Mark as ready
-      } else {
-        activeMatch.player2Reaction = -1; // Mark as ready
+
+      if (isPlayer1) activeMatch.player1Ready = true;
+      else activeMatch.player2Ready = true;
+
+      if (activeMatch.hasStarted) return;
+
+      if (activeMatch.player1Ready && activeMatch.player2Ready) {
+        activeMatch.hasStarted = true;
+
+        await this.startGame(activeMatch);
+
+        setTimeout(() => {
+          const stillActive = this.activeMatches.get(activeMatch.matchId);
+
+          if (stillActive && !stillActive.signalTimestamp) {
+            console.error(`Watchdog: Match ${activeMatch.matchId} failed to start. Refunding.`);
+
+            EscrowService.refundBothPlayers(
+              activeMatch.matchId,
+              activeMatch.player1.walletAddress,
+              activeMatch.player2.walletAddress,
+              activeMatch.stake
+            ).catch(console.error);
+
+            MatchModel.updateStatus(activeMatch.matchId, MatchStatus.CANCELLED)
+              .catch(console.error);
+
+            this.io.to(activeMatch.player1.socketId).emit('error', { message: 'Match cancelled due to an error' });
+            this.io.to(activeMatch.player2.socketId).emit('error', { message: 'Match cancelled due to an error' });
+
+            this.cleanupMatch(activeMatch.matchId);
+          }
+        }, 7000);
       }
 
-      // Check if both players are ready
-      if (activeMatch.player1Reaction === -1 && activeMatch.player2Reaction === -1) {
-        // Both ready, lock funds and start game
-        await this.startGame(activeMatch);
-      }
     } catch (error) {
       console.error('Error in player_ready:', error);
       socket.emit('error', { message: 'Failed to mark ready' });
@@ -204,7 +227,6 @@ export class GameSocketHandler {
 
   private async startGame(activeMatch: ActiveMatch) {
     try {
-      // Lock funds
       const escrowResult = await EscrowService.lockFunds(
         activeMatch.matchId,
         activeMatch.player1.walletAddress,
@@ -218,11 +240,9 @@ export class GameSocketHandler {
         return;
       }
 
-      // Send countdown to both players
       this.io.to(activeMatch.player1.socketId).emit('game_start', { countdown: true });
       this.io.to(activeMatch.player2.socketId).emit('game_start', { countdown: true });
 
-      // Countdown: 3, 2, 1
       await this.sleep(1000);
       this.io.to(activeMatch.player1.socketId).emit('countdown', { count: 3 });
       this.io.to(activeMatch.player2.socketId).emit('countdown', { count: 3 });
@@ -235,14 +255,12 @@ export class GameSocketHandler {
       this.io.to(activeMatch.player1.socketId).emit('countdown', { count: 1 });
       this.io.to(activeMatch.player2.socketId).emit('countdown', { count: 1 });
 
-      // Generate random delay
       const minDelay = parseInt(process.env.SIGNAL_DELAY_MIN_MS || '2000', 10);
       const maxDelay = parseInt(process.env.SIGNAL_DELAY_MAX_MS || '5000', 10);
       const randomDelay = generateRandomDelay(minDelay, maxDelay);
 
       await this.sleep(randomDelay);
 
-      // Send signal
       const signalTimestamp = Date.now();
       activeMatch.signalTimestamp = signalTimestamp;
 
@@ -251,7 +269,6 @@ export class GameSocketHandler {
       this.io.to(activeMatch.player1.socketId).emit('signal', { timestamp: signalTimestamp });
       this.io.to(activeMatch.player2.socketId).emit('signal', { timestamp: signalTimestamp });
 
-      // Set timeout for taps
       setTimeout(() => {
         this.handleMatchTimeout(activeMatch);
       }, parseInt(process.env.MAX_REACTION_MS || '3000', 10) + 1000);
@@ -267,14 +284,11 @@ export class GameSocketHandler {
   ) {
     try {
       const activeMatch = this.activeMatches.get(data.matchId);
-      if (!activeMatch || !activeMatch.signalTimestamp) {
-        return;
-      }
+      if (!activeMatch || !activeMatch.signalTimestamp) return;
 
       const serverTapTimestamp = Date.now();
       const isPlayer1 = activeMatch.player1.socketId === socket.id;
 
-      // Validate reaction
       const validation = AntiCheatService.validateReaction(
         data.clientTimestamp,
         serverTapTimestamp,
@@ -289,14 +303,12 @@ export class GameSocketHandler {
         activeMatch.player2TapTime = serverTapTimestamp;
       }
 
-      // Record in database
       await MatchModel.recordReaction(
         activeMatch.matchId,
         isPlayer1 ? activeMatch.player1.userId : activeMatch.player2.userId,
         validation.reactionMs
       );
 
-      // Check if both players have tapped
       if (
         activeMatch.player1Reaction !== undefined &&
         activeMatch.player2Reaction !== undefined
@@ -314,7 +326,6 @@ export class GameSocketHandler {
       const p2Reaction = activeMatch.player2Reaction!;
       const signalTime = activeMatch.signalTimestamp!;
 
-      // Check for false starts
       const p1FalseStart = AntiCheatService.isFalseStart(
         activeMatch.player1TapTime!,
         signalTime
@@ -328,23 +339,20 @@ export class GameSocketHandler {
       let result: string;
 
       if (p1FalseStart && p2FalseStart) {
-        // Both false started
         const falseStartCount = await MatchModel.incrementFalseStartCount(activeMatch.matchId);
         
         if (falseStartCount === 1) {
-          // First time - rematch
           result = 'both_false_start_rematch';
           this.io.to(activeMatch.player1.socketId).emit('match_result', { result, rematch: true });
           this.io.to(activeMatch.player2.socketId).emit('match_result', { result, rematch: true });
-          
-          // Restart the game
+
           activeMatch.player1Reaction = undefined;
           activeMatch.player2Reaction = undefined;
           activeMatch.signalTimestamp = undefined;
+
           await this.startGame(activeMatch);
           return;
         } else {
-          // Second time - refund with fee
           result = 'both_false_start_cancelled';
           await EscrowService.refundWithFee(
             activeMatch.matchId,
@@ -356,7 +364,6 @@ export class GameSocketHandler {
           await MatchModel.updateStatus(activeMatch.matchId, MatchStatus.CANCELLED);
         }
       } else if (p1FalseStart) {
-        // Player 1 false started, Player 2 wins
         winnerId = activeMatch.player2.userId;
         result = 'player1_false_start';
         await EscrowService.distributeWinnings(
@@ -365,7 +372,6 @@ export class GameSocketHandler {
           activeMatch.stake
         );
       } else if (p2FalseStart) {
-        // Player 2 false started, Player 1 wins
         winnerId = activeMatch.player1.userId;
         result = 'player2_false_start';
         await EscrowService.distributeWinnings(
@@ -374,7 +380,6 @@ export class GameSocketHandler {
           activeMatch.stake
         );
       } else if (Math.abs(p1Reaction - p2Reaction) <= 1) {
-        // Tie - split pot
         result = 'tie';
         await EscrowService.splitPot(
           activeMatch.matchId,
@@ -383,9 +388,9 @@ export class GameSocketHandler {
           activeMatch.stake
         );
       } else {
-        // Normal win
         winnerId = p1Reaction < p2Reaction ? activeMatch.player1.userId : activeMatch.player2.userId;
         result = 'normal_win';
+
         const winnerWallet = winnerId === activeMatch.player1.userId 
           ? activeMatch.player1.walletAddress 
           : activeMatch.player2.walletAddress;
@@ -397,7 +402,6 @@ export class GameSocketHandler {
         );
       }
 
-      // Update match in database
       await MatchModel.completeMatch({
         matchId: activeMatch.matchId,
         winnerId,
@@ -406,15 +410,15 @@ export class GameSocketHandler {
         reason: result,
       });
 
-      // Update user stats
       if (winnerId) {
         await UserModel.updateStats(winnerId, true, winnerId === activeMatch.player1.userId ? p1Reaction : p2Reaction);
+
         const loserId = winnerId === activeMatch.player1.userId ? activeMatch.player2.userId : activeMatch.player1.userId;
         const loserReaction = winnerId === activeMatch.player1.userId ? p2Reaction : p1Reaction;
+
         await UserModel.updateStats(loserId, false, loserReaction);
       }
 
-      // Notify both players
       this.io.to(activeMatch.player1.socketId).emit('match_result', {
         result,
         winnerId,
@@ -429,7 +433,6 @@ export class GameSocketHandler {
         player2Reaction: p2Reaction,
       });
 
-      // Log audit
       AntiCheatService.logMatchAudit(activeMatch.matchId, {
         player1Id: activeMatch.player1.userId,
         player2Id: activeMatch.player2.userId,
@@ -439,7 +442,6 @@ export class GameSocketHandler {
         winnerId,
       });
 
-      // Cleanup
       this.cleanupMatch(activeMatch.matchId);
     } catch (error) {
       console.error('Error determining winner:', error);
@@ -447,18 +449,12 @@ export class GameSocketHandler {
   }
 
   private async handleMatchTimeout(activeMatch: ActiveMatch) {
-    // Check if match is still active
-    if (!this.activeMatches.has(activeMatch.matchId)) {
-      return;
-    }
+    if (!this.activeMatches.has(activeMatch.matchId)) return;
 
     const p1Tapped = activeMatch.player1Reaction !== undefined;
     const p2Tapped = activeMatch.player2Reaction !== undefined;
 
-    if (p1Tapped && p2Tapped) {
-      // Both tapped, winner already determined
-      return;
-    }
+    if (p1Tapped && p2Tapped) return;
 
     let winnerId: string | undefined;
 
@@ -477,7 +473,6 @@ export class GameSocketHandler {
         activeMatch.stake
       );
     } else {
-      // Neither tapped - refund
       await EscrowService.refundBothPlayers(
         activeMatch.matchId,
         activeMatch.player1.walletAddress,
@@ -497,7 +492,6 @@ export class GameSocketHandler {
       });
     }
 
-    // Notify players
     this.io.to(activeMatch.player1.socketId).emit('match_result', {
       result: 'timeout',
       winnerId,
@@ -519,21 +513,15 @@ export class GameSocketHandler {
     console.log(`Client disconnected: ${socket.id}`);
 
     const matchId = this.playerToMatch.get(socket.id);
-    if (!matchId) {
-      return;
-    }
+    if (!matchId) return;
 
     const activeMatch = this.activeMatches.get(matchId);
-    if (!activeMatch) {
-      return;
-    }
+    if (!activeMatch) return;
 
-    // Determine which player disconnected
     const isPlayer1 = activeMatch.player1.socketId === socket.id;
     const otherPlayer = isPlayer1 ? activeMatch.player2 : activeMatch.player1;
 
     if (!activeMatch.signalTimestamp) {
-      // Disconnected before signal - refund both
       await EscrowService.refundBothPlayers(
         activeMatch.matchId,
         activeMatch.player1.walletAddress,
@@ -547,7 +535,6 @@ export class GameSocketHandler {
         reason: 'before_signal',
       });
     } else {
-      // Disconnected after signal - other player wins
       await EscrowService.distributeWinnings(
         activeMatch.matchId,
         otherPlayer.walletAddress,
