@@ -3,15 +3,98 @@ import { MatchmakingRequest } from '../models/types';
 
 export class MatchmakingService {
   private static readonly QUEUE_PREFIX = 'matchmaking:';
+  private static readonly ACTIVE_MATCH_PREFIX = 'active_match:';
+  private static readonly PLAYER_SOCKET_PREFIX = 'player_socket:';
   private static readonly TIMEOUT_MS = parseInt(
     process.env.MATCHMAKING_TIMEOUT_MS || '30000',
     10
   );
 
   /**
-   * Add a player to the matchmaking queue
+   * Check if player is already in an active match
    */
-  static async addToQueue(request: MatchmakingRequest): Promise<void> {
+  static async isPlayerInActiveMatch(userId: string): Promise<boolean> {
+    const matchKey = `${this.ACTIVE_MATCH_PREFIX}${userId}`;
+    const matchId = await redisClient.get(matchKey);
+    return matchId !== null;
+  }
+
+  /**
+   * Mark player as being in an active match
+   */
+  static async markPlayerInMatch(userId: string, matchId: string): Promise<void> {
+    const matchKey = `${this.ACTIVE_MATCH_PREFIX}${userId}`;
+    // Set with 2 hour expiration as safety net
+    await redisClient.setEx(matchKey, 7200, matchId);
+    console.log(`[Matchmaking] Marked player ${userId} as in match ${matchId}`);
+  }
+
+  /**
+   * Remove player from active match tracking
+   */
+  static async clearPlayerMatch(userId: string): Promise<void> {
+    const matchKey = `${this.ACTIVE_MATCH_PREFIX}${userId}`;
+    await redisClient.del(matchKey);
+    console.log(`[Matchmaking] Cleared active match for player ${userId}`);
+  }
+
+  /**
+   * Get player's active match ID if any
+   */
+  static async getPlayerActiveMatch(userId: string): Promise<string | null> {
+    const matchKey = `${this.ACTIVE_MATCH_PREFIX}${userId}`;
+    return await redisClient.get(matchKey);
+  }
+
+  /**
+   * Register or update player's active socket
+   * Enforces single active socket per player
+   */
+  static async registerPlayerSocket(userId: string, socketId: string): Promise<string | null> {
+    const socketKey = `${this.PLAYER_SOCKET_PREFIX}${userId}`;
+    const existingSocketId = await redisClient.get(socketKey);
+    
+    if (existingSocketId && existingSocketId !== socketId) {
+      console.log(`[Matchmaking] Player ${userId} has existing socket ${existingSocketId}, replacing with ${socketId}`);
+    }
+    
+    // Set with 1 hour expiration
+    await redisClient.setEx(socketKey, 3600, socketId);
+    return existingSocketId;
+  }
+
+  /**
+   * Get player's active socket ID
+   */
+  static async getPlayerSocket(userId: string): Promise<string | null> {
+    const socketKey = `${this.PLAYER_SOCKET_PREFIX}${userId}`;
+    return await redisClient.get(socketKey);
+  }
+
+  /**
+   * Clear player's socket registration
+   */
+  static async clearPlayerSocket(userId: string): Promise<void> {
+    const socketKey = `${this.PLAYER_SOCKET_PREFIX}${userId}`;
+    await redisClient.del(socketKey);
+  }
+
+  /**
+   * Add a player to the matchmaking queue
+   * Returns error if player already in active match
+   */
+  static async addToQueue(request: MatchmakingRequest): Promise<{ success: boolean; error?: string }> {
+    // Check if player already in active match
+    const existingMatch = await this.isPlayerInActiveMatch(request.userId);
+    if (existingMatch) {
+      const matchId = await this.getPlayerActiveMatch(request.userId);
+      console.warn(`[Matchmaking] Player ${request.userId} attempted to queue while in active match ${matchId}`);
+      return { 
+        success: false, 
+        error: `Already in active match. Please complete or cancel current match first.` 
+      };
+    }
+
     const queueKey = this.getQueueKey(request.stake);
     const requestData = JSON.stringify({
       ...request,
@@ -19,7 +102,8 @@ export class MatchmakingService {
     });
 
     await redisClient.rPush(queueKey, requestData);
-    console.log(`Matchmaking: Added player ${request.userId} to queue for stake ${request.stake} WLD`);
+    console.log(`[Matchmaking] Added player ${request.userId} to queue for stake ${request.stake} WLD`);
+    return { success: true };
   }
 
   /**
@@ -42,17 +126,20 @@ export class MatchmakingService {
     
     // Check if the waiting player request is not stale
     if (Date.now() - parsedPlayer.timestamp > this.TIMEOUT_MS) {
+      console.log(`[Matchmaking] Stale request from ${parsedPlayer.userId}, discarding`);
       // Request is stale, try finding another
       return this.findMatch(request);
     }
 
     // Make sure we don't match the same player with themselves
     if (parsedPlayer.userId === request.userId) {
+      console.warn(`[Matchmaking] Attempted to match player ${request.userId} with themselves`);
       // Put them back and try again
       await redisClient.lPush(queueKey, waitingPlayer);
       return null;
     }
 
+    console.log(`[Matchmaking] Matched ${request.userId} with ${parsedPlayer.userId}`);
     return parsedPlayer;
   }
 
@@ -67,7 +154,7 @@ export class MatchmakingService {
       const request: MatchmakingRequest = JSON.parse(item);
       if (request.userId === userId) {
         await redisClient.lRem(queueKey, 1, item);
-        console.log(`Matchmaking: Removed player ${userId} from queue for stake ${stake} WLD`);
+        console.log(`[Matchmaking] Removed player ${userId} from queue for stake ${stake} WLD`);
         break;
       }
     }
