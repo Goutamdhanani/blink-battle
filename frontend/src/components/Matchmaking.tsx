@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useGameContext } from '../context/GameContext';
-import { useWebSocket } from '../hooks/useWebSocket';
+import { useSocket } from '../context/SocketContext';
 import { minikit } from '../lib/minikit';
 import { useMiniKit } from '../hooks/useMiniKit';
 import { GlassCard, NeonButton } from './ui';
@@ -13,7 +13,7 @@ const Matchmaking: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { state, setToken } = useGameContext();
-  const { joinMatchmaking, cancelMatchmaking, paymentConfirmed, connected, isConnecting } = useWebSocket();
+  const { joinMatchmaking, cancelMatchmaking, paymentConfirmed, connected, isConnecting } = useSocket();
   const { isInstalled } = useMiniKit();
   const [selectedStake, setSelectedStake] = useState<number>(0.1);
   const [searching, setSearching] = useState(false);
