@@ -7,13 +7,14 @@ export class TransactionModel {
     type: TransactionType,
     amount: number,
     fromWallet?: string,
-    toWallet?: string
+    toWallet?: string,
+    txHash?: string
   ): Promise<Transaction> {
     const result = await pool.query(
-      `INSERT INTO transactions (match_id, type, amount, from_wallet, to_wallet, status) 
-       VALUES ($1, $2, $3, $4, $5, $6) 
+      `INSERT INTO transactions (match_id, type, amount, from_wallet, to_wallet, status, tx_hash) 
+       VALUES ($1, $2, $3, $4, $5, $6, $7) 
        RETURNING *`,
-      [matchId, type, amount, fromWallet, toWallet, TransactionStatus.PENDING]
+      [matchId, type, amount, fromWallet, toWallet, TransactionStatus.PENDING, txHash || null]
     );
     return result.rows[0];
   }
