@@ -75,6 +75,9 @@ export const SocketProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   // Background/foreground tracking
   const backgroundTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const backgroundStartTimeRef = useRef<number>(0);
+  
+  // Track the token used to create the current socket
+  const currentTokenRef = useRef<string | null>(null);
 
   // Clear reconnect timeout on unmount
   useEffect(() => {
@@ -545,13 +548,14 @@ export const SocketProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         console.log('[SocketProvider] Token cleared, closing socket');
         socket.close();
         setSocket(null);
+        currentTokenRef.current = null;
       }
       return;
     }
 
     // If socket already exists and is connected, don't recreate unless token changed
     // This prevents unnecessary socket recreation on component re-renders
-    if (socket && socket.connected && socket.auth.token === state.token) {
+    if (socket && socket.connected && currentTokenRef.current === state.token) {
       console.log('[SocketProvider] Socket already connected with same token, skipping recreation');
       return;
     }
@@ -572,6 +576,9 @@ export const SocketProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       auth: { token: state.token },
       ...SOCKET_CONFIG,
     });
+
+    // Track the token used for this socket
+    currentTokenRef.current = state.token;
 
     setupSocketListeners(newSocket);
     setSocket(newSocket);
