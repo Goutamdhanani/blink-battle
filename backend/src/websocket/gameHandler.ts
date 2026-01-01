@@ -246,7 +246,12 @@ export class GameSocketHandler {
     this.playerToMatch.set(socket.id, activeMatch.matchId);
 
     // Update socket registration in Redis
-    await MatchmakingService.registerPlayerSocket(userId, socket.id);
+    try {
+      await MatchmakingService.registerPlayerSocket(userId, socket.id);
+    } catch (error) {
+      console.error(`[Reconnect] Failed to register socket in Redis for ${userId}:`, error);
+      // Continue with reconnection even if Redis fails - in-memory state is primary
+    }
 
     // Remove from disconnected users
     if (activeMatch.disconnectedUsers?.has(userId)) {

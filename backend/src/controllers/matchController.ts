@@ -179,8 +179,14 @@ export class MatchController {
         escrowData,
         isPlayer1: match.player1_id === userId,
         isPlayer2: match.player2_id === userId,
-        player1Staked: confirmedStakes.some(t => t.from_wallet && match.player1_id === userId),
-        player2Staked: confirmedStakes.some(t => t.from_wallet && match.player2_id === userId),
+        player1Staked: confirmedStakes.some(t => {
+          const p1User = match.player1_id;
+          return t.from_wallet && p1User === match.player1_id;
+        }),
+        player2Staked: confirmedStakes.some(t => {
+          const p2User = match.player2_id;
+          return t.from_wallet && p2User === match.player2_id;
+        }),
         hasStarted: match.signal_timestamp !== null,
         hasCompleted: match.status === 'completed' || match.status === 'cancelled' || match.status === 'refunded',
         winnerId: match.winner_id,

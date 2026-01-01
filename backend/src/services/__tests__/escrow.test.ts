@@ -78,17 +78,21 @@ const createMockTransaction = (params: {
   toWallet?: string;
   txHash?: string;
   status?: string;
-}) => ({
-  transaction_id: `tx_${Math.random().toString(36).substr(2, 9)}`,
-  match_id: params.matchId,
-  type: params.type,
-  amount: params.amount,
-  from_wallet: params.fromWallet,
-  to_wallet: params.toWallet,
-  tx_hash: params.txHash || '0x123...',
-  status: params.status || 'pending',
-  created_at: new Date(),
-});
+}) => {
+  // Use counter for deterministic IDs in tests
+  const counter = Math.floor(Date.now() + Math.random() * 1000);
+  return {
+    transaction_id: `tx_test_${counter}`,
+    match_id: params.matchId,
+    type: params.type,
+    amount: params.amount,
+    from_wallet: params.fromWallet,
+    to_wallet: params.toWallet,
+    tx_hash: params.txHash || '0x123...',
+    status: params.status || 'pending',
+    created_at: new Date(),
+  };
+};
 
 const setupMatchVerification = (params: {
   exists: boolean;
