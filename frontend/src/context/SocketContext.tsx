@@ -5,18 +5,30 @@ import { useGameContext } from './GameContext';
 const SOCKET_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 const RECONNECT_DELAY_MS = 2000; // Start with 2 seconds
 const MAX_RECONNECT_DELAY_MS = 15000; // Max 15 seconds
-const MAX_RECONNECT_ATTEMPTS = 10;
+const MAX_RECONNECT_ATTEMPTS = Infinity; // Infinite reconnection attempts for persistent connection
 const CONNECTION_WAIT_TIMEOUT_MS = 10000; // Wait up to 10 seconds for connection
 const MIN_STABLE_CONNECTION_MS = 5000; // Consider stable after 5 seconds (guard against early disconnects)
 const POLLING_STUCK_THRESHOLD_MS = 10000; // If stuck on polling for >10s, consider reconnecting
 const SOCKET_IO_VERSION = '4.7.5'; // Lock version for compatibility checking
+const BACKGROUND_DISCONNECT_TIMEOUT_MS = 300000; // 5 minutes - disconnect if backgrounded for this long
+
+// Exponential backoff with jitter calculation
+const calculateBackoffWithJitter = (attempt: number): number => {
+  const exponentialDelay = Math.min(
+    RECONNECT_DELAY_MS * Math.pow(2, attempt),
+    MAX_RECONNECT_DELAY_MS
+  );
+  // Add jitter: random value between 0-25% of the delay
+  const jitter = Math.random() * exponentialDelay * 0.25;
+  return exponentialDelay + jitter;
+};
 
 // Socket.IO configuration for production stability
 // HYBRID TRANSPORTS: Use websocket + polling fallback for maximum reliability
 const SOCKET_CONFIG = {
   transports: ['websocket', 'polling'], // Try WebSocket first, fall back to polling if needed
   reconnection: true,
-  reconnectionAttempts: MAX_RECONNECT_ATTEMPTS,
+  reconnectionAttempts: MAX_RECONNECT_ATTEMPTS, // Infinite attempts
   reconnectionDelay: RECONNECT_DELAY_MS,
   reconnectionDelayMax: MAX_RECONNECT_DELAY_MS,
   timeout: 20000,
@@ -59,6 +71,10 @@ export const SocketProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   const transportRef = useRef<'websocket' | 'polling' | null>(null);
   const pollingStartTimeRef = useRef<number>(0);
   const pollingCheckIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // Background/foreground tracking
+  const backgroundTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const backgroundStartTimeRef = useRef<number>(0);
 
   // Clear reconnect timeout on unmount
   useEffect(() => {
@@ -68,6 +84,9 @@ export const SocketProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       }
       if (pollingCheckIntervalRef.current) {
         clearInterval(pollingCheckIntervalRef.current);
+      }
+      if (backgroundTimeoutRef.current) {
+        clearTimeout(backgroundTimeoutRef.current);
       }
       // Reject any pending connection waiters on unmount
       connectionWaiters.current.forEach(waiter => {
@@ -82,11 +101,45 @@ export const SocketProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     const handleVisibilityChange = () => {
       if (document.hidden) {
         console.log('[SocketProvider] Page backgrounded, notifying server');
+        backgroundStartTimeRef.current = Date.now();
+        
         if (socket && connected) {
           socket.emit('player_backgrounded', { timestamp: Date.now() });
         }
+        
+        // Set timeout to disconnect if backgrounded for too long (5 minutes)
+        if (backgroundTimeoutRef.current) {
+          clearTimeout(backgroundTimeoutRef.current);
+        }
+        
+        backgroundTimeoutRef.current = setTimeout(() => {
+          const backgroundDuration = Date.now() - backgroundStartTimeRef.current;
+          console.log(
+            `[SocketProvider] Prolonged background detected\n` +
+            `  Duration: ${backgroundDuration}ms\n` +
+            `  Threshold: ${BACKGROUND_DISCONNECT_TIMEOUT_MS}ms\n` +
+            `  Disconnecting socket to conserve resources`
+          );
+          
+          if (socket && socket.connected) {
+            socket.disconnect();
+          }
+        }, BACKGROUND_DISCONNECT_TIMEOUT_MS);
+        
       } else {
         console.log('[SocketProvider] Page foregrounded');
+        const backgroundDuration = backgroundStartTimeRef.current 
+          ? Date.now() - backgroundStartTimeRef.current 
+          : 0;
+        
+        console.log(`[SocketProvider] Background duration: ${backgroundDuration}ms`);
+        
+        // Clear background timeout
+        if (backgroundTimeoutRef.current) {
+          clearTimeout(backgroundTimeoutRef.current);
+          backgroundTimeoutRef.current = null;
+        }
+        
         if (socket && connected) {
           socket.emit('player_foregrounded', { timestamp: Date.now() });
           // Request state sync if in a match
@@ -137,22 +190,30 @@ export const SocketProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     });
   }, [connected]);
 
-  // Reconnect with exponential backoff
+  // Reconnect with exponential backoff and jitter
   const attemptReconnect = useCallback(() => {
     if (isReconnecting.current || !state.token) return;
     
-    if (reconnectAttempts.current >= MAX_RECONNECT_ATTEMPTS) {
+    // Check if we've exceeded max attempts (only if not Infinity)
+    if (MAX_RECONNECT_ATTEMPTS !== Infinity && reconnectAttempts.current >= MAX_RECONNECT_ATTEMPTS) {
       console.error('[SocketProvider] Max reconnection attempts reached');
       return;
     }
 
     isReconnecting.current = true;
-    const delay = Math.min(
-      RECONNECT_DELAY_MS * Math.pow(2, reconnectAttempts.current),
-      MAX_RECONNECT_DELAY_MS
-    );
+    // Calculate delay with exponential backoff + jitter
+    const delay = calculateBackoffWithJitter(reconnectAttempts.current);
 
-    console.log(`[SocketProvider] Attempting reconnect in ${delay}ms (attempt ${reconnectAttempts.current + 1}/${MAX_RECONNECT_ATTEMPTS})`);
+    const attemptDisplay = MAX_RECONNECT_ATTEMPTS === Infinity 
+      ? `${reconnectAttempts.current + 1}`
+      : `${reconnectAttempts.current + 1}/${MAX_RECONNECT_ATTEMPTS}`;
+
+    console.log(
+      `[SocketProvider] Attempting reconnect\n` +
+      `  Delay: ${Math.round(delay)}ms (with jitter)\n` +
+      `  Attempt: ${attemptDisplay}\n` +
+      `  Base delay: ${Math.min(RECONNECT_DELAY_MS * Math.pow(2, reconnectAttempts.current), MAX_RECONNECT_DELAY_MS)}ms`
+    );
     
     reconnectTimeout.current = setTimeout(() => {
       reconnectAttempts.current++;
@@ -481,10 +542,30 @@ export const SocketProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     if (!state.token) {
       // Clean up socket if no token
       if (socket) {
+        console.log('[SocketProvider] Token cleared, closing socket');
         socket.close();
         setSocket(null);
       }
       return;
+    }
+
+    // If socket already exists and is connected, don't recreate unless token changed
+    // This prevents unnecessary socket recreation on component re-renders
+    if (socket && socket.connected && socket.auth.token === state.token) {
+      console.log('[SocketProvider] Socket already connected with same token, skipping recreation');
+      return;
+    }
+
+    console.log(
+      '[SocketProvider] Creating new socket connection\n' +
+      `  URL: ${SOCKET_URL}\n` +
+      `  Token present: ${!!state.token}\n` +
+      `  Existing socket: ${socket ? 'Yes (will be replaced)' : 'No'}`
+    );
+
+    // Close existing socket if any
+    if (socket) {
+      socket.close();
     }
 
     const newSocket = io(SOCKET_URL, {
@@ -496,6 +577,7 @@ export const SocketProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     setSocket(newSocket);
 
     return () => {
+      console.log('[SocketProvider] Cleanup: Closing socket');
       newSocket.close();
     };
   }, [state.token, setupSocketListeners]);
