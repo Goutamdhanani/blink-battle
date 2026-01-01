@@ -49,9 +49,11 @@ interface ActiveMatch {
   // RECONNECTION SUPPORT
   disconnectedUsers?: Set<string>;
   disconnectTimestamps?: Map<string, number>;
-  reconnectAttempts?: Map<string, number>;
+  reconnectAttempts?: Map<string, number>; // Soft reconnects (includes all reconnects)
+  hardReconnectAttempts?: Map<string, number>; // Hard reconnects (only stable connections that disconnected)
   cancelTimeout?: NodeJS.Timeout;
   matchStartTimeout?: NodeJS.Timeout;
+  matchCreatedAt?: number; // Timestamp when match was created (for funding timeout guard)
 }
 
 export class GameSocketHandler {
@@ -66,6 +68,8 @@ export class GameSocketHandler {
   private readonly RECONNECT_GRACE_PERIOD_MS = 30000; // 30 seconds
   private readonly RECONNECT_DEBOUNCE_MS = 1000; // Minimum time between reconnects
   private readonly MAX_RECONNECT_ATTEMPTS = 5; // Max reconnect attempts before force disconnect
+  private readonly MAX_HARD_RECONNECT_ATTEMPTS = 5; // Max hard reconnects (stable connections) before cancellation
+  private readonly MIN_FUNDING_DURATION_MS = 20000; // Minimum time in funding before applying max reconnect cancellation (20s)
   private readonly MATCH_START_TIMEOUT_MS = parseInt(process.env.MATCH_START_TIMEOUT_MS || '60000', 10);
   private readonly STAKE_DEPOSIT_TIMEOUT_MS = parseInt(process.env.STAKE_DEPOSIT_TIMEOUT_MS || '120000', 10); // 2 minutes for deposits
   private readonly MIN_STABLE_CONNECTION_MS = 5000; // Guard against early disconnects (e.g., React remounts)
@@ -77,10 +81,12 @@ export class GameSocketHandler {
 
   private setupSocketHandlers() {
     this.io.on('connection', (socket: Socket) => {
-      console.log(`Client connected: ${socket.id}`);
+      const connectionTimestamp = Date.now();
+      console.log(`[Connection] Client connected: ${socket.id} at ${new Date(connectionTimestamp).toISOString()}`);
       
       // Track connection time for early disconnect guard
-      this.socketConnectionTimes.set(socket.id, Date.now());
+      this.socketConnectionTimes.set(socket.id, connectionTimestamp);
+      console.log(`[ConnectionTracking] Registered socket ${socket.id} with connection time ${connectionTimestamp}`);
 
       socket.on('join_matchmaking', (data) => this.handleJoinMatchmaking(socket, data));
       socket.on('cancel_matchmaking', (data) => this.handleCancelMatchmaking(socket, data));
@@ -126,7 +132,17 @@ export class GameSocketHandler {
       // Check if there's an existing socket for this user (enforce single socket per player)
       const existingSocket = await MatchmakingService.registerPlayerSocket(userId, socket.id);
       if (existingSocket && existingSocket !== socket.id) {
-        console.log(`[Matchmaking] Replaced stale socket ${existingSocket} with ${socket.id} for user ${userId}`);
+        // Calculate how long the previous socket was connected
+        const oldSocketConnectionTime = this.socketConnectionTimes.get(existingSocket);
+        const oldSocketDuration = oldSocketConnectionTime ? Date.now() - oldSocketConnectionTime : 0;
+        
+        console.log(
+          `[SocketReplacement] Replacing socket for user ${userId}:\n` +
+          `  Old socket: ${existingSocket} (lived ${oldSocketDuration}ms)\n` +
+          `  New socket: ${socket.id}\n` +
+          `  Was stable connection: ${oldSocketDuration >= this.MIN_STABLE_CONNECTION_MS}`
+        );
+        
         // Force disconnect old socket if still connected
         const oldSocket = this.io.sockets.sockets.get(existingSocket);
         if (oldSocket) {
@@ -215,15 +231,55 @@ export class GameSocketHandler {
     userId: string,
     activeMatch: ActiveMatch
   ) {
-    // Track reconnection attempts
+    const reconnectStartTime = Date.now();
+    const isPlayer1 = activeMatch.player1.userId === userId;
+    const playerRole = isPlayer1 ? 'player1' : 'player2';
+    
+    console.log(
+      `\n========== RECONNECT START: ${userId} (${playerRole}) ==========\n` +
+      `  Match ID: ${activeMatch.matchId}\n` +
+      `  Socket ID: ${socket.id}\n` +
+      `  Match State: ${activeMatch.stateMachine.getState()}\n` +
+      `  Match Created: ${activeMatch.matchCreatedAt ? new Date(activeMatch.matchCreatedAt).toISOString() : 'unknown'}\n` +
+      `  Match Age: ${activeMatch.matchCreatedAt ? Date.now() - activeMatch.matchCreatedAt : 'unknown'}ms\n` +
+      `  Has Started: ${activeMatch.hasStarted}\n` +
+      `  Signal Sent: ${!!activeMatch.signalTimestamp}\n` +
+      `  Player1 Ready: ${activeMatch.player1Ready}\n` +
+      `  Player2 Ready: ${activeMatch.player2Ready}\n` +
+      `  Disconnected Users: ${Array.from(activeMatch.disconnectedUsers || []).join(', ') || 'none'}`
+    );
+
+    // Track reconnection attempts (soft - all reconnects)
     if (!activeMatch.reconnectAttempts) {
       activeMatch.reconnectAttempts = new Map();
     }
     const attempts = (activeMatch.reconnectAttempts.get(userId) || 0) + 1;
     activeMatch.reconnectAttempts.set(userId, attempts);
 
-    if (attempts > this.MAX_RECONNECT_ATTEMPTS) {
-      console.error(`[Reconnect] Player ${userId} exceeded max reconnection attempts (${this.MAX_RECONNECT_ATTEMPTS})`);
+    // Get hard reconnect attempts (only from stable connections that disconnected)
+    if (!activeMatch.hardReconnectAttempts) {
+      activeMatch.hardReconnectAttempts = new Map();
+    }
+    const hardAttempts = activeMatch.hardReconnectAttempts.get(userId) || 0;
+
+    console.log(
+      `[Reconnect] Attempt counters for ${userId}:\n` +
+      `  Soft attempts (total): ${attempts}\n` +
+      `  Hard attempts (stable disconnects): ${hardAttempts}/${this.MAX_HARD_RECONNECT_ATTEMPTS}\n` +
+      `  All players' hard attempts: ${JSON.stringify(Array.from(activeMatch.hardReconnectAttempts.entries()))}`
+    );
+
+    // Check if we should apply max reconnect cancellation
+    const shouldCancelForMaxReconnects = this.shouldCancelForMaxReconnects(activeMatch, userId, hardAttempts);
+
+    if (shouldCancelForMaxReconnects) {
+      console.error(
+        `\n!!!! RECONNECT LIMIT EXCEEDED for ${userId} (${playerRole}) !!!!\n` +
+        `  Hard Attempts: ${hardAttempts}/${this.MAX_HARD_RECONNECT_ATTEMPTS}\n` +
+        `  Match State: ${activeMatch.stateMachine.getState()}\n` +
+        `  Match ID: ${activeMatch.matchId}\n` +
+        `  Cancelling match and refunding...`
+      );
       socket.emit('error', { 
         message: 'Too many reconnection attempts. Match will be cancelled.',
         code: 'MAX_RECONNECTS_EXCEEDED'
@@ -233,20 +289,37 @@ export class GameSocketHandler {
       return;
     }
 
-    console.log(`[Reconnect] Player ${userId} reconnection attempt ${attempts}/${this.MAX_RECONNECT_ATTEMPTS}`);
+    console.log(
+      `[Reconnect] ✓ Reconnect allowed for ${userId}\n` +
+      `  Soft: ${attempts}, Hard: ${hardAttempts}/${this.MAX_HARD_RECONNECT_ATTEMPTS}\n` +
+      `  Guard result: shouldCancel=${shouldCancelForMaxReconnects}`
+    );
 
     // Debounce rapid reconnections
     const lastDisconnect = activeMatch.disconnectTimestamps?.get(userId);
     const now = Date.now();
     
     if (lastDisconnect && (now - lastDisconnect) < this.RECONNECT_DEBOUNCE_MS) {
-      console.log(`[Debounce] Rapid reconnect detected for ${userId}, waiting...`);
+      const timeSinceDisconnect = now - lastDisconnect;
+      console.log(
+        `[Debounce] Rapid reconnect detected for ${userId}\n` +
+        `  Time since last disconnect: ${timeSinceDisconnect}ms\n` +
+        `  Debounce threshold: ${this.RECONNECT_DEBOUNCE_MS}ms\n` +
+        `  Waiting...`
+      );
       await this.sleep(this.RECONNECT_DEBOUNCE_MS);
     }
     
-    const isPlayer1 = activeMatch.player1.userId === userId;
     const playerData = isPlayer1 ? activeMatch.player1 : activeMatch.player2;
     const opponent = isPlayer1 ? activeMatch.player2 : activeMatch.player1;
+
+    const oldSocketId = playerData.socketId;
+    console.log(
+      `[Reconnect] Updating socket mapping:\n` +
+      `  Old socket: ${oldSocketId}\n` +
+      `  New socket: ${socket.id}\n` +
+      `  User: ${userId}`
+    );
 
     // Update socket ID
     playerData.socketId = socket.id;
@@ -324,7 +397,18 @@ export class GameSocketHandler {
     }
 
     this.emitLifecycleEvent(activeMatch.matchId, MatchEventType.PLAYER_RECONNECTED, { userId, attempts });
-    console.log(`[Reconnect] Successfully reconnected player ${userId} to match ${activeMatch.matchId}`);
+    
+    const reconnectDuration = Date.now() - reconnectStartTime;
+    console.log(
+      `\n========== RECONNECT SUCCESS: ${userId} (${playerRole}) ==========\n` +
+      `  Match ID: ${activeMatch.matchId}\n` +
+      `  Reconnect Duration: ${reconnectDuration}ms\n` +
+      `  Final Soft Attempts: ${attempts}\n` +
+      `  Final Hard Attempts: ${hardAttempts}\n` +
+      `  Match State: ${activeMatch.stateMachine.getState()}\n` +
+      `  Disconnected Users Remaining: ${Array.from(activeMatch.disconnectedUsers || []).join(', ') || 'none'}\n` +
+      `========================================================\n`
+    );
   }
 
   private async handleCancelMatchmaking(
@@ -538,6 +622,8 @@ export class GameSocketHandler {
         disconnectedUsers: new Set(),
         disconnectTimestamps: new Map(),
         reconnectAttempts: new Map(),
+        hardReconnectAttempts: new Map(),
+        matchCreatedAt: Date.now(), // Track when match was created for funding timeout guard
       };
 
       this.activeMatches.set(match.match_id, activeMatch);
@@ -974,40 +1060,64 @@ export class GameSocketHandler {
     const connectionStartTime = this.socketConnectionTimes.get(socket.id);
     const connectionDuration = connectionStartTime ? disconnectTime - connectionStartTime : 0;
     
-    console.log(`[Disconnect] Client disconnected: ${socket.id} at ${new Date(disconnectTime).toISOString()} (connection duration: ${connectionDuration}ms)`);
+    console.log(
+      `\n---------- DISCONNECT EVENT: ${socket.id} ----------\n` +
+      `  Time: ${new Date(disconnectTime).toISOString()}\n` +
+      `  Connection Duration: ${connectionDuration}ms\n` +
+      `  Connection Started: ${connectionStartTime ? new Date(connectionStartTime).toISOString() : 'unknown'}\n` +
+      `  Is Stable Connection: ${connectionDuration >= this.MIN_STABLE_CONNECTION_MS}\n` +
+      `  Threshold: ${this.MIN_STABLE_CONNECTION_MS}ms`
+    );
 
     // Clean up connection time tracking
     this.socketConnectionTimes.delete(socket.id);
 
     const matchId = this.playerToMatch.get(socket.id);
     if (!matchId) {
-      console.log(`[Disconnect] No active match for socket ${socket.id}`);
+      console.log(`[Disconnect] No active match for socket ${socket.id} - clean disconnect\n`);
       return;
     }
 
     const activeMatch = this.activeMatches.get(matchId);
     if (!activeMatch) {
-      console.log(`[Disconnect] Match ${matchId} not found in active matches`);
+      console.log(`[Disconnect] Match ${matchId} not found in active matches - possibly already cleaned up\n`);
       return;
     }
 
     const isPlayer1 = activeMatch.player1.socketId === socket.id;
     const disconnectedUserId = isPlayer1 ? activeMatch.player1.userId : activeMatch.player2.userId;
     const otherPlayer = isPlayer1 ? activeMatch.player2 : activeMatch.player1;
+    const playerRole = isPlayer1 ? 'player1' : 'player2';
+    const matchAge = activeMatch.matchCreatedAt ? Date.now() - activeMatch.matchCreatedAt : 0;
 
-    console.log(`[Disconnect] Match ${matchId} state:`, {
-      hasStarted: activeMatch.hasStarted,
-      signalSent: !!activeMatch.signalTimestamp,
-      player1Ready: activeMatch.player1Ready,
-      player2Ready: activeMatch.player2Ready,
-      disconnectedPlayer: isPlayer1 ? 'player1' : 'player2',
-      connectionDuration: `${connectionDuration}ms`,
-    });
+    console.log(
+      `[Disconnect] Match context for ${matchId}:\n` +
+      `  Disconnected User: ${disconnectedUserId} (${playerRole})\n` +
+      `  Match State: ${activeMatch.stateMachine.getState()}\n` +
+      `  Match Age: ${matchAge}ms\n` +
+      `  Has Started: ${activeMatch.hasStarted}\n` +
+      `  Signal Sent: ${!!activeMatch.signalTimestamp}\n` +
+      `  Player1 Ready: ${activeMatch.player1Ready}\n` +
+      `  Player2 Ready: ${activeMatch.player2Ready}\n` +
+      `  Player1 Staked: ${activeMatch.player1Staked}\n` +
+      `  Player2 Staked: ${activeMatch.player2Staked}\n` +
+      `  Current Disconnected Users: ${Array.from(activeMatch.disconnectedUsers || []).join(', ') || 'none'}\n` +
+      `  Connection Duration: ${connectionDuration}ms`
+    );
 
     // Early disconnect guard: if connection was very short-lived (e.g., React remount),
     // don't count it toward reconnect attempts or trigger match cancellation logic
     if (connectionDuration < this.MIN_STABLE_CONNECTION_MS) {
-      console.log(`[Disconnect] Early disconnect ignored (connection duration ${connectionDuration}ms < ${this.MIN_STABLE_CONNECTION_MS}ms). Likely a React remount or transient connection.`);
+      console.log(
+        `\n[EARLY DISCONNECT GUARD TRIGGERED]\n` +
+        `  User: ${disconnectedUserId} (${playerRole})\n` +
+        `  Connection Duration: ${connectionDuration}ms\n` +
+        `  Threshold: ${this.MIN_STABLE_CONNECTION_MS}ms\n` +
+        `  Decision: IGNORING - Not counting as hard disconnect\n` +
+        `  Reason: Likely React remount, hot reload, or transient connection\n` +
+        `  Current Hard Attempts: ${activeMatch.hardReconnectAttempts?.get(disconnectedUserId) || 0} (UNCHANGED)\n` +
+        `  Match will NOT be penalized for this disconnect\n`
+      );
       // Clean up the socket mapping but don't trigger disconnection penalties
       this.playerToMatch.delete(socket.id);
       // NOTE: We intentionally don't clean up userToMatch here because the user
@@ -1016,6 +1126,25 @@ export class GameSocketHandler {
       return;
     }
 
+    // This is a "hard" disconnect - connection was stable (>=5s) before disconnecting
+    // Increment hard reconnect attempts counter for this user
+    if (!activeMatch.hardReconnectAttempts) {
+      activeMatch.hardReconnectAttempts = new Map();
+    }
+    const previousHardAttempts = activeMatch.hardReconnectAttempts.get(disconnectedUserId) || 0;
+    const hardAttempts = previousHardAttempts + 1;
+    activeMatch.hardReconnectAttempts.set(disconnectedUserId, hardAttempts);
+    
+    console.log(
+      `\n[HARD DISCONNECT RECORDED]\n` +
+      `  User: ${disconnectedUserId} (${playerRole})\n` +
+      `  Connection Duration: ${connectionDuration}ms (>= ${this.MIN_STABLE_CONNECTION_MS}ms threshold)\n` +
+      `  Previous Hard Attempts: ${previousHardAttempts}\n` +
+      `  New Hard Attempts: ${hardAttempts}/${this.MAX_HARD_RECONNECT_ATTEMPTS}\n` +
+      `  All Players' Hard Attempts: ${JSON.stringify(Array.from(activeMatch.hardReconnectAttempts.entries()))}\n` +
+      `  This WILL count toward max reconnect limit\n`
+    );
+
     // Mark player as disconnected
     activeMatch.disconnectedUsers = activeMatch.disconnectedUsers || new Set();
     activeMatch.disconnectedUsers.add(disconnectedUserId);
@@ -1023,12 +1152,20 @@ export class GameSocketHandler {
     activeMatch.disconnectTimestamps = activeMatch.disconnectTimestamps || new Map();
     activeMatch.disconnectTimestamps.set(disconnectedUserId, disconnectTime);
 
-    console.log(`[Disconnect] Player ${disconnectedUserId} marked as disconnected, grace period: ${this.RECONNECT_GRACE_PERIOD_MS}ms`);
+    console.log(
+      `[Disconnect] Player ${disconnectedUserId} marked as disconnected\n` +
+      `  Grace Period: ${this.RECONNECT_GRACE_PERIOD_MS}ms\n` +
+      `  Will cancel if not reconnected by: ${new Date(disconnectTime + this.RECONNECT_GRACE_PERIOD_MS).toISOString()}\n` +
+      `  Currently Disconnected: ${Array.from(activeMatch.disconnectedUsers).join(', ')}`
+    );
 
     // Emit lifecycle event
     this.emitLifecycleEvent(matchId, MatchEventType.PLAYER_DISCONNECTED, {
       userId: disconnectedUserId,
       state: activeMatch.stateMachine.getState(),
+      connectionDuration,
+      hardAttempts,
+      isHardDisconnect: true,
     });
 
     // Notify other player
@@ -1048,16 +1185,31 @@ export class GameSocketHandler {
     activeMatch.cancelTimeout = setTimeout(async () => {
       const match = this.activeMatches.get(matchId);
       if (!match || !match.disconnectedUsers?.has(disconnectedUserId)) {
-        console.log(`[Disconnect Timeout] Player ${disconnectedUserId} reconnected or match cleaned up`);
+        console.log(
+          `[Disconnect Timeout] Player ${disconnectedUserId} check:\n` +
+          `  Match exists: ${!!match}\n` +
+          `  Still disconnected: ${match?.disconnectedUsers?.has(disconnectedUserId) || false}\n` +
+          `  Result: Player reconnected or match cleaned up - no action needed`
+        );
         return; // Player reconnected or match already cleaned up
       }
 
-      console.log(`[Disconnect Timeout] Player ${disconnectedUserId} did not reconnect within grace period`);
+      console.log(
+        `\n!!!!! DISCONNECT TIMEOUT EXPIRED !!!!!\n` +
+        `  Player: ${disconnectedUserId} (${playerRole})\n` +
+        `  Match: ${matchId}\n` +
+        `  Grace Period: ${this.RECONNECT_GRACE_PERIOD_MS}ms\n` +
+        `  Player did not reconnect - proceeding with cancellation/forfeit\n`
+      );
 
       // Handle based on game state
       if (!match.signalTimestamp) {
         // Disconnected before signal - refund both
-        console.log(`[Refund] Both players for match ${matchId} (disconnect before signal)`);
+        console.log(
+          `[Refund] Both players for match ${matchId}\n` +
+          `  Reason: Disconnect before signal\n` +
+          `  State: ${match.stateMachine.getState()}`
+        );
         await EscrowService.refundBothPlayers(
           match.matchId,
           match.player1.walletAddress,
@@ -1135,26 +1287,139 @@ export class GameSocketHandler {
   }
 
   /**
+   * Determine if a match should be cancelled due to max reconnects exceeded
+   * Applies guards for funding state to prevent premature cancellation
+   */
+  private shouldCancelForMaxReconnects(
+    activeMatch: ActiveMatch,
+    userId: string,
+    hardAttempts: number
+  ): boolean {
+    const currentState = activeMatch.stateMachine.getState();
+    const matchAge = activeMatch.matchCreatedAt ? Date.now() - activeMatch.matchCreatedAt : 0;
+    
+    console.log(
+      `\n========== RECONNECT CANCELLATION GUARD CHECK ==========\n` +
+      `  User: ${userId}\n` +
+      `  Match ID: ${activeMatch.matchId}\n` +
+      `  Current State: ${currentState}\n` +
+      `  Hard Attempts: ${hardAttempts}/${this.MAX_HARD_RECONNECT_ATTEMPTS}\n` +
+      `  Match Age: ${matchAge}ms\n` +
+      `  Match Created: ${activeMatch.matchCreatedAt ? new Date(activeMatch.matchCreatedAt).toISOString() : 'unknown'}`
+    );
+
+    // If hard attempts haven't exceeded the limit, don't cancel
+    if (hardAttempts <= this.MAX_HARD_RECONNECT_ATTEMPTS) {
+      console.log(
+        `  Decision: ALLOW RECONNECT\n` +
+        `  Reason: Hard attempts (${hardAttempts}) <= limit (${this.MAX_HARD_RECONNECT_ATTEMPTS})\n` +
+        `========================================================\n`
+      );
+      return false;
+    }
+
+    console.log(
+      `  ⚠️  Hard attempts EXCEEDED limit: ${hardAttempts} > ${this.MAX_HARD_RECONNECT_ATTEMPTS}\n` +
+      `  Checking state-specific guards...`
+    );
+
+    // Special guard for FUNDING state: prevent cancellation if:
+    // 1. No player has gone ready (neither player1Ready nor player2Ready is true)
+    // 2. No signal has been sent (no signalTimestamp)
+    // 3. Match hasn't been in funding for minimum duration (< MIN_FUNDING_DURATION_MS)
+    if (currentState === MatchState.FUNDING) {
+      const hasAnyReady = activeMatch.player1Ready || activeMatch.player2Ready;
+      const hasSignal = !!activeMatch.signalTimestamp;
+      const hasMinFundingDuration = matchAge >= this.MIN_FUNDING_DURATION_MS;
+
+      console.log(
+        `  FUNDING STATE GUARD:\n` +
+        `    Player1 Ready: ${activeMatch.player1Ready}\n` +
+        `    Player2 Ready: ${activeMatch.player2Ready}\n` +
+        `    Any Ready: ${hasAnyReady}\n` +
+        `    Signal Sent: ${hasSignal}\n` +
+        `    Match Age: ${matchAge}ms\n` +
+        `    Min Duration: ${this.MIN_FUNDING_DURATION_MS}ms\n` +
+        `    Has Min Duration: ${hasMinFundingDuration}`
+      );
+
+      if (!hasAnyReady && !hasSignal && !hasMinFundingDuration) {
+        console.log(
+          `  Decision: ALLOW RECONNECT (Funding Guard)\n` +
+          `  Reason: In FUNDING state with:\n` +
+          `    - No ready signals sent\n` +
+          `    - No game signal sent\n` +
+          `    - Match age ${matchAge}ms < min ${this.MIN_FUNDING_DURATION_MS}ms\n` +
+          `  This protects against rapid remounting during initial funding phase\n` +
+          `========================================================\n`
+        );
+        return false;
+      }
+
+      console.log(
+        `  Funding guard check FAILED - at least one condition met:\n` +
+        `    - hasAnyReady=${hasAnyReady} OR\n` +
+        `    - hasSignal=${hasSignal} OR\n` +
+        `    - hasMinFundingDuration=${hasMinFundingDuration}\n` +
+        `  Proceeding with cancellation...`
+      );
+    }
+
+    // In all other cases, if hard attempts exceeded, cancel the match
+    console.log(
+      `  Decision: CANCEL MATCH\n` +
+      `  Reason: Hard attempts exceeded (${hardAttempts} > ${this.MAX_HARD_RECONNECT_ATTEMPTS}) ` +
+      `and no guards applied\n` +
+      `========================================================\n`
+    );
+    return true;
+  }
+
+  /**
    * Cancel match and attempt refund
    */
   private async cancelMatchAndRefund(activeMatch: ActiveMatch, reason: string) {
-    console.log(`[Cancel] Cancelling match ${activeMatch.matchId}, reason: ${reason}`);
+    const matchAge = activeMatch.matchCreatedAt ? Date.now() - activeMatch.matchCreatedAt : 0;
+    
+    console.log(
+      `\n========== MATCH CANCELLATION ==========\n` +
+      `  Match ID: ${activeMatch.matchId}\n` +
+      `  Reason: ${reason}\n` +
+      `  State: ${activeMatch.stateMachine.getState()}\n` +
+      `  Match Age: ${matchAge}ms\n` +
+      `  Has Started: ${activeMatch.hasStarted}\n` +
+      `  Signal Sent: ${!!activeMatch.signalTimestamp}\n` +
+      `  Player1: ${activeMatch.player1.userId} (Ready: ${activeMatch.player1Ready}, Staked: ${activeMatch.player1Staked})\n` +
+      `  Player2: ${activeMatch.player2.userId} (Ready: ${activeMatch.player2Ready}, Staked: ${activeMatch.player2Staked})\n` +
+      `  Hard Reconnect Attempts: ${JSON.stringify(Array.from(activeMatch.hardReconnectAttempts?.entries() || []))}\n` +
+      `  Soft Reconnect Attempts: ${JSON.stringify(Array.from(activeMatch.reconnectAttempts?.entries() || []))}`
+    );
     
     // Check if any payments were made and refund them
     const payments = await PaymentModel.findByMatchId(activeMatch.matchId);
     const confirmedPayments = payments.filter(p => p.status === PaymentStatus.CONFIRMED);
     
     if (confirmedPayments.length > 0) {
-      console.log(`[Cancel] ${confirmedPayments.length} payment(s) found, initiating refunds`);
+      console.log(
+        `[Cancel] Found ${confirmedPayments.length} confirmed payment(s):\n` +
+        confirmedPayments.map(p => `  - ${p.reference}: ${p.amount} from ${p.user_id}`).join('\n')
+      );
       // TODO: Implement refund logic for World Pay payments
-      // For now, just log and mark for manual review
+      console.log(`[Cancel] TODO: Implement refund logic for World Pay payments`);
+    } else {
+      console.log(`[Cancel] No confirmed payments to refund`);
     }
     
     // Transition state machine to CANCELLED
-    activeMatch.stateMachine.transition(MatchState.CANCELLED, {
+    const transitionResult = activeMatch.stateMachine.transition(MatchState.CANCELLED, {
       reason,
       triggeredBy: 'system',
     });
+    
+    console.log(
+      `[Cancel] State transition to CANCELLED: ${transitionResult.success ? 'SUCCESS' : 'FAILED'}\n` +
+      (transitionResult.error ? `  Error: ${transitionResult.error}` : '')
+    );
     
     // Notify both players
     this.io.to(activeMatch.player1.socketId).emit('match_cancelled', {
@@ -1166,7 +1431,15 @@ export class GameSocketHandler {
       message: `Match cancelled - ${reason.replace(/_/g, ' ')}`
     });
     
+    console.log(`[Cancel] Notified both players of cancellation`);
+    
     await MatchModel.updateStatus(activeMatch.matchId, MatchStatus.CANCELLED);
+    
+    console.log(
+      `[Cancel] Updated match status in database to CANCELLED\n` +
+      `========================================\n`
+    );
+    
     this.cleanupMatch(activeMatch.matchId);
   }
 
