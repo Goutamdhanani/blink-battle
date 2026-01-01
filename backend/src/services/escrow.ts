@@ -133,9 +133,9 @@ export class EscrowService {
       console.log(`[EscrowService] Checking on-chain escrow for match: ${matchId}`);
       const matchData = await contractService.getMatch(matchId);
       
-      // Check for zero or missing stake amount using numeric comparison
-      const stakeAmountNum = matchData ? parseFloat(matchData.stakeAmount) : 0;
-      if (!matchData || stakeAmountNum === 0) {
+      // Check for zero or missing stake amount
+      // matchData.stakeAmount is already formatted as ether string by contractService.getMatch()
+      if (!matchData || matchData.stakeAmount === '0.0' || matchData.stakeAmount === '0') {
         console.warn(`[EscrowService] Match ${matchId} has no on-chain escrow - funds may be in platform wallet`);
         // Record this for manual review/refund
         await this.recordFailedRefund(matchId, player1Wallet, player2Wallet, stakeAmount, 'no_escrow');
