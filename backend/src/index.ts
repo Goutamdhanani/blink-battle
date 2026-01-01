@@ -194,6 +194,7 @@ app.post('/api/verify-world-id', authenticate, VerificationController.verifyWorl
 // Matches
 app.get('/api/matches/history', authenticate, MatchController.getMatchHistory);
 app.get('/api/matches/:matchId', authenticate, MatchController.getMatch);
+app.get('/api/matches/:matchId/status', authenticate, MatchController.getMatchStatus);
 
 // Leaderboard
 app.get('/api/leaderboard', LeaderboardController.getLeaderboard);
