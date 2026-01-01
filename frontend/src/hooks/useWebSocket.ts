@@ -242,6 +242,23 @@ export const useWebSocket = () => {
       setGamePhase('idle');
     });
 
+    // Payment flow events
+    newSocket.on('opponent_paid', (data) => {
+      console.log('[WebSocket] Opponent paid:', data);
+      // TODO: Update UI to show opponent paid status
+    });
+
+    newSocket.on('payment_confirmed_waiting', (data) => {
+      console.log('[WebSocket] Payment confirmed, waiting for opponent:', data);
+      // TODO: Update UI to show waiting for opponent payment
+    });
+
+    newSocket.on('both_players_paid', (data) => {
+      console.log('[WebSocket] Both players paid, can proceed:', data);
+      // Game phase will transition to ready/countdown
+      setGamePhase('matched'); // Use matched phase to show "Get Ready" screen
+    });
+
     newSocket.on('game_start', (data) => {
       console.log('[WebSocket] Game starting', data.reconnected ? '(reconnected)' : '');
       setGamePhase('countdown');
@@ -361,6 +378,15 @@ export const useWebSocket = () => {
     }
   };
 
+  const paymentConfirmed = (matchId: string, userId: string, paymentReference: string) => {
+    if (socket && connected) {
+      console.log('[WebSocket] Sending payment_confirmed for match:', matchId, 'ref:', paymentReference);
+      socket.emit('payment_confirmed', { matchId, userId, paymentReference });
+    } else {
+      console.warn('[WebSocket] Cannot send payment_confirmed - socket not connected');
+    }
+  };
+
   const playerReady = (matchId: string) => {
     if (socket && connected) {
       console.log('[WebSocket] Sending player_ready for match:', matchId);
@@ -382,6 +408,7 @@ export const useWebSocket = () => {
     isConnecting,
     joinMatchmaking,
     cancelMatchmaking,
+    paymentConfirmed,
     playerReady,
     playerTap,
   };
