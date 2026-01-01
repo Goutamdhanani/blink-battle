@@ -68,7 +68,7 @@ const Matchmaking: React.FC = () => {
       setPaymentError(matchmakingError.message || 'Failed to join matchmaking. Please try again.');
     }
   };
-    setPaymentError(null);
+
   const handlePayNow = async () => {
     if (!state.user || !state.matchId) return;
 

@@ -248,14 +248,6 @@ export class GameSocketHandler {
 
     console.log(`Successfully reconnected player ${userId} to match ${activeMatch.matchId}`);
   }
-      socket.emit('signal', { 
-        timestamp: activeMatch.signalTimestamp,
-        reconnected: true 
-      });
-    }
-
-    console.log(`Successfully reconnected player ${userId} to match ${activeMatch.matchId}`);
-  }
 
   private async handleCancelMatchmaking(
     socket: Socket,
@@ -459,15 +451,6 @@ export class GameSocketHandler {
           }
         }, this.STAKE_DEPOSIT_TIMEOUT_MS);
       }
-    } catch (error) {
-      console.error('Error creating match:', error);
-      socket.emit('error', { message: 'Failed to create match' });
-    }
-  }
-          await MatchModel.updateStatus(matchCheck.matchId, MatchStatus.CANCELLED);
-          this.cleanupMatch(matchCheck.matchId);
-        }
-      }, this.MATCH_START_TIMEOUT_MS);
     } catch (error) {
       console.error('Error creating match:', error);
       socket.emit('error', { message: 'Failed to create match' });
