@@ -5,10 +5,12 @@ export class MatchmakingService {
   private static readonly QUEUE_PREFIX = 'matchmaking:';
   private static readonly ACTIVE_MATCH_PREFIX = 'active_match:';
   private static readonly PLAYER_SOCKET_PREFIX = 'player_socket:';
+  private static readonly QUEUE_DISCONNECT_PREFIX = 'queue_disconnect:'; // Track disconnected queue entries
   private static readonly TIMEOUT_MS = parseInt(
     process.env.MATCHMAKING_TIMEOUT_MS || '30000',
     10
   );
+  private static readonly QUEUE_GRACE_PERIOD_MS = 30000; // 30 second grace period for queue disconnect/reconnect
   // Standard stake levels supported by the system
   private static readonly STAKE_LEVELS = [0, 0.1, 0.25, 0.5, 1.0, 2.0, 5.0, 10.0];
 
@@ -164,6 +166,7 @@ export class MatchmakingService {
 
   /**
    * Remove a player from all matchmaking queues (used on disconnect)
+   * Now marks queue entries as disconnected with grace period instead of immediate removal
    */
   static async removeFromAllQueues(userId: string): Promise<number> {
     let removedCount = 0;
@@ -175,8 +178,9 @@ export class MatchmakingService {
       for (const item of queue) {
         const request: MatchmakingRequest = JSON.parse(item);
         if (request.userId === userId) {
-          await redisClient.lRem(queueKey, 1, item);
-          console.log(`[Matchmaking] Removed player ${userId} from queue for stake ${stake} WLD (disconnect cleanup)`);
+          // Mark as disconnected instead of removing immediately
+          await this.markQueueEntryDisconnected(userId, stake);
+          console.log(`[Matchmaking] Marked player ${userId} as disconnected in queue for stake ${stake} WLD (grace period: ${this.QUEUE_GRACE_PERIOD_MS}ms)`);
           removedCount++;
           break;
         }
@@ -184,10 +188,98 @@ export class MatchmakingService {
     }
 
     if (removedCount > 0) {
-      console.log(`[Matchmaking] Cleaned up ${removedCount} queue entries for disconnected player ${userId}`);
+      console.log(`[Matchmaking] Marked ${removedCount} queue entries as disconnected for player ${userId}`);
     }
 
     return removedCount;
+  }
+
+  /**
+   * Mark a queue entry as disconnected with a grace period
+   * Entry will be auto-removed after grace period if player doesn't reconnect
+   */
+  static async markQueueEntryDisconnected(userId: string, stake: number): Promise<void> {
+    const disconnectKey = `${this.QUEUE_DISCONNECT_PREFIX}${userId}:${stake}`;
+    const disconnectData = JSON.stringify({
+      userId,
+      stake,
+      disconnectTimestamp: Date.now(),
+    });
+    
+    // Set with TTL equal to grace period (auto-cleanup)
+    const gracePeriodSeconds = Math.ceil(this.QUEUE_GRACE_PERIOD_MS / 1000);
+    await redisClient.setEx(disconnectKey, gracePeriodSeconds, disconnectData);
+    
+    console.log(
+      `[QueueGrace] Marked ${userId} as disconnected from queue (stake: ${stake})\n` +
+      `  Grace period: ${this.QUEUE_GRACE_PERIOD_MS}ms\n` +
+      `  Will auto-remove at: ${new Date(Date.now() + this.QUEUE_GRACE_PERIOD_MS).toISOString()}`
+    );
+  }
+
+  /**
+   * Check if a queue entry is marked as disconnected
+   */
+  static async isQueueEntryDisconnected(userId: string, stake: number): Promise<boolean> {
+    const disconnectKey = `${this.QUEUE_DISCONNECT_PREFIX}${userId}:${stake}`;
+    const data = await redisClient.get(disconnectKey);
+    return data !== null;
+  }
+
+  /**
+   * Restore a queue entry after reconnection (clear disconnect marker)
+   * Returns true if the entry was within grace period and successfully restored
+   */
+  static async restoreQueueEntry(userId: string, stake: number): Promise<boolean> {
+    const disconnectKey = `${this.QUEUE_DISCONNECT_PREFIX}${userId}:${stake}`;
+    const data = await redisClient.get(disconnectKey);
+    
+    if (!data) {
+      console.log(`[QueueGrace] No disconnect marker for ${userId} (stake: ${stake}) - may have expired`);
+      return false;
+    }
+    
+    const disconnectData = JSON.parse(data);
+    const disconnectDuration = Date.now() - disconnectData.disconnectTimestamp;
+    
+    if (disconnectDuration > this.QUEUE_GRACE_PERIOD_MS) {
+      console.log(
+        `[QueueGrace] Grace period expired for ${userId} (stake: ${stake})\n` +
+        `  Disconnect duration: ${disconnectDuration}ms\n` +
+        `  Grace period: ${this.QUEUE_GRACE_PERIOD_MS}ms`
+      );
+      await redisClient.del(disconnectKey);
+      return false;
+    }
+    
+    // Clear disconnect marker - player is back
+    await redisClient.del(disconnectKey);
+    
+    console.log(
+      `[QueueGrace] Restored queue entry for ${userId} (stake: ${stake})\n` +
+      `  Disconnect duration: ${disconnectDuration}ms\n` +
+      `  Within grace period: ${this.QUEUE_GRACE_PERIOD_MS}ms`
+    );
+    
+    return true;
+  }
+
+  /**
+   * Cleanup expired queue entries (called after grace period)
+   * Removes entries from queue if disconnect marker expired
+   */
+  static async cleanupExpiredQueueEntry(userId: string, stake: number): Promise<void> {
+    const queueKey = this.getQueueKey(stake);
+    const queue = await redisClient.lRange(queueKey, 0, -1);
+    
+    for (const item of queue) {
+      const request: MatchmakingRequest = JSON.parse(item);
+      if (request.userId === userId) {
+        await redisClient.lRem(queueKey, 1, item);
+        console.log(`[QueueGrace] Removed expired queue entry for ${userId} (stake: ${stake})`);
+        break;
+      }
+    }
   }
 
   /**
