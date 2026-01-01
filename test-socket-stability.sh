@@ -62,9 +62,18 @@ echo "🎯 Monitoring connection stability for ${TEST_DURATION} seconds..."
 echo "   (Backend logs will be filtered for Socket.IO events)"
 echo ""
 
+# Determine script directory
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+BACKEND_DIR="${SCRIPT_DIR}/backend"
+
+if [ ! -d "$BACKEND_DIR" ]; then
+    echo -e "${RED}❌ Backend directory not found: ${BACKEND_DIR}${NC}"
+    exit 1
+fi
+
 # Monitor backend logs in background
 {
-    cd /home/runner/work/blink-battle/blink-battle/backend
+    cd "$BACKEND_DIR"
     npm run dev 2>&1 | grep -E "\[Connection\]|\[Transport\]|\[Keepalive\]|\[Disconnect\]" | while IFS= read -r line; do
         echo "$(date '+%H:%M:%S.%3N') | $line"
     done

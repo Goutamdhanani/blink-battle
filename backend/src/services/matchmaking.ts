@@ -9,6 +9,8 @@ export class MatchmakingService {
     process.env.MATCHMAKING_TIMEOUT_MS || '30000',
     10
   );
+  // Standard stake levels supported by the system
+  private static readonly STAKE_LEVELS = [0, 0.1, 0.25, 0.5, 1.0, 2.0, 5.0, 10.0];
 
   /**
    * Check if player is already in an active match
@@ -158,6 +160,34 @@ export class MatchmakingService {
         break;
       }
     }
+  }
+
+  /**
+   * Remove a player from all matchmaking queues (used on disconnect)
+   */
+  static async removeFromAllQueues(userId: string): Promise<number> {
+    let removedCount = 0;
+
+    for (const stake of this.STAKE_LEVELS) {
+      const queueKey = this.getQueueKey(stake);
+      const queue = await redisClient.lRange(queueKey, 0, -1);
+
+      for (const item of queue) {
+        const request: MatchmakingRequest = JSON.parse(item);
+        if (request.userId === userId) {
+          await redisClient.lRem(queueKey, 1, item);
+          console.log(`[Matchmaking] Removed player ${userId} from queue for stake ${stake} WLD (disconnect cleanup)`);
+          removedCount++;
+          break;
+        }
+      }
+    }
+
+    if (removedCount > 0) {
+      console.log(`[Matchmaking] Cleaned up ${removedCount} queue entries for disconnected player ${userId}`);
+    }
+
+    return removedCount;
   }
 
   /**

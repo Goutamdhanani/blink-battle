@@ -182,6 +182,9 @@ export class GameSocketHandler {
       socket.on('player_ready', (data) => this.handlePlayerReady(socket, data));
       socket.on('player_tap', (data) => this.handlePlayerTap(socket, data));
       socket.on('rejoin_match', (data) => this.handleRejoinMatch(socket, data));
+      socket.on('player_backgrounded', (data) => this.handlePlayerBackgrounded(socket, data));
+      socket.on('player_foregrounded', (data) => this.handlePlayerForegrounded(socket, data));
+      socket.on('request_state_sync', (data) => this.handleRequestStateSync(socket, data));
       socket.on('disconnect', () => this.handleDisconnect(socket));
     });
   }
@@ -510,6 +513,73 @@ export class GameSocketHandler {
       socket.emit('matchmaking_cancelled');
     } catch (error) {
       console.error('Error cancelling matchmaking:', error);
+    }
+  }
+
+  /**
+   * Handle player backgrounding (mobile app loses focus)
+   */
+  private handlePlayerBackgrounded(socket: Socket, data: { timestamp: number }) {
+    console.log(`[Visibility] Player backgrounded: ${socket.id} at ${new Date(data.timestamp).toISOString()}`);
+    // Log for monitoring - could be used to pause timers or notify opponent
+  }
+
+  /**
+   * Handle player foregrounding (mobile app gains focus)
+   */
+  private handlePlayerForegrounded(socket: Socket, data: { timestamp: number }) {
+    console.log(`[Visibility] Player foregrounded: ${socket.id} at ${new Date(data.timestamp).toISOString()}`);
+    // Player is active again - connection should be stable
+  }
+
+  /**
+   * Handle request for state sync (after reconnection or foreground)
+   */
+  private async handleRequestStateSync(socket: Socket, data: { matchId: string }) {
+    try {
+      const activeMatch = this.activeMatches.get(data.matchId);
+      if (!activeMatch) {
+        socket.emit('error', { message: 'Match not found for state sync' });
+        return;
+      }
+
+      const isPlayer1 = activeMatch.player1.socketId === socket.id;
+      const opponent = isPlayer1 ? activeMatch.player2 : activeMatch.player1;
+
+      console.log(`[StateSync] Syncing state for match ${data.matchId} to socket ${socket.id}`);
+
+      // Send current match state
+      socket.emit('match_found', {
+        matchId: activeMatch.matchId,
+        opponent: { 
+          userId: opponent.userId, 
+          wallet: opponent.walletAddress 
+        },
+        stake: activeMatch.stake,
+        reconnected: true,
+        hasStarted: activeMatch.hasStarted,
+        signalSent: !!activeMatch.signalTimestamp,
+        state: activeMatch.stateMachine.getState(),
+        escrowStatus: activeMatch.escrowStatus,
+        player1Staked: activeMatch.player1Staked,
+        player2Staked: activeMatch.player2Staked,
+        bothPlayersStaked: activeMatch.player1Staked && activeMatch.player2Staked,
+        player1Ready: activeMatch.player1Ready,
+        player2Ready: activeMatch.player2Ready,
+      });
+
+      // Resync game state if in progress
+      if (activeMatch.hasStarted && !activeMatch.signalTimestamp) {
+        socket.emit('game_start', { countdown: true, reconnected: true });
+      } else if (activeMatch.signalTimestamp) {
+        socket.emit('signal', { 
+          timestamp: activeMatch.signalTimestamp,
+          reconnected: true 
+        });
+      }
+    } catch (error) {
+      console.error('[StateSync] Error syncing state:', error);
+      socket.emit('error', { message: 'Failed to sync state' });
     }
   }
 
@@ -1161,10 +1231,28 @@ export class GameSocketHandler {
 
     // Clean up connection time tracking
     this.socketConnectionTimes.delete(socket.id);
+    
+    // Get userId from socket for matchmaking queue cleanup
+    const userId = (socket as any).userId;
 
     const matchId = this.playerToMatch.get(socket.id);
     if (!matchId) {
-      console.log(`[Disconnect] No active match for socket ${socket.id} - clean disconnect\n`);
+      // Player not in a match - might be in matchmaking queue
+      if (userId) {
+        console.log(`[Disconnect] No active match for socket ${socket.id}, checking matchmaking queues...`);
+        try {
+          const removedCount = await MatchmakingService.removeFromAllQueues(userId);
+          if (removedCount > 0) {
+            console.log(`[Disconnect] Cleaned up ${removedCount} matchmaking queue entries for user ${userId}`);
+          }
+          // Also clear socket registration
+          await MatchmakingService.clearPlayerSocket(userId);
+        } catch (error) {
+          console.error(`[Disconnect] Error cleaning up matchmaking for user ${userId}:`, error);
+        }
+      } else {
+        console.log(`[Disconnect] No active match or userId for socket ${socket.id} - clean disconnect\n`);
+      }
       return;
     }
 
