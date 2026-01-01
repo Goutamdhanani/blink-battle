@@ -139,7 +139,8 @@ export class EscrowService {
 
       // If no stakes exist on-chain, log warning and don't mark as refunded
       if (!stakeStatus.hasStakes) {
-        console.warn(`[EscrowService] No on-chain stakes found for match ${matchId}. Cannot refund. This likely means the match was created in DB but stakes were never deposited on-chain.`);
+        console.warn(`[EscrowService] No on-chain stakes found for match ${matchId}. Cannot refund.`);
+        console.warn('[EscrowService] Match was likely created in DB but stakes were never deposited on-chain.');
         return { 
           success: false, 
           error: 'No on-chain stakes found. Match was never funded or already refunded.' 

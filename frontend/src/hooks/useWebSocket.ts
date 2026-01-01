@@ -281,13 +281,13 @@ export const useWebSocket = () => {
         }
       }
 
-      if (socket && connected) {
-        console.log('[WebSocket] Joining matchmaking:', { userId, stake, walletAddress });
-        socket.emit('join_matchmaking', { userId, stake, walletAddress });
-      } else {
-        console.warn('[WebSocket] Cannot join matchmaking - socket not connected after wait');
-        throw new Error('Connection failed. Please try again.');
+      // At this point, socket should be connected
+      if (!socket) {
+        throw new Error('Socket not initialized. Please try again.');
       }
+
+      console.log('[WebSocket] Joining matchmaking:', { userId, stake, walletAddress });
+      socket.emit('join_matchmaking', { userId, stake, walletAddress });
     } catch (error) {
       setIsConnecting(false);
       throw error;
