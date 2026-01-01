@@ -253,7 +253,7 @@ const Matchmaking: React.FC = () => {
               onClick={handleJoinQueue}
               disabled={!connected || needsAuth || isConnecting}
             >
-              {isConnecting ? 'Connecting...' : !connected ? 'Connecting...' : needsAuth ? 'Sign In Required' : 'Find Opponent'}
+              {needsAuth ? 'Sign In Required' : (isConnecting || !connected) ? 'Connecting...' : 'Find Opponent'}
             </NeonButton>
           </div>
         ) : processingPayment ? (

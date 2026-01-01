@@ -139,8 +139,7 @@ export class EscrowService {
 
       // If no stakes exist on-chain, log warning and don't mark as refunded
       if (!stakeStatus.hasStakes) {
-        console.warn(`[EscrowService] No on-chain stakes found for match ${matchId}. Cannot refund.`);
-        console.warn('[EscrowService] This likely means the match was created in DB but stakes were never deposited on-chain.');
+        console.warn(`[EscrowService] No on-chain stakes found for match ${matchId}. Cannot refund. This likely means the match was created in DB but stakes were never deposited on-chain.`);
         return { 
           success: false, 
           error: 'No on-chain stakes found. Match was never funded or already refunded.' 
@@ -149,8 +148,7 @@ export class EscrowService {
 
       // Check if both players staked (cancelMatch requires both stakes)
       if (!stakeStatus.player1Staked || !stakeStatus.player2Staked) {
-        console.warn(`[EscrowService] Partial stakes for match ${matchId}. Player1: ${stakeStatus.player1Staked}, Player2: ${stakeStatus.player2Staked}`);
-        console.warn('[EscrowService] cancelMatch only works if both players staked. This may fail.');
+        console.warn(`[EscrowService] Partial stakes for match ${matchId}. Player1: ${stakeStatus.player1Staked}, Player2: ${stakeStatus.player2Staked}. cancelMatch only works if both players staked. This may fail.`);
       }
 
       // Attempt to cancel match and refund

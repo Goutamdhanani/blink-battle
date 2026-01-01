@@ -227,7 +227,7 @@ export class ContractService {
 
   /**
    * Verify on-chain stake status before attempting refund
-   * Returns true if both players have staked on-chain
+   * Returns an object with stake status for both players
    */
   async verifyOnChainStakeStatus(matchId: string): Promise<{ 
     hasStakes: boolean; 
