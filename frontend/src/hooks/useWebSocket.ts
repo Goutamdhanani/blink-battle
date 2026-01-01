@@ -27,16 +27,18 @@ const MAX_RECONNECT_DELAY_MS = 15000; // Max 15 seconds (increased from 10s)
 const MAX_RECONNECT_ATTEMPTS = 10;
 const CONNECTION_WAIT_TIMEOUT_MS = 10000; // Wait up to 10 seconds for connection
 
-// Socket.IO configuration for Heroku stability
-// USE WEBSOCKET ONLY to prevent polling->websocket upgrade disconnect loops
+// Socket.IO configuration for production stability
+// HYBRID TRANSPORTS: Use websocket + polling fallback for maximum reliability
 const SOCKET_CONFIG = {
-  transports: ['websocket'], // WebSocket only - no polling/upgrade
+  transports: ['websocket', 'polling'], // Try WebSocket first, fall back to polling if needed
   reconnection: true,
   reconnectionAttempts: MAX_RECONNECT_ATTEMPTS,
   reconnectionDelay: RECONNECT_DELAY_MS,
   reconnectionDelayMax: MAX_RECONNECT_DELAY_MS,
   timeout: 20000,
   forceNew: false,
+  upgrade: true, // Allow upgrading from polling to websocket
+  rememberUpgrade: true, // Remember successful upgrades
 };
 
 export const useWebSocket = () => {

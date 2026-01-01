@@ -73,20 +73,108 @@ export class GameSocketHandler {
   private readonly MATCH_START_TIMEOUT_MS = parseInt(process.env.MATCH_START_TIMEOUT_MS || '60000', 10);
   private readonly STAKE_DEPOSIT_TIMEOUT_MS = parseInt(process.env.STAKE_DEPOSIT_TIMEOUT_MS || '120000', 10); // 2 minutes for deposits
   private readonly MIN_STABLE_CONNECTION_MS = 5000; // Guard against early disconnects (e.g., React remounts)
+  private readonly MATCH_GARBAGE_COLLECTION_INTERVAL_MS = 300000; // 5 minutes
+  private readonly MATCH_MAX_AGE_MS = 600000; // 10 minutes - matches older than this are stale
 
   constructor(io: Server) {
     this.io = io;
     this.setupSocketHandlers();
+    this.startMatchGarbageCollection();
+  }
+
+  /**
+   * Start periodic garbage collection for abandoned/stale matches
+   * Prevents memory leaks from failed connections and zombie matches
+   */
+  private startMatchGarbageCollection() {
+    console.log(
+      `[GC] Starting match garbage collection\n` +
+      `  Interval: ${this.MATCH_GARBAGE_COLLECTION_INTERVAL_MS}ms (${this.MATCH_GARBAGE_COLLECTION_INTERVAL_MS / 60000} minutes)\n` +
+      `  Max Match Age: ${this.MATCH_MAX_AGE_MS}ms (${this.MATCH_MAX_AGE_MS / 60000} minutes)`
+    );
+    
+    setInterval(() => {
+      const now = Date.now();
+      let cleanedCount = 0;
+      let totalMatches = this.activeMatches.size;
+      
+      console.log(`[GC] Starting garbage collection scan - ${totalMatches} active matches`);
+      
+      this.activeMatches.forEach((match, matchId) => {
+        const matchAge = match.matchCreatedAt ? now - match.matchCreatedAt : 0;
+        const isStale = matchAge > this.MATCH_MAX_AGE_MS;
+        const state = match.stateMachine.getState();
+        
+        // Consider a match stale if:
+        // 1. It's older than MAX_AGE and not in a terminal state, OR
+        // 2. Both players are disconnected for > grace period
+        const bothDisconnected = match.disconnectedUsers && match.disconnectedUsers.size === 2;
+        const shouldClean = isStale || bothDisconnected;
+        
+        if (shouldClean) {
+          console.log(
+            `[GC] Cleaning up stale match ${matchId}\n` +
+            `  Age: ${matchAge}ms (${Math.floor(matchAge / 60000)} minutes)\n` +
+            `  State: ${state}\n` +
+            `  Reason: ${isStale ? 'exceeded max age' : 'both players disconnected'}\n` +
+            `  Player1: ${match.player1.userId}\n` +
+            `  Player2: ${match.player2.userId}\n` +
+            `  Disconnected: ${Array.from(match.disconnectedUsers || []).join(', ') || 'none'}`
+          );
+          
+          // Cancel and clean up the match
+          this.cancelMatchAndRefund(match, 'garbage_collection').catch(err => {
+            console.error(`[GC] Error cleaning match ${matchId}:`, err);
+          });
+          
+          cleanedCount++;
+        }
+      });
+      
+      console.log(
+        `[GC] Garbage collection complete\n` +
+        `  Total Matches: ${totalMatches}\n` +
+        `  Cleaned: ${cleanedCount}\n` +
+        `  Remaining: ${this.activeMatches.size}`
+      );
+    }, this.MATCH_GARBAGE_COLLECTION_INTERVAL_MS);
   }
 
   private setupSocketHandlers() {
     this.io.on('connection', (socket: Socket) => {
       const connectionTimestamp = Date.now();
-      console.log(`[Connection] Client connected: ${socket.id} at ${new Date(connectionTimestamp).toISOString()}`);
+      const transport = socket.conn.transport.name; // 'websocket' or 'polling'
+      
+      console.log(
+        `[Connection] Client connected: ${socket.id}\n` +
+        `  Timestamp: ${new Date(connectionTimestamp).toISOString()}\n` +
+        `  Initial Transport: ${transport}\n` +
+        `  User Agent: ${socket.handshake.headers['user-agent'] || 'unknown'}`
+      );
       
       // Track connection time for early disconnect guard
       this.socketConnectionTimes.set(socket.id, connectionTimestamp);
-      console.log(`[ConnectionTracking] Registered socket ${socket.id} with connection time ${connectionTimestamp}`);
+      
+      // Monitor transport upgrades
+      socket.conn.on('upgrade', (transport) => {
+        console.log(
+          `[Transport Upgrade] Socket ${socket.id} upgraded\n` +
+          `  From: polling\n` +
+          `  To: ${transport.name}\n` +
+          `  Duration: ${Date.now() - connectionTimestamp}ms`
+        );
+      });
+      
+      // Monitor ping/pong for keepalive health
+      socket.on('ping', () => {
+        const now = Date.now();
+        const uptime = now - connectionTimestamp;
+        console.log(
+          `[Keepalive] Ping from ${socket.id}\n` +
+          `  Transport: ${socket.conn.transport.name}\n` +
+          `  Uptime: ${uptime}ms (${Math.floor(uptime / 1000)}s)`
+        );
+      });
 
       socket.on('join_matchmaking', (data) => this.handleJoinMatchmaking(socket, data));
       socket.on('cancel_matchmaking', (data) => this.handleCancelMatchmaking(socket, data));
@@ -94,6 +182,9 @@ export class GameSocketHandler {
       socket.on('player_ready', (data) => this.handlePlayerReady(socket, data));
       socket.on('player_tap', (data) => this.handlePlayerTap(socket, data));
       socket.on('rejoin_match', (data) => this.handleRejoinMatch(socket, data));
+      socket.on('player_backgrounded', (data) => this.handlePlayerBackgrounded(socket, data));
+      socket.on('player_foregrounded', (data) => this.handlePlayerForegrounded(socket, data));
+      socket.on('request_state_sync', (data) => this.handleRequestStateSync(socket, data));
       socket.on('disconnect', () => this.handleDisconnect(socket));
     });
   }
@@ -422,6 +513,73 @@ export class GameSocketHandler {
       socket.emit('matchmaking_cancelled');
     } catch (error) {
       console.error('Error cancelling matchmaking:', error);
+    }
+  }
+
+  /**
+   * Handle player backgrounding (mobile app loses focus)
+   */
+  private handlePlayerBackgrounded(socket: Socket, data: { timestamp: number }) {
+    console.log(`[Visibility] Player backgrounded: ${socket.id} at ${new Date(data.timestamp).toISOString()}`);
+    // Log for monitoring - could be used to pause timers or notify opponent
+  }
+
+  /**
+   * Handle player foregrounding (mobile app gains focus)
+   */
+  private handlePlayerForegrounded(socket: Socket, data: { timestamp: number }) {
+    console.log(`[Visibility] Player foregrounded: ${socket.id} at ${new Date(data.timestamp).toISOString()}`);
+    // Player is active again - connection should be stable
+  }
+
+  /**
+   * Handle request for state sync (after reconnection or foreground)
+   */
+  private async handleRequestStateSync(socket: Socket, data: { matchId: string }) {
+    try {
+      const activeMatch = this.activeMatches.get(data.matchId);
+      if (!activeMatch) {
+        socket.emit('error', { message: 'Match not found for state sync' });
+        return;
+      }
+
+      const isPlayer1 = activeMatch.player1.socketId === socket.id;
+      const opponent = isPlayer1 ? activeMatch.player2 : activeMatch.player1;
+
+      console.log(`[StateSync] Syncing state for match ${data.matchId} to socket ${socket.id}`);
+
+      // Send current match state
+      socket.emit('match_found', {
+        matchId: activeMatch.matchId,
+        opponent: { 
+          userId: opponent.userId, 
+          wallet: opponent.walletAddress 
+        },
+        stake: activeMatch.stake,
+        reconnected: true,
+        hasStarted: activeMatch.hasStarted,
+        signalSent: !!activeMatch.signalTimestamp,
+        state: activeMatch.stateMachine.getState(),
+        escrowStatus: activeMatch.escrowStatus,
+        player1Staked: activeMatch.player1Staked,
+        player2Staked: activeMatch.player2Staked,
+        bothPlayersStaked: activeMatch.player1Staked && activeMatch.player2Staked,
+        player1Ready: activeMatch.player1Ready,
+        player2Ready: activeMatch.player2Ready,
+      });
+
+      // Resync game state if in progress
+      if (activeMatch.hasStarted && !activeMatch.signalTimestamp) {
+        socket.emit('game_start', { countdown: true, reconnected: true });
+      } else if (activeMatch.signalTimestamp) {
+        socket.emit('signal', { 
+          timestamp: activeMatch.signalTimestamp,
+          reconnected: true 
+        });
+      }
+    } catch (error) {
+      console.error('[StateSync] Error syncing state:', error);
+      socket.emit('error', { message: 'Failed to sync state' });
     }
   }
 
@@ -1073,10 +1231,28 @@ export class GameSocketHandler {
 
     // Clean up connection time tracking
     this.socketConnectionTimes.delete(socket.id);
+    
+    // Get userId from socket for matchmaking queue cleanup
+    const userId = (socket as any).userId;
 
     const matchId = this.playerToMatch.get(socket.id);
     if (!matchId) {
-      console.log(`[Disconnect] No active match for socket ${socket.id} - clean disconnect\n`);
+      // Player not in a match - might be in matchmaking queue
+      if (userId) {
+        console.log(`[Disconnect] No active match for socket ${socket.id}, checking matchmaking queues...`);
+        try {
+          const removedCount = await MatchmakingService.removeFromAllQueues(userId);
+          if (removedCount > 0) {
+            console.log(`[Disconnect] Cleaned up ${removedCount} matchmaking queue entries for user ${userId}`);
+          }
+          // Also clear socket registration
+          await MatchmakingService.clearPlayerSocket(userId);
+        } catch (error) {
+          console.error(`[Disconnect] Error cleaning up matchmaking for user ${userId}:`, error);
+        }
+      } else {
+        console.log(`[Disconnect] No active match or userId for socket ${socket.id} - clean disconnect\n`);
+      }
       return;
     }
 

@@ -8,17 +8,22 @@ const MAX_RECONNECT_DELAY_MS = 15000; // Max 15 seconds
 const MAX_RECONNECT_ATTEMPTS = 10;
 const CONNECTION_WAIT_TIMEOUT_MS = 10000; // Wait up to 10 seconds for connection
 const MIN_STABLE_CONNECTION_MS = 5000; // Consider stable after 5 seconds (guard against early disconnects)
+const POLLING_STUCK_THRESHOLD_MS = 10000; // If stuck on polling for >10s, consider reconnecting
+const SOCKET_IO_VERSION = '4.7.5'; // Lock version for compatibility checking
 
-// Socket.IO configuration for Heroku stability
-// USE WEBSOCKET ONLY to prevent polling->websocket upgrade disconnect loops
+// Socket.IO configuration for production stability
+// HYBRID TRANSPORTS: Use websocket + polling fallback for maximum reliability
 const SOCKET_CONFIG = {
-  transports: ['websocket'], // WebSocket only - no polling/upgrade
+  transports: ['websocket', 'polling'], // Try WebSocket first, fall back to polling if needed
   reconnection: true,
   reconnectionAttempts: MAX_RECONNECT_ATTEMPTS,
   reconnectionDelay: RECONNECT_DELAY_MS,
   reconnectionDelayMax: MAX_RECONNECT_DELAY_MS,
   timeout: 20000,
   forceNew: false,
+  // Additional stability options
+  upgrade: true, // Allow upgrading from polling to websocket
+  rememberUpgrade: true, // Remember successful upgrades
 };
 
 interface SocketContextType {
@@ -49,12 +54,20 @@ export const SocketProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   // Connection stability tracking (guard against early disconnects)
   const connectionStableRef = useRef(false);
   const connectionStartTimeRef = useRef<number>(0);
+  
+  // Transport monitoring (detect stuck-on-polling)
+  const transportRef = useRef<'websocket' | 'polling' | null>(null);
+  const pollingStartTimeRef = useRef<number>(0);
+  const pollingCheckIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   // Clear reconnect timeout on unmount
   useEffect(() => {
     return () => {
       if (reconnectTimeout.current) {
         clearTimeout(reconnectTimeout.current);
+      }
+      if (pollingCheckIntervalRef.current) {
+        clearInterval(pollingCheckIntervalRef.current);
       }
       // Reject any pending connection waiters on unmount
       connectionWaiters.current.forEach(waiter => {
@@ -63,6 +76,36 @@ export const SocketProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       connectionWaiters.current = [];
     };
   }, []);
+
+  // Handle page visibility changes (mobile backgrounding)
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        console.log('[SocketProvider] Page backgrounded, notifying server');
+        if (socket && connected) {
+          socket.emit('player_backgrounded', { timestamp: Date.now() });
+        }
+      } else {
+        console.log('[SocketProvider] Page foregrounded');
+        if (socket && connected) {
+          socket.emit('player_foregrounded', { timestamp: Date.now() });
+          // Request state sync if in a match
+          if (state.matchId) {
+            console.log('[SocketProvider] Requesting match state sync after foreground');
+            socket.emit('request_state_sync', { matchId: state.matchId });
+          }
+        } else if (socket && !connected) {
+          console.log('[SocketProvider] Not connected after foreground, attempting reconnect');
+          socket.connect();
+        }
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [socket, connected, state.matchId]);
 
   // Helper to wait for connection with timeout
   const waitForConnection = useCallback((): Promise<void> => {
@@ -129,9 +172,87 @@ export const SocketProvider: React.FC<{ children: ReactNode }> = ({ children }) 
 
   const setupSocketListeners = useCallback((newSocket: Socket) => {
     newSocket.on('connect', () => {
-      console.log('[SocketProvider] Connected, socket ID:', newSocket.id);
+      const transport = (newSocket.io.engine as any).transport?.name || 'unknown';
+      console.log(
+        '[SocketProvider] Connected\n' +
+        `  Socket ID: ${newSocket.id}\n` +
+        `  Transport: ${transport}\n` +
+        `  Client Version: ${SOCKET_IO_VERSION}`
+      );
+      
       connectionStartTimeRef.current = Date.now();
       connectionStableRef.current = false;
+      transportRef.current = transport as 'websocket' | 'polling';
+      
+      // Start monitoring for stuck-on-polling
+      if (transport === 'polling') {
+        pollingStartTimeRef.current = Date.now();
+        console.log('[SocketProvider] Started on polling, monitoring for upgrade...');
+        
+        // Check periodically if we're stuck on polling
+        if (pollingCheckIntervalRef.current) {
+          clearInterval(pollingCheckIntervalRef.current);
+        }
+        
+        pollingCheckIntervalRef.current = setInterval(() => {
+          const currentTransport = (newSocket.io.engine as any).transport?.name;
+          if (currentTransport === 'polling') {
+            const pollingDuration = Date.now() - pollingStartTimeRef.current;
+            if (pollingDuration > POLLING_STUCK_THRESHOLD_MS) {
+              console.warn(
+                '[SocketProvider] Stuck on polling transport\n' +
+                `  Duration: ${pollingDuration}ms\n` +
+                `  Threshold: ${POLLING_STUCK_THRESHOLD_MS}ms\n` +
+                `  Action: Forcing reconnect with forceNew`
+              );
+              
+              // Clear interval and force reconnect
+              if (pollingCheckIntervalRef.current) {
+                clearInterval(pollingCheckIntervalRef.current);
+                pollingCheckIntervalRef.current = null;
+              }
+              
+              // Force a new connection that might upgrade to websocket
+              newSocket.disconnect();
+              setTimeout(() => {
+                const freshSocket = io(SOCKET_URL, {
+                  auth: { token: state.token },
+                  ...SOCKET_CONFIG,
+                  forceNew: true, // Force new connection
+                });
+                setupSocketListeners(freshSocket);
+                setSocket(freshSocket);
+              }, 1000);
+            }
+          } else {
+            // Successfully upgraded, clear the interval
+            if (pollingCheckIntervalRef.current) {
+              clearInterval(pollingCheckIntervalRef.current);
+              pollingCheckIntervalRef.current = null;
+            }
+          }
+        }, 2000); // Check every 2 seconds
+      }
+      
+      // Monitor transport upgrades
+      (newSocket.io.engine as any).on('upgrade', (transport: any) => {
+        const upgradedTo = transport.name;
+        const upgradeDuration = Date.now() - connectionStartTimeRef.current;
+        console.log(
+          '[SocketProvider] Transport upgraded\n' +
+          `  From: polling\n` +
+          `  To: ${upgradedTo}\n` +
+          `  Duration: ${upgradeDuration}ms`
+        );
+        transportRef.current = upgradedTo;
+        
+        // Clear polling stuck check
+        if (pollingCheckIntervalRef.current) {
+          clearInterval(pollingCheckIntervalRef.current);
+          pollingCheckIntervalRef.current = null;
+        }
+      });
+      
       setConnected(true);
       setIsConnecting(false);
       reconnectAttempts.current = 0; // Reset on successful connection
