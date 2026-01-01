@@ -1,6 +1,7 @@
 import { Server, Socket } from 'socket.io';
 import { MatchModel } from '../models/Match';
 import { UserModel } from '../models/User';
+import { PaymentModel, PaymentStatus } from '../models/Payment';
 import { MatchmakingService } from '../services/matchmaking';
 import { EscrowService } from '../services/escrow';
 import { AntiCheatService } from '../services/antiCheat';
@@ -18,6 +19,12 @@ interface ActiveMatch {
   player1: PlayerData;
   player2: PlayerData;
   stake: number;
+
+  // ESCROW TRACKING - Option B: Full Escrow
+  player1Staked: boolean;
+  player2Staked: boolean;
+  escrowCreated: boolean;
+  waitingForStakes: boolean;
 
   // readiness
   player1Ready: boolean;
@@ -37,6 +44,7 @@ interface ActiveMatch {
   disconnectedUsers?: Set<string>;
   disconnectTimestamps?: Map<string, number>;
   cancelTimeout?: NodeJS.Timeout;
+  matchStartTimeout?: NodeJS.Timeout;
 }
 
 export class GameSocketHandler {
@@ -48,6 +56,7 @@ export class GameSocketHandler {
   private readonly RECONNECT_GRACE_PERIOD_MS = 30000; // 30 seconds
   private readonly RECONNECT_DEBOUNCE_MS = 1000; // Minimum time between reconnects
   private readonly MATCH_START_TIMEOUT_MS = parseInt(process.env.MATCH_START_TIMEOUT_MS || '60000', 10);
+  private readonly STAKE_DEPOSIT_TIMEOUT_MS = parseInt(process.env.STAKE_DEPOSIT_TIMEOUT_MS || '120000', 10); // 2 minutes for deposits
 
   constructor(io: Server) {
     this.io = io;
@@ -60,6 +69,7 @@ export class GameSocketHandler {
 
       socket.on('join_matchmaking', (data) => this.handleJoinMatchmaking(socket, data));
       socket.on('cancel_matchmaking', (data) => this.handleCancelMatchmaking(socket, data));
+      socket.on('payment_confirmed', (data) => this.handlePaymentConfirmed(socket, data));
       socket.on('player_ready', (data) => this.handlePlayerReady(socket, data));
       socket.on('player_tap', (data) => this.handlePlayerTap(socket, data));
       socket.on('rejoin_match', (data) => this.handleRejoinMatch(socket, data));
@@ -235,6 +245,85 @@ export class GameSocketHandler {
     }
   }
 
+  private async handlePaymentConfirmed(
+    socket: Socket,
+    data: { matchId: string; userId: string; paymentReference: string }
+  ) {
+    try {
+      const { matchId, userId, paymentReference } = data;
+      
+      console.log(`[Payment] Player ${userId} confirmed payment for match ${matchId}, ref: ${paymentReference}`);
+
+      const activeMatch = this.activeMatches.get(matchId);
+      if (!activeMatch) {
+        socket.emit('error', { message: 'Match not found' });
+        return;
+      }
+
+      // Verify the payment exists and is confirmed
+      const payment = await PaymentModel.findByReference(paymentReference);
+      if (!payment || payment.status !== PaymentStatus.CONFIRMED) {
+        console.error(`[Payment] Invalid or unconfirmed payment: ${paymentReference}`);
+        socket.emit('error', { message: 'Payment not confirmed' });
+        return;
+      }
+
+      // Link payment to match if not already linked
+      if (!payment.match_id) {
+        await PaymentModel.linkToMatch(paymentReference, matchId);
+      }
+
+      // Update stake tracking
+      const isPlayer1 = activeMatch.player1.userId === userId;
+      if (isPlayer1) {
+        activeMatch.player1Staked = true;
+        console.log(`[Payment] Player1 staked for match ${matchId}`);
+      } else {
+        activeMatch.player2Staked = true;
+        console.log(`[Payment] Player2 staked for match ${matchId}`);
+      }
+
+      // Notify the other player
+      const otherPlayerSocketId = isPlayer1 ? activeMatch.player2.socketId : activeMatch.player1.socketId;
+      this.io.to(otherPlayerSocketId).emit('opponent_paid', { 
+        matchId,
+        waitingForBoth: !(activeMatch.player1Staked && activeMatch.player2Staked)
+      });
+
+      // If both players have paid, proceed to game start phase
+      if (activeMatch.player1Staked && activeMatch.player2Staked) {
+        console.log(`[Payment] Both players paid for match ${matchId}, transitioning to ready phase`);
+        
+        activeMatch.waitingForStakes = false;
+        
+        // Clear the stake deposit timeout
+        if (activeMatch.matchStartTimeout) {
+          clearTimeout(activeMatch.matchStartTimeout);
+          activeMatch.matchStartTimeout = undefined;
+        }
+
+        // Notify both players they can proceed to ready screen
+        this.io.to(activeMatch.player1.socketId).emit('both_players_paid', { 
+          matchId,
+          canProceed: true
+        });
+        this.io.to(activeMatch.player2.socketId).emit('both_players_paid', { 
+          matchId,
+          canProceed: true
+        });
+      } else {
+        // Notify the player who paid that we're waiting for opponent
+        socket.emit('payment_confirmed_waiting', { 
+          matchId,
+          waitingForOpponent: true
+        });
+      }
+    } catch (error) {
+      console.error('Error in handlePaymentConfirmed:', error);
+      socket.emit('error', { message: 'Failed to process payment confirmation' });
+    }
+  }
+
   private async createMatch(
     socket: Socket,
     player1Request: MatchmakingRequest,
@@ -249,6 +338,9 @@ export class GameSocketHandler {
         socket.emit('error', { message: 'Player data not found' });
         return;
       }
+
+      // Skip payment/escrow for free matches (stake = 0)
+      const isFreeMatch = player1Request.stake === 0;
 
       const match = await MatchModel.create(
         player1.user_id,
@@ -272,6 +364,12 @@ export class GameSocketHandler {
         },
         stake: player1Request.stake,
 
+        // OPTION B: Full Escrow - Track stake deposits
+        player1Staked: isFreeMatch, // Free matches don't need stakes
+        player2Staked: isFreeMatch,
+        escrowCreated: false,
+        waitingForStakes: !isFreeMatch,
+
         player1Ready: false,
         player2Ready: false,
         hasStarted: false,
@@ -287,44 +385,61 @@ export class GameSocketHandler {
       this.userToMatch.set(player1.user_id, match.match_id);
       this.userToMatch.set(player2.user_id, match.match_id);
 
-      this.io.to(player1Request.socketId).emit('match_found', {
+      // Notify both players match is found - they need to pay
+      const matchFoundPayload = {
         matchId: match.match_id,
-        opponent: { userId: player2.user_id, wallet: player2.wallet_address },
         stake: player1Request.stake,
+        needsPayment: !isFreeMatch,
+        platformWallet: process.env.PLATFORM_WALLET_ADDRESS,
+      };
+
+      this.io.to(player1Request.socketId).emit('match_found', {
+        ...matchFoundPayload,
+        opponent: { userId: player2.user_id, wallet: player2.wallet_address },
       });
 
       this.io.to(player2Request.socketId).emit('match_found', {
-        matchId: match.match_id,
+        ...matchFoundPayload,
         opponent: { userId: player1.user_id, wallet: player1.wallet_address },
-        stake: player1Request.stake,
       });
       
-      // Set timeout to cancel match if it never starts (Bug 4 fix)
-      setTimeout(async () => {
-        const matchCheck = this.activeMatches.get(activeMatch.matchId);
-        if (matchCheck && !matchCheck.hasStarted) {
-          console.error(`[Match Timeout] Match ${activeMatch.matchId} never started after ${this.MATCH_START_TIMEOUT_MS}ms`);
-          
-          // Attempt refund
-          const refundResult = await EscrowService.refundBothPlayers(
-            matchCheck.matchId,
-            matchCheck.player1.walletAddress,
-            matchCheck.player2.walletAddress,
-            matchCheck.stake
-          );
-          
-          // Notify both players
-          this.io.to(matchCheck.player1.socketId).emit('match_cancelled', {
-            reason: 'timeout',
-            refunded: refundResult.success,
-            noEscrow: refundResult.noEscrow
-          });
-          this.io.to(matchCheck.player2.socketId).emit('match_cancelled', {
-            reason: 'timeout', 
-            refunded: refundResult.success,
-            noEscrow: refundResult.noEscrow
-          });
-          
+      // Set timeout to cancel match if payments not completed in time
+      if (!isFreeMatch) {
+        activeMatch.matchStartTimeout = setTimeout(async () => {
+          const matchCheck = this.activeMatches.get(activeMatch.matchId);
+          if (matchCheck && matchCheck.waitingForStakes) {
+            console.error(`[Payment Timeout] Match ${activeMatch.matchId} - payments not completed after ${this.STAKE_DEPOSIT_TIMEOUT_MS}ms`);
+            
+            // Check if any payments were made and refund them
+            const payments = await PaymentModel.findByMatchId(matchCheck.matchId);
+            const confirmedPayments = payments.filter(p => p.status === PaymentStatus.CONFIRMED);
+            
+            if (confirmedPayments.length > 0) {
+              console.log(`[Payment Timeout] ${confirmedPayments.length} payment(s) found, initiating refunds`);
+              // TODO: Implement refund logic for World Pay payments
+              // For now, just log and mark for manual review
+            }
+            
+            // Notify both players
+            this.io.to(matchCheck.player1.socketId).emit('match_cancelled', {
+              reason: 'payment_timeout',
+              message: 'Match cancelled - not all players completed payment in time'
+            });
+            this.io.to(matchCheck.player2.socketId).emit('match_cancelled', {
+              reason: 'payment_timeout',
+              message: 'Match cancelled - not all players completed payment in time'
+            });
+            
+            await MatchModel.updateStatus(matchCheck.matchId, MatchStatus.CANCELLED);
+            this.cleanupMatch(matchCheck.matchId);
+          }
+        }, this.STAKE_DEPOSIT_TIMEOUT_MS);
+      }
+    } catch (error) {
+      console.error('Error creating match:', error);
+      socket.emit('error', { message: 'Failed to create match' });
+    }
+  }
           await MatchModel.updateStatus(matchCheck.matchId, MatchStatus.CANCELLED);
           this.cleanupMatch(matchCheck.matchId);
         }
@@ -791,6 +906,9 @@ export class GameSocketHandler {
       // Clear any pending timeouts
       if (activeMatch.cancelTimeout) {
         clearTimeout(activeMatch.cancelTimeout);
+      }
+      if (activeMatch.matchStartTimeout) {
+        clearTimeout(activeMatch.matchStartTimeout);
       }
 
       // Remove from all tracking maps

@@ -14,6 +14,7 @@ export class ContractService {
   // Contract ABI - only the functions we need
   private static readonly ABI = [
     'function createMatch(bytes32 matchId, address player1, address player2, uint256 stakeAmount) external',
+    'function depositStake(bytes32 matchId) external',
     'function completeMatch(bytes32 matchId, address winner) external',
     'function splitPot(bytes32 matchId) external',
     'function cancelMatch(bytes32 matchId) external',
@@ -106,6 +107,36 @@ export class ContractService {
       console.error('[ContractService] Error creating match:', error);
       return { success: false, error: error.message };
     }
+  }
+
+  /**
+   * DEPRECATED: Cannot be used with World Pay flow
+   * 
+   * The depositStake function requires msg.sender to be player1 or player2.
+   * Since we use World Pay (which sends to platform wallet), players can't call this directly.
+   * 
+   * INSTEAD: We track payments in database and manually verify both players paid
+   * before starting the game. The escrow contract is used only for:
+   * - createMatch: Register match on-chain
+   * - completeMatch/splitPot: Distribute winnings
+   * - cancelMatch: Refund if needed
+   * 
+   * Actual fund flow:
+   * 1. Players send WLD to platform wallet via World Pay
+   * 2. Backend tracks payments in database  
+   * 3. When both paid, backend manually sends 2x stake to escrow contract
+   * 4. Game proceeds, winner determined
+   * 5. Backend calls completeMatch/splitPot to distribute from escrow
+   */
+  async depositStakeForPlayer(
+    matchId: string,
+    playerAddress: string
+  ): Promise<{ success: boolean; txHash?: string; error?: string }> {
+    console.warn('[ContractService] depositStakeForPlayer called but not supported with World Pay flow');
+    return { 
+      success: false, 
+      error: 'depositStake not compatible with World Pay - use payment confirmation flow instead' 
+    };
   }
 
   /**
