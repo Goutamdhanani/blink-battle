@@ -50,6 +50,10 @@ const validateEnvVars = () => {
 validateEnvVars();
 
 const app = express();
+
+// Trust Heroku proxy for WebSocket support
+app.set('trust proxy', 1);
+
 const httpServer = createServer(app);
 
 // Build allowed origins list from environment variables
@@ -92,7 +96,9 @@ const allowedOrigins = buildAllowedOrigins();
 
 console.log('✅ CORS allowed origins:', allowedOrigins);
 
-// Create Socket.IO server
+// Create Socket.IO server with hybrid transport strategy
+// HYBRID TRANSPORTS: Use websocket + polling fallback for maximum reliability
+// This prevents disconnect loops caused by websocket-only upgrade failures on Heroku/Vercel
 const io = new Server(httpServer, {
   cors: {
     origin: (origin, callback) => {
@@ -111,16 +117,19 @@ const io = new Server(httpServer, {
     methods: ['GET', 'POST'],
     allowedHeaders: ['Content-Type', 'Authorization', 'X-Request-Id'],
   },
-  // Transport configuration - USE WEBSOCKET ONLY to prevent disconnect loops
-  // This avoids polling->websocket upgrade issues on Heroku/World App MiniKit
-  transports: ['websocket'],
-  allowUpgrades: false,
-  // Heartbeat/ping configuration to keep connections alive
-  pingInterval: 25000, // Send ping every 25 seconds
+  // HYBRID TRANSPORT STRATEGY - Critical for Heroku/Vercel stability
+  // Start with WebSocket, allow polling fallback if upgrade fails
+  transports: ['websocket', 'polling'],
+  allowUpgrades: true, // Allow transport upgrades
+  upgradeTimeout: 10000, // 10 seconds to upgrade from polling to websocket
+  // Heartbeat/ping configuration - optimized for Heroku H15 idle timeout (55s)
+  pingInterval: 20000, // Send ping every 20 seconds (well under 55s Heroku limit)
   pingTimeout: 60000, // Wait 60 seconds for pong before considering connection dead
   maxHttpBufferSize: 1e6,
   // Disable per-message deflate for better Heroku compatibility
   perMessageDeflate: false,
+  // Allow EIO3 clients for broader compatibility
+  allowEIO3: true,
 });
 
 // WebSocket authentication middleware

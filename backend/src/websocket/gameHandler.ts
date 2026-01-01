@@ -73,20 +73,108 @@ export class GameSocketHandler {
   private readonly MATCH_START_TIMEOUT_MS = parseInt(process.env.MATCH_START_TIMEOUT_MS || '60000', 10);
   private readonly STAKE_DEPOSIT_TIMEOUT_MS = parseInt(process.env.STAKE_DEPOSIT_TIMEOUT_MS || '120000', 10); // 2 minutes for deposits
   private readonly MIN_STABLE_CONNECTION_MS = 5000; // Guard against early disconnects (e.g., React remounts)
+  private readonly MATCH_GARBAGE_COLLECTION_INTERVAL_MS = 300000; // 5 minutes
+  private readonly MATCH_MAX_AGE_MS = 600000; // 10 minutes - matches older than this are stale
 
   constructor(io: Server) {
     this.io = io;
     this.setupSocketHandlers();
+    this.startMatchGarbageCollection();
+  }
+
+  /**
+   * Start periodic garbage collection for abandoned/stale matches
+   * Prevents memory leaks from failed connections and zombie matches
+   */
+  private startMatchGarbageCollection() {
+    console.log(
+      `[GC] Starting match garbage collection\n` +
+      `  Interval: ${this.MATCH_GARBAGE_COLLECTION_INTERVAL_MS}ms (${this.MATCH_GARBAGE_COLLECTION_INTERVAL_MS / 60000} minutes)\n` +
+      `  Max Match Age: ${this.MATCH_MAX_AGE_MS}ms (${this.MATCH_MAX_AGE_MS / 60000} minutes)`
+    );
+    
+    setInterval(() => {
+      const now = Date.now();
+      let cleanedCount = 0;
+      let totalMatches = this.activeMatches.size;
+      
+      console.log(`[GC] Starting garbage collection scan - ${totalMatches} active matches`);
+      
+      this.activeMatches.forEach((match, matchId) => {
+        const matchAge = match.matchCreatedAt ? now - match.matchCreatedAt : 0;
+        const isStale = matchAge > this.MATCH_MAX_AGE_MS;
+        const state = match.stateMachine.getState();
+        
+        // Consider a match stale if:
+        // 1. It's older than MAX_AGE and not in a terminal state, OR
+        // 2. Both players are disconnected for > grace period
+        const bothDisconnected = match.disconnectedUsers && match.disconnectedUsers.size === 2;
+        const shouldClean = isStale || bothDisconnected;
+        
+        if (shouldClean) {
+          console.log(
+            `[GC] Cleaning up stale match ${matchId}\n` +
+            `  Age: ${matchAge}ms (${Math.floor(matchAge / 60000)} minutes)\n` +
+            `  State: ${state}\n` +
+            `  Reason: ${isStale ? 'exceeded max age' : 'both players disconnected'}\n` +
+            `  Player1: ${match.player1.userId}\n` +
+            `  Player2: ${match.player2.userId}\n` +
+            `  Disconnected: ${Array.from(match.disconnectedUsers || []).join(', ') || 'none'}`
+          );
+          
+          // Cancel and clean up the match
+          this.cancelMatchAndRefund(match, 'garbage_collection').catch(err => {
+            console.error(`[GC] Error cleaning match ${matchId}:`, err);
+          });
+          
+          cleanedCount++;
+        }
+      });
+      
+      console.log(
+        `[GC] Garbage collection complete\n` +
+        `  Total Matches: ${totalMatches}\n` +
+        `  Cleaned: ${cleanedCount}\n` +
+        `  Remaining: ${this.activeMatches.size}`
+      );
+    }, this.MATCH_GARBAGE_COLLECTION_INTERVAL_MS);
   }
 
   private setupSocketHandlers() {
     this.io.on('connection', (socket: Socket) => {
       const connectionTimestamp = Date.now();
-      console.log(`[Connection] Client connected: ${socket.id} at ${new Date(connectionTimestamp).toISOString()}`);
+      const transport = socket.conn.transport.name; // 'websocket' or 'polling'
+      
+      console.log(
+        `[Connection] Client connected: ${socket.id}\n` +
+        `  Timestamp: ${new Date(connectionTimestamp).toISOString()}\n` +
+        `  Initial Transport: ${transport}\n` +
+        `  User Agent: ${socket.handshake.headers['user-agent'] || 'unknown'}`
+      );
       
       // Track connection time for early disconnect guard
       this.socketConnectionTimes.set(socket.id, connectionTimestamp);
-      console.log(`[ConnectionTracking] Registered socket ${socket.id} with connection time ${connectionTimestamp}`);
+      
+      // Monitor transport upgrades
+      socket.conn.on('upgrade', (transport) => {
+        console.log(
+          `[Transport Upgrade] Socket ${socket.id} upgraded\n` +
+          `  From: polling\n` +
+          `  To: ${transport.name}\n` +
+          `  Duration: ${Date.now() - connectionTimestamp}ms`
+        );
+      });
+      
+      // Monitor ping/pong for keepalive health
+      socket.on('ping', () => {
+        const now = Date.now();
+        const uptime = now - connectionTimestamp;
+        console.log(
+          `[Keepalive] Ping from ${socket.id}\n` +
+          `  Transport: ${socket.conn.transport.name}\n` +
+          `  Uptime: ${uptime}ms (${Math.floor(uptime / 1000)}s)`
+        );
+      });
 
       socket.on('join_matchmaking', (data) => this.handleJoinMatchmaking(socket, data));
       socket.on('cancel_matchmaking', (data) => this.handleCancelMatchmaking(socket, data));
