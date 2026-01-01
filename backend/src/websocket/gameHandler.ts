@@ -622,26 +622,41 @@ export class GameSocketHandler {
   }
 
   private async handleDisconnect(socket: Socket) {
-    console.log(`Client disconnected: ${socket.id}`);
+    const disconnectTime = Date.now();
+    console.log(`[Disconnect] Client disconnected: ${socket.id} at ${new Date(disconnectTime).toISOString()}`);
 
     const matchId = this.playerToMatch.get(socket.id);
-    if (!matchId) return;
+    if (!matchId) {
+      console.log(`[Disconnect] No active match for socket ${socket.id}`);
+      return;
+    }
 
     const activeMatch = this.activeMatches.get(matchId);
-    if (!activeMatch) return;
+    if (!activeMatch) {
+      console.log(`[Disconnect] Match ${matchId} not found in active matches`);
+      return;
+    }
 
     const isPlayer1 = activeMatch.player1.socketId === socket.id;
     const disconnectedUserId = isPlayer1 ? activeMatch.player1.userId : activeMatch.player2.userId;
     const otherPlayer = isPlayer1 ? activeMatch.player2 : activeMatch.player1;
+
+    console.log(`[Disconnect] Match ${matchId} state:`, {
+      hasStarted: activeMatch.hasStarted,
+      signalSent: !!activeMatch.signalTimestamp,
+      player1Ready: activeMatch.player1Ready,
+      player2Ready: activeMatch.player2Ready,
+      disconnectedPlayer: isPlayer1 ? 'player1' : 'player2',
+    });
 
     // Mark player as disconnected
     activeMatch.disconnectedUsers = activeMatch.disconnectedUsers || new Set();
     activeMatch.disconnectedUsers.add(disconnectedUserId);
     
     activeMatch.disconnectTimestamps = activeMatch.disconnectTimestamps || new Map();
-    activeMatch.disconnectTimestamps.set(disconnectedUserId, Date.now());
+    activeMatch.disconnectTimestamps.set(disconnectedUserId, disconnectTime);
 
-    console.log(`Player ${disconnectedUserId} disconnected from match ${matchId}, grace period: ${this.RECONNECT_GRACE_PERIOD_MS}ms`);
+    console.log(`[Disconnect] Player ${disconnectedUserId} marked as disconnected, grace period: ${this.RECONNECT_GRACE_PERIOD_MS}ms`);
 
     // Notify other player
     this.io.to(otherPlayer.socketId).emit('opponent_disconnected', {
@@ -653,15 +668,16 @@ export class GameSocketHandler {
     activeMatch.cancelTimeout = setTimeout(async () => {
       const match = this.activeMatches.get(matchId);
       if (!match || !match.disconnectedUsers?.has(disconnectedUserId)) {
+        console.log(`[Disconnect Timeout] Player ${disconnectedUserId} reconnected or match cleaned up`);
         return; // Player reconnected or match already cleaned up
       }
 
-      console.log(`Player ${disconnectedUserId} did not reconnect within grace period, handling match cancellation`);
+      console.log(`[Disconnect Timeout] Player ${disconnectedUserId} did not reconnect within grace period`);
 
       // Handle based on game state
       if (!match.signalTimestamp) {
         // Disconnected before signal - refund both
-        console.log(`Refunding both players for match ${matchId} (disconnect before signal)`);
+        console.log(`[Refund] Both players for match ${matchId} (disconnect before signal)`);
         await EscrowService.refundBothPlayers(
           match.matchId,
           match.player1.walletAddress,
@@ -676,7 +692,7 @@ export class GameSocketHandler {
         });
       } else {
         // Disconnected after signal - other player wins
-        console.log(`Awarding win to ${otherPlayer.userId} for match ${matchId} (opponent disconnect after signal)`);
+        console.log(`[Win by Disconnect] ${otherPlayer.userId} wins match ${matchId}`);
         await EscrowService.distributeWinnings(
           match.matchId,
           otherPlayer.walletAddress,
