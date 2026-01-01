@@ -1010,6 +1010,9 @@ export class GameSocketHandler {
       console.log(`[Disconnect] Early disconnect ignored (connection duration ${connectionDuration}ms < ${this.MIN_STABLE_CONNECTION_MS}ms). Likely a React remount or transient connection.`);
       // Clean up the socket mapping but don't trigger disconnection penalties
       this.playerToMatch.delete(socket.id);
+      // NOTE: We intentionally don't clean up userToMatch here because the user
+      // will likely reconnect immediately with a new socket ID. The userToMatch
+      // mapping allows the reconnection to find the existing match.
       return;
     }
 
