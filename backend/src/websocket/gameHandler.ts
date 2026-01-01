@@ -372,11 +372,12 @@ export class GameSocketHandler {
         waitingForBoth: !(activeMatch.player1Staked && activeMatch.player2Staked)
       });
 
-      // If both players have paid, proceed to game start phase
+      // If both players have paid, proceed to escrow verification
       if (activeMatch.player1Staked && activeMatch.player2Staked) {
-        console.log(`[Payment] Both players paid for match ${matchId}, transitioning to ready phase`);
+        console.log(`[Payment] Both players paid for match ${matchId}, verifying escrow`);
         
         activeMatch.waitingForStakes = false;
+        activeMatch.escrowStatus = EscrowStatus.FUNDED;
         
         // Clear the stake deposit timeout
         if (activeMatch.matchStartTimeout) {
@@ -384,20 +385,61 @@ export class GameSocketHandler {
           activeMatch.matchStartTimeout = undefined;
         }
 
-        // Notify both players they can proceed to ready screen
-        this.io.to(activeMatch.player1.socketId).emit('both_players_paid', { 
-          matchId,
-          canProceed: true
+        // Emit lifecycle event
+        this.emitLifecycleEvent(matchId, MatchEventType.PAYMENT_RECEIVED, {
+          player1Staked: true,
+          player2Staked: true,
         });
-        this.io.to(activeMatch.player2.socketId).emit('both_players_paid', { 
-          matchId,
-          canProceed: true
-        });
+
+        // Verify escrow on-chain before transitioning to READY
+        console.log(`[Escrow] Verifying escrow on-chain for match ${matchId}`);
+        const verification = await EscrowService.verifyEscrowOnChain(matchId, activeMatch.stake);
+        
+        if (verification.verified) {
+          console.log(`[Escrow] Escrow verified for match ${matchId}`);
+          activeMatch.escrowVerified = true;
+          activeMatch.escrowStatus = EscrowStatus.VERIFIED;
+          
+          // Transition to READY state
+          const transition = activeMatch.stateMachine.transition(MatchState.READY, {
+            reason: 'Both players paid and escrow verified',
+            triggeredBy: 'system',
+          });
+
+          if (!transition.success) {
+            console.error(`[State] Failed to transition to READY: ${transition.error}`);
+          }
+
+          this.emitLifecycleEvent(matchId, MatchEventType.ESCROW_VERIFIED, {
+            stakeAmount: activeMatch.stake,
+          });
+
+          // Notify both players they can proceed to ready screen
+          this.io.to(activeMatch.player1.socketId).emit('both_players_paid', { 
+            matchId,
+            canProceed: true,
+            escrowVerified: true,
+            state: activeMatch.stateMachine.getState(),
+          });
+          this.io.to(activeMatch.player2.socketId).emit('both_players_paid', { 
+            matchId,
+            canProceed: true,
+            escrowVerified: true,
+            state: activeMatch.stateMachine.getState(),
+          });
+        } else {
+          console.error(`[Escrow] Escrow verification failed for match ${matchId}: ${verification.error}`);
+          activeMatch.escrowStatus = EscrowStatus.FAILED;
+          
+          // Cancel match and refund
+          await this.cancelMatchAndRefund(activeMatch, 'escrow_verification_failed');
+        }
       } else {
         // Notify the player who paid that we're waiting for opponent
         socket.emit('payment_confirmed_waiting', { 
           matchId,
-          waitingForOpponent: true
+          waitingForOpponent: true,
+          state: activeMatch.stateMachine.getState(),
         });
       }
     } catch (error) {
@@ -557,31 +599,55 @@ export class GameSocketHandler {
       if (isPlayer1) activeMatch.player1Ready = true;
       else activeMatch.player2Ready = true;
 
-      console.log(`Player ready: ${isPlayer1 ? 'Player1' : 'Player2'} in match ${data.matchId}`);
+      console.log(`[Ready] Player ${isPlayer1 ? 'Player1' : 'Player2'} ready in match ${data.matchId}`);
+
+      this.emitLifecycleEvent(data.matchId, MatchEventType.PLAYER_READY, {
+        player: isPlayer1 ? 'player1' : 'player2',
+        userId: isPlayer1 ? activeMatch.player1.userId : activeMatch.player2.userId,
+      });
 
       if (activeMatch.hasStarted) return;
 
       if (activeMatch.player1Ready && activeMatch.player2Ready) {
-        // Add stability check - both players must be connected
+        // Check state machine guards before starting
         const p1Connected = this.io.sockets.sockets.has(activeMatch.player1.socketId);
         const p2Connected = this.io.sockets.sockets.has(activeMatch.player2.socketId);
         
-        if (!p1Connected || !p2Connected) {
-          console.warn(`[GameStart] Cannot start - Player connection unstable. P1: ${p1Connected}, P2: ${p2Connected}`);
-          // Don't start game, wait for stable connections
+        const canStart = MatchStateGuards.canTransitionToStarted({
+          player1Ready: activeMatch.player1Ready,
+          player2Ready: activeMatch.player2Ready,
+          player1Connected: p1Connected,
+          player2Connected: p2Connected,
+        });
+
+        if (!canStart.allowed) {
+          console.warn(`[GameStart] Cannot start match ${data.matchId}: ${canStart.reason}`);
+          return;
+        }
+
+        // Transition to STARTED state
+        const transition = activeMatch.stateMachine.transition(MatchState.STARTED, {
+          reason: 'Both players ready and connected',
+          triggeredBy: 'player',
+        });
+
+        if (!transition.success) {
+          console.error(`[State] Failed to transition to STARTED: ${transition.error}`);
+          socket.emit('error', { message: 'Cannot start game in current state' });
           return;
         }
         
         activeMatch.hasStarted = true;
-        console.log(`Both players ready, starting match ${data.matchId}`);
+        console.log(`[GameStart] Both players ready, starting match ${data.matchId}`);
 
         await this.startGame(activeMatch);
 
+        // Watchdog timer to detect start failures
         setTimeout(() => {
           const stillActive = this.activeMatches.get(activeMatch.matchId);
 
           if (stillActive && !stillActive.signalTimestamp) {
-            console.error(`Watchdog: Match ${activeMatch.matchId} failed to start. Refunding.`);
+            console.error(`[Watchdog] Match ${activeMatch.matchId} failed to start. Refunding.`);
 
             EscrowService.refundBothPlayers(
               activeMatch.matchId,
@@ -602,7 +668,7 @@ export class GameSocketHandler {
       }
 
     } catch (error) {
-      console.error('Error in player_ready:', error);
+      console.error('[Ready] Error in player_ready:', error);
       socket.emit('error', { message: 'Failed to mark ready' });
     }
   }

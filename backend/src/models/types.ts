@@ -40,6 +40,7 @@ export interface Transaction {
   amount: number;
   from_wallet?: string;
   to_wallet?: string;
+  tx_hash?: string;
   status: TransactionStatus;
   created_at: Date;
 }
