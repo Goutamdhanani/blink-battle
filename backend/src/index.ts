@@ -56,6 +56,20 @@ app.set('trust proxy', 1);
 
 const httpServer = createServer(app);
 
+// Configure HTTP server timeouts to prevent Heroku H15 idle connection drops
+// Heroku routing layer has a 55-second idle timeout. We set keepAliveTimeout to 65s
+// so the Node.js server keeps connections alive longer than Heroku's routing timeout.
+// This prevents H15 errors where Heroku closes the connection before the server does.
+httpServer.keepAliveTimeout = 65000; // 65 seconds - longer than Heroku's 55s idle timeout
+httpServer.headersTimeout = 66000;   // 66 seconds - slightly longer than keepAliveTimeout
+
+console.log(
+  `✅ HTTP server timeouts configured:\n` +
+  `  keepAliveTimeout: ${httpServer.keepAliveTimeout}ms\n` +
+  `  headersTimeout: ${httpServer.headersTimeout}ms\n` +
+  `  (Heroku H15 protection: both > 55s routing timeout)`
+);
+
 // Build allowed origins list from environment variables
 const LOCALHOST_URL = 'http://localhost:3000';
 
@@ -126,8 +140,9 @@ const io = new Server(httpServer, {
   pingInterval: 20000, // Send ping every 20 seconds (well under 55s Heroku limit)
   pingTimeout: 60000, // Wait 60 seconds for pong before considering connection dead
   maxHttpBufferSize: 1e6,
-  // Disable per-message deflate for better Heroku compatibility
-  perMessageDeflate: false,
+  // Disable compression for better proxy compatibility and lower CPU usage
+  perMessageDeflate: false,  // Disable per-message deflate (WebSocket compression)
+  httpCompression: false,     // Disable HTTP compression for polling transport
   // Allow EIO3 clients for broader compatibility
   allowEIO3: true,
 });
