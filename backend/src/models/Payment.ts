@@ -108,6 +108,50 @@ export class PaymentModel {
   }
 
   /**
+   * Find payments by match ID
+   */
+  static async findByMatchId(matchId: string): Promise<Payment[]> {
+    const result = await pool.query(
+      'SELECT * FROM payments WHERE match_id = $1',
+      [matchId]
+    );
+    return result.rows;
+  }
+
+  /**
+   * Find confirmed payment for user and match
+   */
+  static async findConfirmedPaymentForMatch(
+    userId: string,
+    matchId: string
+  ): Promise<Payment | null> {
+    const result = await pool.query(
+      `SELECT * FROM payments 
+       WHERE user_id = $1 
+       AND match_id = $2 
+       AND status = $3
+       ORDER BY confirmed_at DESC
+       LIMIT 1`,
+      [userId, matchId, PaymentStatus.CONFIRMED]
+    );
+    return result.rows[0] || null;
+  }
+
+  /**
+   * Link a payment to a match
+   */
+  static async linkToMatch(reference: string, matchId: string): Promise<Payment | null> {
+    const result = await pool.query(
+      `UPDATE payments 
+       SET match_id = $2, updated_at = CURRENT_TIMESTAMP
+       WHERE reference = $1
+       RETURNING *`,
+      [reference, matchId]
+    );
+    return result.rows[0] || null;
+  }
+
+  /**
    * Clean up expired pending payments (older than 30 minutes)
    */
   static async cleanupExpired(): Promise<number> {

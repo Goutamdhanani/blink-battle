@@ -9,10 +9,9 @@ const MAX_RECONNECT_ATTEMPTS = 10;
 const CONNECTION_WAIT_TIMEOUT_MS = 10000; // Wait up to 10 seconds for connection
 
 // Socket.IO configuration for Heroku stability
+// USE WEBSOCKET ONLY to prevent polling->websocket upgrade disconnect loops
 const SOCKET_CONFIG = {
-  transports: ['polling', 'websocket'], // START WITH POLLING, upgrade later
-  upgrade: true,
-  rememberUpgrade: false, // Don't cache failed upgrades
+  transports: ['websocket'], // WebSocket only - no polling/upgrade
   reconnection: true,
   reconnectionAttempts: MAX_RECONNECT_ATTEMPTS,
   reconnectionDelay: RECONNECT_DELAY_MS,
@@ -243,6 +242,32 @@ export const useWebSocket = () => {
       setGamePhase('idle');
     });
 
+    // Payment flow events
+    newSocket.on('opponent_paid', (data) => {
+      console.log('[WebSocket] Opponent paid:', data);
+      // TODO: Update UI to show opponent paid status
+    });
+
+    newSocket.on('payment_confirmed_waiting', (data) => {
+      console.log('[WebSocket] Payment confirmed, waiting for opponent:', data);
+      // TODO: Update UI to show waiting for opponent payment
+    });
+
+    newSocket.on('both_players_paid', (data) => {
+      console.log('[WebSocket] Both players paid, can proceed:', data);
+      // Game phase will transition to waiting for players to be ready
+      setGamePhase('waiting');
+    });
+
+    newSocket.on('player_ready_restored', (data) => {
+      console.log('[WebSocket] Player ready state restored after reconnect:', data);
+      // Client should automatically resend player_ready
+      if (data.matchId && state.user) {
+        console.log('[WebSocket] Auto-resending player_ready after reconnect');
+        newSocket.emit('player_ready', { matchId: data.matchId });
+      }
+    });
+
     newSocket.on('game_start', (data) => {
       console.log('[WebSocket] Game starting', data.reconnected ? '(reconnected)' : '');
       setGamePhase('countdown');
@@ -362,6 +387,15 @@ export const useWebSocket = () => {
     }
   };
 
+  const paymentConfirmed = (matchId: string, userId: string, paymentReference: string) => {
+    if (socket && connected) {
+      console.log('[WebSocket] Sending payment_confirmed for match:', matchId, 'ref:', paymentReference);
+      socket.emit('payment_confirmed', { matchId, userId, paymentReference });
+    } else {
+      console.warn('[WebSocket] Cannot send payment_confirmed - socket not connected');
+    }
+  };
+
   const playerReady = (matchId: string) => {
     if (socket && connected) {
       console.log('[WebSocket] Sending player_ready for match:', matchId);
@@ -383,6 +417,7 @@ export const useWebSocket = () => {
     isConnecting,
     joinMatchmaking,
     cancelMatchmaking,
+    paymentConfirmed,
     playerReady,
     playerTap,
   };

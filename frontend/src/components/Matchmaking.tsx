@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useGameContext } from '../context/GameContext';
 import { useWebSocket } from '../hooks/useWebSocket';
@@ -13,13 +13,16 @@ const Matchmaking: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { state, setToken } = useGameContext();
-  const { joinMatchmaking, cancelMatchmaking, connected, isConnecting } = useWebSocket();
+  const { joinMatchmaking, cancelMatchmaking, paymentConfirmed, connected, isConnecting } = useWebSocket();
   const { isInstalled } = useMiniKit();
   const [selectedStake, setSelectedStake] = useState<number>(0.1);
   const [searching, setSearching] = useState(false);
+  const [matchFound, setMatchFound] = useState(false);
   const [processingPayment, setProcessingPayment] = useState(false);
   const [paymentError, setPaymentError] = useState<string | null>(null);
   const [needsAuth, setNeedsAuth] = useState(false);
+  const [bothPaid, _setBothPaid] = useState(false);
+  const [_paymentReference, setPaymentReference] = useState<string | null>(null);
   const isFree = location.state?.isFree || false;
 
   useEffect(() => {
@@ -28,16 +31,17 @@ const Matchmaking: React.FC = () => {
       return;
     }
 
-    // If match found, navigate to game
-    if (state.gamePhase === 'countdown' && state.matchId) {
+    // If match found and need to show payment screen
+    if (state.matchId && !isFree && !matchFound) {
+      setMatchFound(true);
+      setSearching(false);
+    }
+
+    // If game phase is countdown and both paid, navigate to game
+    if (state.gamePhase === 'countdown' && state.matchId && (bothPaid || isFree)) {
       navigate('/game');
     }
-  }, [state.user, state.token, state.gamePhase, state.matchId, navigate]);
-
-  // Memoized cleanup function to reset payment state
-  const resetPaymentState = useCallback(() => {
-    setProcessingPayment(false);
-  }, []);
+  }, [state.user, state.token, state.gamePhase, state.matchId, navigate, matchFound, bothPaid, isFree]);
 
   const handleJoinQueue = async () => {
     if (!state.user) return;
@@ -46,31 +50,28 @@ const Matchmaking: React.FC = () => {
     setPaymentError(null);
     setNeedsAuth(false);
 
-    // Check if user has valid token before proceeding with payment
+    // Check if user has valid token
     if (!state.token) {
       setPaymentError('Authentication required. Please sign in again.');
       setNeedsAuth(true);
       return;
     }
 
-    // For PvP mode, process payment with MiniKit first
-    if (!isFree && isInstalled) {
-      await handleMiniKitPayment();
-    } else {
-      // For free mode or demo mode (not in World App)
-      setSearching(true);
-      try {
-        await joinMatchmaking(state.user.userId, isFree ? 0 : selectedStake, state.user.walletAddress);
-      } catch (matchmakingError: any) {
-        console.error('[Matchmaking] Failed to join matchmaking:', matchmakingError);
-        setSearching(false);
-        setPaymentError(matchmakingError.message || 'Failed to join matchmaking. Please try again.');
-      }
+    // NEW FLOW: Join matchmaking WITHOUT paying first
+    setSearching(true);
+    try {
+      await joinMatchmaking(state.user.userId, isFree ? 0 : selectedStake, state.user.walletAddress);
+    } catch (matchmakingError: any) {
+      console.error('[Matchmaking] Failed to join matchmaking:', matchmakingError);
+      setSearching(false);
+      setPaymentError(matchmakingError.message || 'Failed to join matchmaking. Please try again.');
     }
   };
 
-  const handleMiniKitPayment = async () => {
-    if (!state.user) return;
+  // TODO: Wire up payment UI - this will be called when "Pay Now" button is clicked after match found
+  // @ts-expect-error - Unused until UI is implemented
+  const handlePayNow = async () => {
+    if (!state.user || !state.matchId) return;
 
     setProcessingPayment(true);
     setPaymentError(null);
@@ -87,52 +88,45 @@ const Matchmaking: React.FC = () => {
         if (result.pending) {
           minikit.sendHaptic('warning');
           setPaymentError('Transaction is pending confirmation. Please wait and try again in a moment.');
-          resetPaymentState();
+          setProcessingPayment(false);
           return;
         }
 
-        // Payment successful - send haptic feedback and join matchmaking
+        // Payment successful - send haptic feedback
         minikit.sendHaptic('success');
         
-        resetPaymentState(); // Reset payment state before starting matchmaking
-        setSearching(true);
-        // Note: payment reference is stored on backend, matchmaking uses the same stake
-        try {
-          await joinMatchmaking(
-            state.user.userId, 
-            selectedStake, 
-            state.user.walletAddress
-          );
-        } catch (matchmakingError: any) {
-          console.error('[Matchmaking] Failed to join matchmaking:', matchmakingError);
-          setSearching(false);
-          setPaymentError(matchmakingError.message || 'Failed to join matchmaking. Please try again.');
-        }
+        // Store payment reference
+        setPaymentReference(result.reference);
+        setProcessingPayment(false);
+
+        // Notify backend that payment is confirmed
+        paymentConfirmed(state.matchId, state.user.userId, result.reference);
+        
+        console.log('[Matchmaking] Payment confirmed, reference:', result.reference);
+        // The backend will notify us when both players have paid via 'both_players_paid' event
       } else {
         minikit.sendHaptic('error');
         const errorMsg = result.error || 'Payment failed';
         console.error('[Matchmaking] Payment failed:', errorMsg, 'errorCode:', result.errorCode);
         setPaymentError(errorMsg);
-        resetPaymentState();
+        setProcessingPayment(false);
       }
     } catch (error: any) {
       console.error('[Matchmaking] Payment error:', error);
       minikit.sendHaptic('error');
       
-      // Check if it's an authentication error (using isAuthError flag from API client)
+      // Check if it's an authentication error
       if (error.isAuthError) {
         setPaymentError('Your session has expired. Please sign in again.');
         setNeedsAuth(true);
-        // Update React state to reflect cleared authentication (localStorage already cleared by API interceptor)
         setToken(null);
       } else {
-        // Extract meaningful error message
         const errorMessage = error.message || 'Failed to process payment';
         console.error('[Matchmaking] Setting error message:', errorMessage);
         setPaymentError(errorMessage);
       }
       
-      resetPaymentState();
+      setProcessingPayment(false);
     }
   };
 
@@ -140,6 +134,10 @@ const Matchmaking: React.FC = () => {
     if (!state.user) return;
 
     setSearching(false);
+    setMatchFound(false);
+    if (state.matchId) {
+      // TODO: Emit match cancel event to backend
+    }
     cancelMatchmaking(state.user.userId, isFree ? 0 : selectedStake);
   };
 
