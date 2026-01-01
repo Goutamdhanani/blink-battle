@@ -106,8 +106,8 @@ export const useWebSocket = () => {
       // Trigger reconnection by updating socket
       if (state.token) {
         const newSocket = io(SOCKET_URL, {
-          ...SOCKET_CONFIG,
           auth: { token: state.token },
+          ...SOCKET_CONFIG,
         });
         setupSocketListeners(newSocket);
         setSocket(newSocket);
@@ -315,8 +315,8 @@ export const useWebSocket = () => {
     }
 
     const newSocket = io(SOCKET_URL, {
-      ...SOCKET_CONFIG,
       auth: { token: state.token },
+      ...SOCKET_CONFIG,
     });
 
     setupSocketListeners(newSocket);
