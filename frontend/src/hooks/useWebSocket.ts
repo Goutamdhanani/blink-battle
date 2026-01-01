@@ -255,8 +255,8 @@ export const useWebSocket = () => {
 
     newSocket.on('both_players_paid', (data) => {
       console.log('[WebSocket] Both players paid, can proceed:', data);
-      // Game phase will transition to ready/countdown
-      setGamePhase('matched'); // Use matched phase to show "Get Ready" screen
+      // Game phase will transition to waiting for players to be ready
+      setGamePhase('waiting');
     });
 
     newSocket.on('player_ready_restored', (data) => {

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useGameContext } from '../context/GameContext';
 import { useWebSocket } from '../hooks/useWebSocket';
@@ -21,9 +21,8 @@ const Matchmaking: React.FC = () => {
   const [processingPayment, setProcessingPayment] = useState(false);
   const [paymentError, setPaymentError] = useState<string | null>(null);
   const [needsAuth, setNeedsAuth] = useState(false);
-  const [opponentPaid, setOpponentPaid] = useState(false);
-  const [bothPaid, setBothPaid] = useState(false);
-  const [paymentReference, setPaymentReference] = useState<string | null>(null);
+  const [bothPaid, _setBothPaid] = useState(false);
+  const [_paymentReference, setPaymentReference] = useState<string | null>(null);
   const isFree = location.state?.isFree || false;
 
   useEffect(() => {
@@ -69,6 +68,8 @@ const Matchmaking: React.FC = () => {
     }
   };
 
+  // TODO: Wire up payment UI - this will be called when "Pay Now" button is clicked after match found
+  // @ts-expect-error - Unused until UI is implemented
   const handlePayNow = async () => {
     if (!state.user || !state.matchId) return;
 
