@@ -111,6 +111,13 @@ const io = new Server(httpServer, {
     methods: ['GET', 'POST'],
     allowedHeaders: ['Content-Type', 'Authorization', 'X-Request-Id'],
   },
+  // Heartbeat/ping configuration to keep connections alive
+  pingInterval: 25000, // Send ping every 25 seconds
+  pingTimeout: 20000, // Wait 20 seconds for pong before considering connection dead
+  // Transport configuration
+  transports: ['websocket', 'polling'],
+  allowUpgrades: true,
+  upgradeTimeout: 30000,
 });
 
 // WebSocket authentication middleware

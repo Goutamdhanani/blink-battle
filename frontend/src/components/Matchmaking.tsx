@@ -13,7 +13,7 @@ const Matchmaking: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { state, setToken } = useGameContext();
-  const { joinMatchmaking, cancelMatchmaking, connected } = useWebSocket();
+  const { joinMatchmaking, cancelMatchmaking, connected, isConnecting } = useWebSocket();
   const { isInstalled } = useMiniKit();
   const [selectedStake, setSelectedStake] = useState<number>(0.1);
   const [searching, setSearching] = useState(false);
@@ -59,7 +59,13 @@ const Matchmaking: React.FC = () => {
     } else {
       // For free mode or demo mode (not in World App)
       setSearching(true);
-      joinMatchmaking(state.user.userId, isFree ? 0 : selectedStake, state.user.walletAddress);
+      try {
+        await joinMatchmaking(state.user.userId, isFree ? 0 : selectedStake, state.user.walletAddress);
+      } catch (matchmakingError: any) {
+        console.error('[Matchmaking] Failed to join matchmaking:', matchmakingError);
+        setSearching(false);
+        setPaymentError(matchmakingError.message || 'Failed to join matchmaking. Please try again.');
+      }
     }
   };
 
@@ -91,11 +97,17 @@ const Matchmaking: React.FC = () => {
         resetPaymentState(); // Reset payment state before starting matchmaking
         setSearching(true);
         // Note: payment reference is stored on backend, matchmaking uses the same stake
-        joinMatchmaking(
-          state.user.userId, 
-          selectedStake, 
-          state.user.walletAddress
-        );
+        try {
+          await joinMatchmaking(
+            state.user.userId, 
+            selectedStake, 
+            state.user.walletAddress
+          );
+        } catch (matchmakingError: any) {
+          console.error('[Matchmaking] Failed to join matchmaking:', matchmakingError);
+          setSearching(false);
+          setPaymentError(matchmakingError.message || 'Failed to join matchmaking. Please try again.');
+        }
       } else {
         minikit.sendHaptic('error');
         const errorMsg = result.error || 'Payment failed';
@@ -239,9 +251,9 @@ const Matchmaking: React.FC = () => {
               size="large"
               fullWidth
               onClick={handleJoinQueue}
-              disabled={!connected || needsAuth}
+              disabled={!connected || needsAuth || isConnecting}
             >
-              {!connected ? 'Connecting...' : needsAuth ? 'Sign In Required' : 'Find Opponent'}
+              {needsAuth ? 'Sign In Required' : (isConnecting || !connected) ? 'Connecting...' : 'Find Opponent'}
             </NeonButton>
           </div>
         ) : processingPayment ? (

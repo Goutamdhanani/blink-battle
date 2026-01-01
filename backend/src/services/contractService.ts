@@ -224,6 +224,50 @@ export class ContractService {
       return '0';
     }
   }
+
+  /**
+   * Verify on-chain stake status before attempting refund
+   * Returns an object with stake status for both players
+   */
+  async verifyOnChainStakeStatus(matchId: string): Promise<{ 
+    hasStakes: boolean; 
+    player1Staked: boolean; 
+    player2Staked: boolean;
+    error?: string;
+  }> {
+    try {
+      const matchData = await this.getMatch(matchId);
+      
+      if (!matchData) {
+        console.warn('[ContractService] Match not found on-chain:', matchId);
+        return { hasStakes: false, player1Staked: false, player2Staked: false, error: 'Match not found on-chain' };
+      }
+
+      console.log('[ContractService] On-chain stake status:', {
+        matchId,
+        player1Staked: matchData.player1Staked,
+        player2Staked: matchData.player2Staked,
+        completed: matchData.completed,
+        cancelled: matchData.cancelled,
+      });
+
+      const hasStakes = matchData.player1Staked || matchData.player2Staked;
+      
+      return {
+        hasStakes,
+        player1Staked: matchData.player1Staked,
+        player2Staked: matchData.player2Staked,
+      };
+    } catch (error: any) {
+      console.error('[ContractService] Error verifying stake status:', error);
+      return { 
+        hasStakes: false, 
+        player1Staked: false, 
+        player2Staked: false,
+        error: error.message 
+      };
+    }
+  }
 }
 
 // Singleton instance

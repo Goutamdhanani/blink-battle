@@ -3,19 +3,22 @@ import { io, Socket } from 'socket.io-client';
 import { useGameContext } from '../context/GameContext';
 
 const SOCKET_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
-const RECONNECT_DELAY_MS = 1000; // Start with 1 second
-const MAX_RECONNECT_DELAY_MS = 10000; // Max 10 seconds
+const RECONNECT_DELAY_MS = 2000; // Start with 2 seconds (increased from 1s)
+const MAX_RECONNECT_DELAY_MS = 15000; // Max 15 seconds (increased from 10s)
 const MAX_RECONNECT_ATTEMPTS = 10;
+const CONNECTION_WAIT_TIMEOUT_MS = 10000; // Wait up to 10 seconds for connection
 
 export const useWebSocket = () => {
   const [socket, setSocket] = useState<Socket | null>(null);
   const [connected, setConnected] = useState(false);
+  const [isConnecting, setIsConnecting] = useState(false);
   const { state, setMatch, setGamePhase, setCountdown, setSignalTimestamp, setMatchResult } = useGameContext();
   
   // Track reconnection state
   const reconnectAttempts = useRef(0);
   const reconnectTimeout = useRef<NodeJS.Timeout | null>(null);
   const isReconnecting = useRef(false);
+  const connectionWaiters = useRef<Array<{ resolve: () => void; reject: (error: Error) => void }>>([]);
 
   // Clear reconnect timeout on unmount
   useEffect(() => {
@@ -23,8 +26,43 @@ export const useWebSocket = () => {
       if (reconnectTimeout.current) {
         clearTimeout(reconnectTimeout.current);
       }
+      // Reject any pending connection waiters on unmount
+      connectionWaiters.current.forEach(waiter => {
+        waiter.reject(new Error('Component unmounted'));
+      });
+      connectionWaiters.current = [];
     };
   }, []);
+
+  // Helper to wait for connection with timeout
+  const waitForConnection = useCallback((): Promise<void> => {
+    if (connected) {
+      return Promise.resolve();
+    }
+
+    return new Promise((resolve, reject) => {
+      const timeoutId = setTimeout(() => {
+        // Remove this waiter from the list
+        const index = connectionWaiters.current.findIndex(w => w.resolve === resolve);
+        if (index !== -1) {
+          connectionWaiters.current.splice(index, 1);
+        }
+        reject(new Error('Connection timeout'));
+      }, CONNECTION_WAIT_TIMEOUT_MS);
+
+      const wrappedResolve = () => {
+        clearTimeout(timeoutId);
+        resolve();
+      };
+
+      const wrappedReject = (error: Error) => {
+        clearTimeout(timeoutId);
+        reject(error);
+      };
+
+      connectionWaiters.current.push({ resolve: wrappedResolve, reject: wrappedReject });
+    });
+  }, [connected]);
 
   // Reconnect with exponential backoff
   const attemptReconnect = useCallback(() => {
@@ -52,8 +90,12 @@ export const useWebSocket = () => {
         const newSocket = io(SOCKET_URL, {
           auth: { token: state.token },
           reconnection: true,
-          reconnectionAttempts: 5,
-          reconnectionDelay: 1000,
+          reconnectionAttempts: MAX_RECONNECT_ATTEMPTS,
+          reconnectionDelay: RECONNECT_DELAY_MS,
+          reconnectionDelayMax: MAX_RECONNECT_DELAY_MS,
+          timeout: 20000,
+          transports: ['websocket', 'polling'],
+          upgrade: true,
         });
         setupSocketListeners(newSocket);
         setSocket(newSocket);
@@ -65,7 +107,12 @@ export const useWebSocket = () => {
     newSocket.on('connect', () => {
       console.log('[WebSocket] Connected, socket ID:', newSocket.id);
       setConnected(true);
+      setIsConnecting(false);
       reconnectAttempts.current = 0; // Reset on successful connection
+      
+      // Resolve all pending connection waiters
+      connectionWaiters.current.forEach(waiter => waiter.resolve());
+      connectionWaiters.current = [];
       
       // If user was in a match, attempt to rejoin
       if (state.matchId && state.user) {
@@ -86,6 +133,13 @@ export const useWebSocket = () => {
     newSocket.on('disconnect', (reason) => {
       console.log('[WebSocket] Disconnected:', reason);
       setConnected(false);
+      setIsConnecting(false);
+      
+      // Reject all pending connection waiters
+      connectionWaiters.current.forEach(waiter => {
+        waiter.reject(new Error('Socket disconnected'));
+      });
+      connectionWaiters.current = [];
       
       // Attempt to reconnect if not a manual disconnect
       if (reason !== 'io client disconnect' && state.token) {
@@ -96,6 +150,7 @@ export const useWebSocket = () => {
     newSocket.on('connect_error', (error) => {
       console.error('[WebSocket] Connection error:', error);
       setConnected(false);
+      setIsConnecting(false);
       
       // Attempt to reconnect on connection error
       if (state.token) {
@@ -194,8 +249,12 @@ export const useWebSocket = () => {
     const newSocket = io(SOCKET_URL, {
       auth: { token: state.token },
       reconnection: true,
-      reconnectionAttempts: 5,
-      reconnectionDelay: 1000,
+      reconnectionAttempts: MAX_RECONNECT_ATTEMPTS,
+      reconnectionDelay: RECONNECT_DELAY_MS,
+      reconnectionDelayMax: MAX_RECONNECT_DELAY_MS,
+      timeout: 20000,
+      transports: ['websocket', 'polling'],
+      upgrade: true,
     });
 
     setupSocketListeners(newSocket);
@@ -206,12 +265,32 @@ export const useWebSocket = () => {
     };
   }, [state.token, setupSocketListeners]);
 
-  const joinMatchmaking = (userId: string, stake: number, walletAddress: string) => {
-    if (socket && connected) {
+  const joinMatchmaking = async (userId: string, stake: number, walletAddress: string) => {
+    try {
+      // If not connected, wait for connection with timeout
+      if (!connected) {
+        console.log('[WebSocket] Not connected, waiting for connection...');
+        setIsConnecting(true);
+        try {
+          await waitForConnection();
+          console.log('[WebSocket] Connection established, proceeding with matchmaking');
+        } catch (error: any) {
+          console.error('[WebSocket] Failed to establish connection:', error);
+          setIsConnecting(false);
+          throw new Error('Failed to connect to server. Please try again.');
+        }
+      }
+
+      // At this point, socket should be connected
+      if (!socket) {
+        throw new Error('Socket not initialized. Please try again.');
+      }
+
       console.log('[WebSocket] Joining matchmaking:', { userId, stake, walletAddress });
       socket.emit('join_matchmaking', { userId, stake, walletAddress });
-    } else {
-      console.warn('[WebSocket] Cannot join matchmaking - socket not connected');
+    } catch (error) {
+      setIsConnecting(false);
+      throw error;
     }
   };
 
@@ -239,6 +318,7 @@ export const useWebSocket = () => {
   return {
     socket,
     connected,
+    isConnecting,
     joinMatchmaking,
     cancelMatchmaking,
     playerReady,
