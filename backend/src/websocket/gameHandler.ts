@@ -59,12 +59,16 @@ export class GameSocketHandler {
   private activeMatches: Map<string, ActiveMatch> = new Map();
   private playerToMatch: Map<string, string> = new Map(); // socketId -> matchId
   private userToMatch: Map<string, string> = new Map(); // userId -> matchId
+  
+  // Track socket connection times for early disconnect guard
+  private socketConnectionTimes: Map<string, number> = new Map(); // socketId -> connection timestamp
 
   private readonly RECONNECT_GRACE_PERIOD_MS = 30000; // 30 seconds
   private readonly RECONNECT_DEBOUNCE_MS = 1000; // Minimum time between reconnects
   private readonly MAX_RECONNECT_ATTEMPTS = 5; // Max reconnect attempts before force disconnect
   private readonly MATCH_START_TIMEOUT_MS = parseInt(process.env.MATCH_START_TIMEOUT_MS || '60000', 10);
   private readonly STAKE_DEPOSIT_TIMEOUT_MS = parseInt(process.env.STAKE_DEPOSIT_TIMEOUT_MS || '120000', 10); // 2 minutes for deposits
+  private readonly MIN_STABLE_CONNECTION_MS = 5000; // Guard against early disconnects (e.g., React remounts)
 
   constructor(io: Server) {
     this.io = io;
@@ -74,6 +78,9 @@ export class GameSocketHandler {
   private setupSocketHandlers() {
     this.io.on('connection', (socket: Socket) => {
       console.log(`Client connected: ${socket.id}`);
+      
+      // Track connection time for early disconnect guard
+      this.socketConnectionTimes.set(socket.id, Date.now());
 
       socket.on('join_matchmaking', (data) => this.handleJoinMatchmaking(socket, data));
       socket.on('cancel_matchmaking', (data) => this.handleCancelMatchmaking(socket, data));
@@ -964,7 +971,13 @@ export class GameSocketHandler {
 
   private async handleDisconnect(socket: Socket) {
     const disconnectTime = Date.now();
-    console.log(`[Disconnect] Client disconnected: ${socket.id} at ${new Date(disconnectTime).toISOString()}`);
+    const connectionStartTime = this.socketConnectionTimes.get(socket.id);
+    const connectionDuration = connectionStartTime ? disconnectTime - connectionStartTime : 0;
+    
+    console.log(`[Disconnect] Client disconnected: ${socket.id} at ${new Date(disconnectTime).toISOString()} (connection duration: ${connectionDuration}ms)`);
+
+    // Clean up connection time tracking
+    this.socketConnectionTimes.delete(socket.id);
 
     const matchId = this.playerToMatch.get(socket.id);
     if (!matchId) {
@@ -988,7 +1001,17 @@ export class GameSocketHandler {
       player1Ready: activeMatch.player1Ready,
       player2Ready: activeMatch.player2Ready,
       disconnectedPlayer: isPlayer1 ? 'player1' : 'player2',
+      connectionDuration: `${connectionDuration}ms`,
     });
+
+    // Early disconnect guard: if connection was very short-lived (e.g., React remount),
+    // don't count it toward reconnect attempts or trigger match cancellation logic
+    if (connectionDuration < this.MIN_STABLE_CONNECTION_MS) {
+      console.log(`[Disconnect] Early disconnect ignored (connection duration ${connectionDuration}ms < ${this.MIN_STABLE_CONNECTION_MS}ms). Likely a React remount or transient connection.`);
+      // Clean up the socket mapping but don't trigger disconnection penalties
+      this.playerToMatch.delete(socket.id);
+      return;
+    }
 
     // Mark player as disconnected
     activeMatch.disconnectedUsers = activeMatch.disconnectedUsers || new Set();
@@ -1093,6 +1116,11 @@ export class GameSocketHandler {
       this.playerToMatch.delete(activeMatch.player2.socketId);
       this.userToMatch.delete(activeMatch.player1.userId);
       this.userToMatch.delete(activeMatch.player2.userId);
+      
+      // Clean up connection time tracking for both players
+      this.socketConnectionTimes.delete(activeMatch.player1.socketId);
+      this.socketConnectionTimes.delete(activeMatch.player2.socketId);
+      
       this.activeMatches.delete(matchId);
       
       this.emitLifecycleEvent(matchId, MatchEventType.MATCH_CANCELLED, {

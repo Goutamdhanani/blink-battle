@@ -2,6 +2,25 @@ import { useEffect, useState, useRef, useCallback } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { useGameContext } from '../context/GameContext';
 
+/**
+ * @deprecated This hook is deprecated in favor of the centralized SocketProvider.
+ * Use `useSocket()` from '../context/SocketContext' instead to consume the shared socket instance.
+ * 
+ * Creating multiple socket instances per component causes duplicate events and connection instability.
+ * The SocketProvider ensures exactly one WebSocket connection per authenticated session.
+ * 
+ * Migration:
+ * ```
+ * // Old (causes multiple connections):
+ * import { useWebSocket } from '../hooks/useWebSocket';
+ * const { socket, connected } = useWebSocket();
+ * 
+ * // New (uses shared connection):
+ * import { useSocket } from '../context/SocketContext';
+ * const { socket, connected } = useSocket();
+ * ```
+ */
+
 const SOCKET_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 const RECONNECT_DELAY_MS = 2000; // Start with 2 seconds (increased from 1s)
 const MAX_RECONNECT_DELAY_MS = 15000; // Max 15 seconds (increased from 10s)
