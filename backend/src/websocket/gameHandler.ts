@@ -46,6 +46,8 @@ export class GameSocketHandler {
   private userToMatch: Map<string, string> = new Map(); // userId -> matchId
 
   private readonly RECONNECT_GRACE_PERIOD_MS = 30000; // 30 seconds
+  private readonly RECONNECT_DEBOUNCE_MS = 1000; // Minimum time between reconnects
+  private readonly MATCH_START_TIMEOUT_MS = parseInt(process.env.MATCH_START_TIMEOUT_MS || '60000', 10);
 
   constructor(io: Server) {
     this.io = io;
@@ -156,6 +158,15 @@ export class GameSocketHandler {
     userId: string,
     activeMatch: ActiveMatch
   ) {
+    // Debounce rapid reconnections
+    const lastDisconnect = activeMatch.disconnectTimestamps?.get(userId);
+    const now = Date.now();
+    
+    if (lastDisconnect && (now - lastDisconnect) < this.RECONNECT_DEBOUNCE_MS) {
+      console.log(`[Debounce] Rapid reconnect detected for ${userId}, waiting...`);
+      await this.sleep(this.RECONNECT_DEBOUNCE_MS);
+    }
+    
     const isPlayer1 = activeMatch.player1.userId === userId;
     const playerData = isPlayer1 ? activeMatch.player1 : activeMatch.player2;
     const opponent = isPlayer1 ? activeMatch.player2 : activeMatch.player1;
@@ -169,12 +180,21 @@ export class GameSocketHandler {
       activeMatch.disconnectedUsers.delete(userId);
       console.log(`Player ${userId} reconnected to match ${activeMatch.matchId}`);
 
-      // Cancel the timeout if both players are now connected
+      // Cancel the timeout if both players are now connected - CLEAR ANY EXISTING TIMEOUT
       if (activeMatch.disconnectedUsers.size === 0 && activeMatch.cancelTimeout) {
         clearTimeout(activeMatch.cancelTimeout);
         activeMatch.cancelTimeout = undefined;
         console.log(`Cancelled match timeout for ${activeMatch.matchId}`);
       }
+    }
+
+    // Wait for connection to stabilize before sending match state
+    await this.sleep(500);
+    
+    // Verify socket is still connected
+    if (!socket.connected) {
+      console.log(`[Reconnect] Socket disconnected during stabilization for ${userId}`);
+      return;
     }
 
     // Send current match state
@@ -278,6 +298,37 @@ export class GameSocketHandler {
         opponent: { userId: player1.user_id, wallet: player1.wallet_address },
         stake: player1Request.stake,
       });
+      
+      // Set timeout to cancel match if it never starts (Bug 4 fix)
+      setTimeout(async () => {
+        const matchCheck = this.activeMatches.get(activeMatch.matchId);
+        if (matchCheck && !matchCheck.hasStarted) {
+          console.error(`[Match Timeout] Match ${activeMatch.matchId} never started after ${this.MATCH_START_TIMEOUT_MS}ms`);
+          
+          // Attempt refund
+          const refundResult = await EscrowService.refundBothPlayers(
+            matchCheck.matchId,
+            matchCheck.player1.walletAddress,
+            matchCheck.player2.walletAddress,
+            matchCheck.stake
+          );
+          
+          // Notify both players
+          this.io.to(matchCheck.player1.socketId).emit('match_cancelled', {
+            reason: 'timeout',
+            refunded: refundResult.success,
+            noEscrow: refundResult.noEscrow
+          });
+          this.io.to(matchCheck.player2.socketId).emit('match_cancelled', {
+            reason: 'timeout', 
+            refunded: refundResult.success,
+            noEscrow: refundResult.noEscrow
+          });
+          
+          await MatchModel.updateStatus(matchCheck.matchId, MatchStatus.CANCELLED);
+          this.cleanupMatch(matchCheck.matchId);
+        }
+      }, this.MATCH_START_TIMEOUT_MS);
     } catch (error) {
       console.error('Error creating match:', error);
       socket.emit('error', { message: 'Failed to create match' });
@@ -302,6 +353,16 @@ export class GameSocketHandler {
       if (activeMatch.hasStarted) return;
 
       if (activeMatch.player1Ready && activeMatch.player2Ready) {
+        // Add stability check - both players must be connected
+        const p1Connected = this.io.sockets.sockets.has(activeMatch.player1.socketId);
+        const p2Connected = this.io.sockets.sockets.has(activeMatch.player2.socketId);
+        
+        if (!p1Connected || !p2Connected) {
+          console.warn(`[GameStart] Cannot start - Player connection unstable. P1: ${p1Connected}, P2: ${p2Connected}`);
+          // Don't start game, wait for stable connections
+          return;
+        }
+        
         activeMatch.hasStarted = true;
         console.log(`Both players ready, starting match ${data.matchId}`);
 

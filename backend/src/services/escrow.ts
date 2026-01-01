@@ -6,6 +6,16 @@ import { getContractService } from './contractService';
  * Escrow service for handling game stakes and payouts
  * Integrates with BlinkBattleEscrow smart contract on World Chain
  */
+
+// Refund failure reasons for tracking and admin review
+const REFUND_FAILURE_REASONS = {
+  NO_ESCROW: 'no_escrow',
+  NO_STAKES: 'no_stakes',
+  NO_STAKES_ON_CHAIN: 'no_stakes_on_chain',
+  NO_TX_HASH: 'no_tx_hash',
+  EXCEPTION: 'exception',
+} as const;
+
 export class EscrowService {
   private static readonly PLATFORM_FEE_PERCENT = parseFloat(
     process.env.PLATFORM_FEE_PERCENT || '3'
@@ -118,15 +128,35 @@ export class EscrowService {
 
   /**
    * Refund both players via smart contract
+   * Checks if match has on-chain escrow before attempting refund
    */
   static async refundBothPlayers(
     matchId: string,
     player1Wallet: string,
     player2Wallet: string,
     stakeAmount: number
-  ): Promise<{ success: boolean; error?: string }> {
+  ): Promise<{ success: boolean; error?: string; noEscrow?: boolean }> {
     try {
       const contractService = getContractService();
+      
+      // FIRST: Check if match exists on-chain
+      console.log(`[EscrowService] Checking on-chain escrow for match: ${matchId}`);
+      const matchData = await contractService.getMatch(matchId);
+      
+      // Check for zero or missing stake amount
+      // matchData.stakeAmount is already formatted as ether string by contractService.getMatch()
+      if (!matchData || matchData.stakeAmount === '0.0' || matchData.stakeAmount === '0') {
+        console.warn(`[EscrowService] Match ${matchId} has no on-chain escrow - funds may be in platform wallet`);
+        // Record this for manual review/refund
+        await this.recordFailedRefund(matchId, player1Wallet, player2Wallet, stakeAmount, REFUND_FAILURE_REASONS.NO_ESCROW);
+        return { success: false, error: 'No on-chain escrow found', noEscrow: true };
+      }
+      
+      if (!matchData.player1Staked && !matchData.player2Staked) {
+        console.warn(`[EscrowService] Match ${matchId} exists but no stakes deposited`);
+        await this.recordFailedRefund(matchId, player1Wallet, player2Wallet, stakeAmount, REFUND_FAILURE_REASONS.NO_STAKES);
+        return { success: false, error: 'No stakes deposited on-chain', noEscrow: true };
+      }
       
       // Verify on-chain stake status before attempting refund
       console.log(`[EscrowService] Verifying on-chain stake status for match: ${matchId}`);
@@ -134,16 +164,19 @@ export class EscrowService {
       
       if (stakeStatus.error) {
         console.error('[EscrowService] Error checking stake status:', stakeStatus.error);
-        return { success: false, error: stakeStatus.error };
+        await this.recordFailedRefund(matchId, player1Wallet, player2Wallet, stakeAmount, stakeStatus.error);
+        return { success: false, error: stakeStatus.error, noEscrow: true };
       }
 
       // If no stakes exist on-chain, log warning and don't mark as refunded
       if (!stakeStatus.hasStakes) {
         console.warn(`[EscrowService] No on-chain stakes found for match ${matchId}. Cannot refund.`);
         console.warn('[EscrowService] Match was likely created in DB but stakes were never deposited on-chain.');
+        await this.recordFailedRefund(matchId, player1Wallet, player2Wallet, stakeAmount, REFUND_FAILURE_REASONS.NO_STAKES_ON_CHAIN);
         return { 
           success: false, 
-          error: 'No on-chain stakes found. Match was never funded or already refunded.' 
+          error: 'No on-chain stakes found. Match was never funded or already refunded.',
+          noEscrow: true
         };
       }
 
@@ -157,12 +190,14 @@ export class EscrowService {
 
       if (!result.success) {
         console.error('[EscrowService] Failed to cancel match on-chain:', result.error);
+        await this.recordFailedRefund(matchId, player1Wallet, player2Wallet, stakeAmount, result.error || REFUND_FAILURE_REASONS.EXCEPTION);
         return { success: false, error: result.error };
       }
 
       // Verify the transaction hash exists before creating records
       if (!result.txHash) {
         console.error('[EscrowService] No transaction hash returned from cancelMatch');
+        await this.recordFailedRefund(matchId, player1Wallet, player2Wallet, stakeAmount, REFUND_FAILURE_REASONS.NO_TX_HASH);
         return { success: false, error: 'Failed to get transaction confirmation' };
       }
 
@@ -193,9 +228,34 @@ export class EscrowService {
       return { success: true };
     } catch (error: any) {
       console.error('[EscrowService] Error refunding players:', error);
+      await this.recordFailedRefund(matchId, player1Wallet, player2Wallet, stakeAmount, error.message || REFUND_FAILURE_REASONS.EXCEPTION);
       // Return more detailed error information
       const errorMsg = error.message || 'Failed to refund players';
       return { success: false, error: errorMsg };
+    }
+  }
+
+  /**
+   * Record failed refunds for manual review
+   * TODO: Implement database table for failed_refunds to track these for admin review
+   * GitHub Issue #XXX: Create failed_refunds table with columns: match_id, player1_wallet, 
+   * player2_wallet, stake_amount, failure_reason, timestamp, resolved (boolean)
+   * For now, this logs critical refund failures to console for monitoring
+   */
+  private static async recordFailedRefund(
+    matchId: string,
+    player1Wallet: string,
+    player2Wallet: string,
+    stakeAmount: number,
+    reason: string
+  ): Promise<void> {
+    try {
+      // Log to console for monitoring and alerting
+      console.error(`[REFUND_FAILED] Match: ${matchId}, Players: ${player1Wallet}, ${player2Wallet}, Amount: ${stakeAmount}, Reason: ${reason}`);
+      // TODO: In production, insert into a dedicated failed_refunds table:
+      // await FailedRefundModel.create({ matchId, player1Wallet, player2Wallet, stakeAmount, reason, timestamp: new Date() });
+    } catch (error) {
+      console.error('[EscrowService] Error recording failed refund:', error);
     }
   }
 

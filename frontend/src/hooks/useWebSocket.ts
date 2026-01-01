@@ -8,6 +8,19 @@ const MAX_RECONNECT_DELAY_MS = 15000; // Max 15 seconds (increased from 10s)
 const MAX_RECONNECT_ATTEMPTS = 10;
 const CONNECTION_WAIT_TIMEOUT_MS = 10000; // Wait up to 10 seconds for connection
 
+// Socket.IO configuration for Heroku stability
+const SOCKET_CONFIG = {
+  transports: ['polling', 'websocket'], // START WITH POLLING, upgrade later
+  upgrade: true,
+  rememberUpgrade: false, // Don't cache failed upgrades
+  reconnection: true,
+  reconnectionAttempts: MAX_RECONNECT_ATTEMPTS,
+  reconnectionDelay: RECONNECT_DELAY_MS,
+  reconnectionDelayMax: MAX_RECONNECT_DELAY_MS,
+  timeout: 20000,
+  forceNew: false,
+};
+
 export const useWebSocket = () => {
   const [socket, setSocket] = useState<Socket | null>(null);
   const [connected, setConnected] = useState(false);
@@ -19,6 +32,11 @@ export const useWebSocket = () => {
   const reconnectTimeout = useRef<NodeJS.Timeout | null>(null);
   const isReconnecting = useRef(false);
   const connectionWaiters = useRef<Array<{ resolve: () => void; reject: (error: Error) => void }>>([]);
+  
+  // Connection stability tracking
+  const connectionStableRef = useRef(false);
+  const connectionStartTimeRef = useRef<number>(0);
+  const MIN_STABLE_CONNECTION_MS = 1000; // Consider stable after 1 second
 
   // Clear reconnect timeout on unmount
   useEffect(() => {
@@ -89,13 +107,7 @@ export const useWebSocket = () => {
       if (state.token) {
         const newSocket = io(SOCKET_URL, {
           auth: { token: state.token },
-          reconnection: true,
-          reconnectionAttempts: MAX_RECONNECT_ATTEMPTS,
-          reconnectionDelay: RECONNECT_DELAY_MS,
-          reconnectionDelayMax: MAX_RECONNECT_DELAY_MS,
-          timeout: 20000,
-          transports: ['websocket', 'polling'],
-          upgrade: true,
+          ...SOCKET_CONFIG,
         });
         setupSocketListeners(newSocket);
         setSocket(newSocket);
@@ -106,9 +118,19 @@ export const useWebSocket = () => {
   const setupSocketListeners = useCallback((newSocket: Socket) => {
     newSocket.on('connect', () => {
       console.log('[WebSocket] Connected, socket ID:', newSocket.id);
+      connectionStartTimeRef.current = Date.now();
+      connectionStableRef.current = false;
       setConnected(true);
       setIsConnecting(false);
       reconnectAttempts.current = 0; // Reset on successful connection
+      
+      // Mark connection as stable after MIN_STABLE_CONNECTION_MS
+      setTimeout(() => {
+        if (newSocket.connected) {
+          connectionStableRef.current = true;
+          console.log('[WebSocket] Connection stabilized');
+        }
+      }, MIN_STABLE_CONNECTION_MS);
       
       // Resolve all pending connection waiters
       connectionWaiters.current.forEach(waiter => waiter.resolve());
@@ -158,16 +180,44 @@ export const useWebSocket = () => {
       }
     });
 
-    newSocket.on('match_found', (data) => {
-      console.log('[WebSocket] Match found:', data);
-      setMatch(data.matchId, data.opponent.wallet, data.stake);
-      
-      // If this is a reconnection, handle appropriately
-      if (data.reconnected) {
-        console.log('[WebSocket] Successfully reconnected to match');
-        if (data.hasStarted) {
-          setGamePhase('countdown');
+    newSocket.on('match_found', async (data) => {
+      try {
+        console.log('[WebSocket] Match found:', data);
+        setMatch(data.matchId, data.opponent.wallet, data.stake);
+        
+        // Wait for connection to be stable before sending player_ready
+        const waitForStable = async () => {
+          const maxWait = 3000;
+          const checkInterval = 100;
+          let waited = 0;
+          
+          while (!connectionStableRef.current && waited < maxWait) {
+            await new Promise(r => setTimeout(r, checkInterval));
+            waited += checkInterval;
+          }
+          
+          return connectionStableRef.current;
+        };
+        
+        // If this is a reconnection, handle appropriately
+        if (data.reconnected) {
+          console.log('[WebSocket] Successfully reconnected to match');
+          if (data.hasStarted) {
+            setGamePhase('countdown');
+          }
+          return;
         }
+        
+        const isStable = await waitForStable();
+        
+        if (isStable && newSocket.connected) {
+          console.log('[WebSocket] Connection stable, sending player_ready');
+          newSocket.emit('player_ready', { matchId: data.matchId });
+        } else {
+          console.warn('[WebSocket] Connection not stable, delaying player_ready');
+        }
+      } catch (error) {
+        console.error('[WebSocket] Error handling match_found:', error);
       }
     });
 
@@ -230,6 +280,24 @@ export const useWebSocket = () => {
       }
     });
 
+    newSocket.on('match_cancelled', (data) => {
+      console.log('[WebSocket] Match cancelled:', data);
+      
+      if (data.reason === 'timeout') {
+        if (data.refunded) {
+          alert('Match cancelled - game did not start in time. Your stake has been refunded.');
+        } else if (data.noEscrow) {
+          alert('Match cancelled - game did not start. Refund pending manual review.');
+        } else {
+          alert('Match cancelled - game did not start in time.');
+        }
+      } else {
+        alert(`Match cancelled: ${data.reason || 'Unknown reason'}`);
+      }
+      
+      setGamePhase('idle');
+    });
+
     newSocket.on('error', (data) => {
       console.error('[WebSocket] Socket error:', data);
       alert(data.message);
@@ -248,13 +316,7 @@ export const useWebSocket = () => {
 
     const newSocket = io(SOCKET_URL, {
       auth: { token: state.token },
-      reconnection: true,
-      reconnectionAttempts: MAX_RECONNECT_ATTEMPTS,
-      reconnectionDelay: RECONNECT_DELAY_MS,
-      reconnectionDelayMax: MAX_RECONNECT_DELAY_MS,
-      timeout: 20000,
-      transports: ['websocket', 'polling'],
-      upgrade: true,
+      ...SOCKET_CONFIG,
     });
 
     setupSocketListeners(newSocket);
