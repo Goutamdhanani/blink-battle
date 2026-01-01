@@ -68,14 +68,26 @@ export class ContractService {
     stakeAmount: number
   ): Promise<{ success: boolean; txHash?: string; error?: string }> {
     try {
+      // Validate stake amount is reasonable (between 0.01 and 1000 WLD)
+      if (stakeAmount < 0.01 || stakeAmount > 1000) {
+        return { success: false, error: `Invalid stake amount: ${stakeAmount} WLD` };
+      }
+
       const matchIdBytes = this.matchIdToBytes32(matchId);
-      const stakeWei = ethers.parseEther(stakeAmount.toString());
+      
+      // Convert to wei using string manipulation to avoid precision loss
+      // Handle up to 18 decimal places
+      const stakeStr = stakeAmount.toFixed(18);
+      const [whole, decimal = ''] = stakeStr.split('.');
+      const paddedDecimal = decimal.padEnd(18, '0');
+      const stakeWei = ethers.getBigInt(whole + paddedDecimal);
 
       console.log('[ContractService] Creating match on-chain:', {
         matchId: matchIdBytes,
         player1: player1Address,
         player2: player2Address,
         stake: stakeAmount,
+        stakeWei: stakeWei.toString(),
       });
 
       const tx = await this.contract.createMatch(

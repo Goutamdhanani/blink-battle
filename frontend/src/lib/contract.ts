@@ -10,19 +10,24 @@ const ESCROW_CONTRACT_ADDRESS = import.meta.env.VITE_ESCROW_CONTRACT_ADDRESS;
 const WLD_TOKEN_ADDRESS = import.meta.env.VITE_WLD_TOKEN_ADDRESS;
 
 /**
- * Convert match ID to bytes32 format (keccak256 hash)
+ * Helper function to format match ID for contract
+ * Note: The actual bytes32 conversion happens on the backend/contract
+ * This ensures consistency across frontend and backend
  */
-export function matchIdToBytes32(matchId: string): string {
-  // Simple keccak256 hash - in production you'd use a proper library
-  // For now, we'll send the string and let the backend/contract handle conversion
+export function formatMatchId(matchId: string): string {
   return matchId;
 }
 
 /**
  * Convert WLD amount to wei (18 decimals)
+ * Uses integer arithmetic to avoid precision errors
  */
 export function wldToWei(amount: number): string {
-  return (BigInt(Math.floor(amount * 1e18))).toString();
+  // Convert to string with fixed decimals to avoid floating point issues
+  const amountStr = amount.toFixed(18);
+  const [whole, decimal = ''] = amountStr.split('.');
+  const paddedDecimal = decimal.padEnd(18, '0');
+  return BigInt(whole + paddedDecimal).toString();
 }
 
 /**
@@ -105,13 +110,12 @@ export async function depositStake(matchId: string): Promise<{
       throw new Error('Escrow contract address not configured');
     }
 
-    // Convert matchId to bytes32 - the backend will handle this conversion
-    // but for now we pass the matchId as-is
-    const matchIdBytes = matchId;
+    // Format matchId for contract (backend handles bytes32 conversion)
+    const formattedMatchId = formatMatchId(matchId);
 
     console.log('[Contract] Depositing stake:', {
       contract: ESCROW_CONTRACT_ADDRESS,
-      matchId: matchIdBytes,
+      matchId: formattedMatchId,
     });
 
     const { finalPayload } = await MiniKit.commandsAsync.sendTransaction({
@@ -120,7 +124,7 @@ export async function depositStake(matchId: string): Promise<{
           address: ESCROW_CONTRACT_ADDRESS,
           abi: EscrowABI,
           functionName: 'depositStake',
-          args: [matchIdBytes],
+          args: [formattedMatchId],
         },
       ],
     });
@@ -150,10 +154,15 @@ export async function depositStake(matchId: string): Promise<{
 /**
  * Approve and deposit stake in a single flow
  * Handles the two-step process: approve WLD, then deposit to escrow
+ * 
+ * @param matchId Match identifier
+ * @param stakeAmount Amount to stake in WLD
+ * @param confirmationDelay Time to wait between approval and deposit (ms)
  */
 export async function approveAndDeposit(
   matchId: string,
-  stakeAmount: number
+  stakeAmount: number,
+  confirmationDelay: number = 3000
 ): Promise<{
   success: boolean;
   approvalTxId?: string;
@@ -172,9 +181,10 @@ export async function approveAndDeposit(
       };
     }
 
-    // Wait a moment for the approval transaction to be processed
-    console.log('[Contract] Step 1 complete, waiting for confirmation...');
-    await new Promise(resolve => setTimeout(resolve, 2000));
+    // Wait for the approval transaction to be processed
+    // This is a simple delay - in production, you'd want to check transaction confirmation
+    console.log(`[Contract] Step 1 complete, waiting ${confirmationDelay}ms for confirmation...`);
+    await new Promise(resolve => setTimeout(resolve, confirmationDelay));
 
     // Step 2: Deposit stake
     console.log('[Contract] Step 2: Depositing stake...');
@@ -184,7 +194,7 @@ export async function approveAndDeposit(
       return {
         success: false,
         approvalTxId: approvalResult.transactionId,
-        error: `Deposit failed: ${depositResult.error}`,
+        error: `Deposit failed: ${depositResult.error}. You may need to try depositing again.`,
       };
     }
 

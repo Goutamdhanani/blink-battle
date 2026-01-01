@@ -70,10 +70,16 @@ export const useWebSocket = () => {
       // If user was in a match, attempt to rejoin
       if (state.matchId && state.user) {
         console.log('[WebSocket] Reconnected with active match, attempting to rejoin:', state.matchId);
-        newSocket.emit('rejoin_match', { 
-          userId: state.user.userId, 
-          matchId: state.matchId 
-        });
+        try {
+          newSocket.emit('rejoin_match', { 
+            userId: state.user.userId, 
+            matchId: state.matchId 
+          });
+        } catch (error) {
+          console.error('[WebSocket] Error emitting rejoin_match:', error);
+          // If rejoin fails, user will see disconnected state
+          // They can try to rejoin manually or return to dashboard
+        }
       }
     });
 
