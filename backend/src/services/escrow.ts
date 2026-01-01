@@ -133,7 +133,9 @@ export class EscrowService {
       console.log(`[EscrowService] Checking on-chain escrow for match: ${matchId}`);
       const matchData = await contractService.getMatch(matchId);
       
-      if (!matchData || matchData.stakeAmount === '0' || matchData.stakeAmount === '0.0') {
+      // Check for zero or missing stake amount using numeric comparison
+      const stakeAmountNum = matchData ? parseFloat(matchData.stakeAmount) : 0;
+      if (!matchData || stakeAmountNum === 0) {
         console.warn(`[EscrowService] Match ${matchId} has no on-chain escrow - funds may be in platform wallet`);
         // Record this for manual review/refund
         await this.recordFailedRefund(matchId, player1Wallet, player2Wallet, stakeAmount, 'no_escrow');
@@ -225,6 +227,8 @@ export class EscrowService {
 
   /**
    * Record failed refunds for manual review
+   * TODO: Implement database table for failed_refunds to track these for admin review
+   * For now, this logs critical refund failures to console for monitoring
    */
   private static async recordFailedRefund(
     matchId: string,
@@ -234,10 +238,10 @@ export class EscrowService {
     reason: string
   ): Promise<void> {
     try {
-      // Log to database for admin review
+      // Log to console for monitoring and alerting
       console.error(`[REFUND_FAILED] Match: ${matchId}, Players: ${player1Wallet}, ${player2Wallet}, Amount: ${stakeAmount}, Reason: ${reason}`);
-      // TODO: Add to a failed_refunds table for manual processing
-      // For now, just logging. In production, you would insert into a dedicated table
+      // TODO: In production, insert into a dedicated failed_refunds table:
+      // await FailedRefundModel.create({ matchId, player1Wallet, player2Wallet, stakeAmount, reason, timestamp: new Date() });
     } catch (error) {
       console.error('[EscrowService] Error recording failed refund:', error);
     }

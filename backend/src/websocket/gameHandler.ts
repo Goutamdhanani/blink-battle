@@ -47,6 +47,7 @@ export class GameSocketHandler {
 
   private readonly RECONNECT_GRACE_PERIOD_MS = 30000; // 30 seconds
   private readonly RECONNECT_DEBOUNCE_MS = 1000; // Minimum time between reconnects
+  private readonly MATCH_START_TIMEOUT_MS = parseInt(process.env.MATCH_START_TIMEOUT_MS || '60000', 10);
 
   constructor(io: Server) {
     this.io = io;
@@ -299,12 +300,10 @@ export class GameSocketHandler {
       });
       
       // Set timeout to cancel match if it never starts (Bug 4 fix)
-      const MATCH_START_TIMEOUT = parseInt(process.env.MATCH_START_TIMEOUT_MS || '60000', 10);
-      
       setTimeout(async () => {
         const matchCheck = this.activeMatches.get(activeMatch.matchId);
         if (matchCheck && !matchCheck.hasStarted) {
-          console.error(`[Match Timeout] Match ${activeMatch.matchId} never started after ${MATCH_START_TIMEOUT}ms`);
+          console.error(`[Match Timeout] Match ${activeMatch.matchId} never started after ${this.MATCH_START_TIMEOUT_MS}ms`);
           
           // Attempt refund
           const refundResult = await EscrowService.refundBothPlayers(
@@ -329,7 +328,7 @@ export class GameSocketHandler {
           await MatchModel.updateStatus(matchCheck.matchId, MatchStatus.CANCELLED);
           this.cleanupMatch(matchCheck.matchId);
         }
-      }, MATCH_START_TIMEOUT);
+      }, this.MATCH_START_TIMEOUT_MS);
     } catch (error) {
       console.error('Error creating match:', error);
       socket.emit('error', { message: 'Failed to create match' });
