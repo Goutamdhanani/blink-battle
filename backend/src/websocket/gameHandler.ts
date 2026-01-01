@@ -664,6 +664,13 @@ export class GameSocketHandler {
       gracePeriodMs: this.RECONNECT_GRACE_PERIOD_MS,
     });
 
+    // Clear any existing timeout before setting a new one to prevent conflicts
+    if (activeMatch.cancelTimeout) {
+      console.log(`[Disconnect] Clearing existing timeout for match ${matchId}`);
+      clearTimeout(activeMatch.cancelTimeout);
+      activeMatch.cancelTimeout = undefined;
+    }
+
     // Set timeout to cancel match if player doesn't reconnect
     activeMatch.cancelTimeout = setTimeout(async () => {
       const match = this.activeMatches.get(matchId);

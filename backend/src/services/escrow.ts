@@ -127,11 +127,44 @@ export class EscrowService {
   ): Promise<{ success: boolean; error?: string }> {
     try {
       const contractService = getContractService();
+      
+      // Verify on-chain stake status before attempting refund
+      console.log(`[EscrowService] Verifying on-chain stake status for match: ${matchId}`);
+      const stakeStatus = await contractService.verifyOnChainStakeStatus(matchId);
+      
+      if (stakeStatus.error) {
+        console.error('[EscrowService] Error checking stake status:', stakeStatus.error);
+        return { success: false, error: stakeStatus.error };
+      }
+
+      // If no stakes exist on-chain, log warning and don't mark as refunded
+      if (!stakeStatus.hasStakes) {
+        console.warn(`[EscrowService] No on-chain stakes found for match ${matchId}. Cannot refund.`);
+        console.warn('[EscrowService] This likely means the match was created in DB but stakes were never deposited on-chain.');
+        return { 
+          success: false, 
+          error: 'No on-chain stakes found. Match was never funded or already refunded.' 
+        };
+      }
+
+      // Check if both players staked (cancelMatch requires both stakes)
+      if (!stakeStatus.player1Staked || !stakeStatus.player2Staked) {
+        console.warn(`[EscrowService] Partial stakes for match ${matchId}. Player1: ${stakeStatus.player1Staked}, Player2: ${stakeStatus.player2Staked}`);
+        console.warn('[EscrowService] cancelMatch only works if both players staked. This may fail.');
+      }
+
+      // Attempt to cancel match and refund
       const result = await contractService.cancelMatch(matchId);
 
       if (!result.success) {
         console.error('[EscrowService] Failed to cancel match on-chain:', result.error);
         return { success: false, error: result.error };
+      }
+
+      // Verify the transaction hash exists before creating records
+      if (!result.txHash) {
+        console.error('[EscrowService] No transaction hash returned from cancelMatch');
+        return { success: false, error: 'Failed to get transaction confirmation' };
       }
 
       // Record refund transactions in database
@@ -159,9 +192,11 @@ export class EscrowService {
 
       console.log(`[EscrowService] Players refunded on-chain: ${matchId}, tx: ${result.txHash}`);
       return { success: true };
-    } catch (error) {
+    } catch (error: any) {
       console.error('[EscrowService] Error refunding players:', error);
-      return { success: false, error: 'Failed to refund players' };
+      // Return more detailed error information
+      const errorMsg = error.message || 'Failed to refund players';
+      return { success: false, error: errorMsg };
     }
   }
 
