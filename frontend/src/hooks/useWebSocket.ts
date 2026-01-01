@@ -9,10 +9,9 @@ const MAX_RECONNECT_ATTEMPTS = 10;
 const CONNECTION_WAIT_TIMEOUT_MS = 10000; // Wait up to 10 seconds for connection
 
 // Socket.IO configuration for Heroku stability
+// USE WEBSOCKET ONLY to prevent polling->websocket upgrade disconnect loops
 const SOCKET_CONFIG = {
-  transports: ['polling', 'websocket'], // START WITH POLLING, upgrade later
-  upgrade: true,
-  rememberUpgrade: false, // Don't cache failed upgrades
+  transports: ['websocket'], // WebSocket only - no polling/upgrade
   reconnection: true,
   reconnectionAttempts: MAX_RECONNECT_ATTEMPTS,
   reconnectionDelay: RECONNECT_DELAY_MS,

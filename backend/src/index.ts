@@ -111,14 +111,16 @@ const io = new Server(httpServer, {
     methods: ['GET', 'POST'],
     allowedHeaders: ['Content-Type', 'Authorization', 'X-Request-Id'],
   },
-  // Transport configuration - START WITH POLLING for stability
-  transports: ['polling', 'websocket'],
-  allowUpgrades: true,
-  upgradeTimeout: 30000, // 30 seconds for upgrade
+  // Transport configuration - USE WEBSOCKET ONLY to prevent disconnect loops
+  // This avoids polling->websocket upgrade issues on Heroku/World App MiniKit
+  transports: ['websocket'],
+  allowUpgrades: false,
   // Heartbeat/ping configuration to keep connections alive
   pingInterval: 25000, // Send ping every 25 seconds
   pingTimeout: 60000, // Wait 60 seconds for pong before considering connection dead
   maxHttpBufferSize: 1e6,
+  // Disable per-message deflate for better Heroku compatibility
+  perMessageDeflate: false,
 });
 
 // WebSocket authentication middleware
