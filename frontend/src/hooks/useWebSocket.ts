@@ -259,6 +259,15 @@ export const useWebSocket = () => {
       setGamePhase('matched'); // Use matched phase to show "Get Ready" screen
     });
 
+    newSocket.on('player_ready_restored', (data) => {
+      console.log('[WebSocket] Player ready state restored after reconnect:', data);
+      // Client should automatically resend player_ready
+      if (data.matchId && state.user) {
+        console.log('[WebSocket] Auto-resending player_ready after reconnect');
+        newSocket.emit('player_ready', { matchId: data.matchId });
+      }
+    });
+
     newSocket.on('game_start', (data) => {
       console.log('[WebSocket] Game starting', data.reconnected ? '(reconnected)' : '');
       setGamePhase('countdown');

@@ -207,7 +207,7 @@ export class GameSocketHandler {
       return;
     }
 
-    // Send current match state
+    // Send current match state including ready states
     socket.emit('match_found', {
       matchId: activeMatch.matchId,
       opponent: { 
@@ -218,12 +218,36 @@ export class GameSocketHandler {
       reconnected: true,
       hasStarted: activeMatch.hasStarted,
       signalSent: !!activeMatch.signalTimestamp,
+      // Include payment/ready states for Option B
+      player1Staked: activeMatch.player1Staked,
+      player2Staked: activeMatch.player2Staked,
+      bothPlayersStaked: activeMatch.player1Staked && activeMatch.player2Staked,
+      player1Ready: activeMatch.player1Ready,
+      player2Ready: activeMatch.player2Ready,
     });
 
     // If game has started, resync state
     if (activeMatch.hasStarted && !activeMatch.signalTimestamp) {
       socket.emit('game_start', { countdown: true, reconnected: true });
     } else if (activeMatch.signalTimestamp) {
+      socket.emit('signal', { 
+        timestamp: activeMatch.signalTimestamp,
+        reconnected: true 
+      });
+    }
+
+    // If this player was ready before disconnect, auto-send player_ready again
+    const wasReady = isPlayer1 ? activeMatch.player1Ready : activeMatch.player2Ready;
+    if (wasReady && !activeMatch.hasStarted) {
+      console.log(`[Reconnect] Player ${userId} was ready before disconnect, re-sending player_ready`);
+      // Give client time to process match_found before sending player_ready
+      setTimeout(() => {
+        socket.emit('player_ready_restored', { matchId: activeMatch.matchId });
+      }, 1000);
+    }
+
+    console.log(`Successfully reconnected player ${userId} to match ${activeMatch.matchId}`);
+  }
       socket.emit('signal', { 
         timestamp: activeMatch.signalTimestamp,
         reconnected: true 
