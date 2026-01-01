@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useGameContext } from '../context/GameContext';
 import { useWebSocket } from '../hooks/useWebSocket';
@@ -12,6 +12,7 @@ const GameArena: React.FC = () => {
   const { playerReady, playerTap, connected } = useWebSocket();
   const [tapped, setTapped] = useState(false);
   const [tapTime, setTapTime] = useState<number | null>(null);
+  const readySent = useRef(false);
 
   useEffect(() => {
     if (!state.user || !state.matchId) {
@@ -19,16 +20,29 @@ const GameArena: React.FC = () => {
       return;
     }
 
-    // Auto-send player ready when entering game
-    if (state.gamePhase === 'countdown' && state.matchId) {
-      playerReady(state.matchId);
-    }
-
     // Navigate to result screen when match completes
     if (state.gamePhase === 'result') {
       navigate('/result');
     }
   }, [state.user, state.matchId, state.gamePhase, navigate]);
+
+  // Send player ready when entering game and connected
+  useEffect(() => {
+    if (state.gamePhase === 'countdown' && state.matchId && connected && !readySent.current) {
+      console.log('[GameArena] Sending player_ready (connected)');
+      playerReady(state.matchId);
+      readySent.current = true;
+    }
+  }, [state.gamePhase, state.matchId, connected, playerReady]);
+
+  // Retry sending player ready if we reconnect
+  useEffect(() => {
+    if (connected && state.matchId && state.gamePhase === 'countdown' && !readySent.current) {
+      console.log('[GameArena] Reconnected, sending player_ready');
+      playerReady(state.matchId);
+      readySent.current = true;
+    }
+  }, [connected, state.matchId, state.gamePhase, playerReady]);
 
   // Send haptic feedback for countdown
   useEffect(() => {

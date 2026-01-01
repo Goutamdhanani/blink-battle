@@ -152,10 +152,12 @@ app.use(cors({
 app.use(express.json());
 app.use(requestIdMiddleware);
 
-// 🔥 NORMALIZE DOUBLE SLASHES HERE
+// 🔥 NORMALIZE DOUBLE SLASHES - MUST BE BEFORE ROUTES
 app.use((req, _res, next) => {
+  const originalUrl = req.url;
   if (req.url.includes('//')) {
     req.url = req.url.replace(/\/{2,}/g, '/');
+    console.log(`[URL Normalization] Fixed: ${originalUrl} -> ${req.url}`);
   }
   next();
 });

@@ -26,18 +26,21 @@ const logAuthError = (message: string, ...args: unknown[]) => {
 
 // Determine API URL with production-safe defaults
 const getApiUrl = (): string => {
+  let url = '';
+  
   // If explicitly set via environment variable, use it
   if (import.meta.env.VITE_API_URL) {
-    return import.meta.env.VITE_API_URL;
+    url = import.meta.env.VITE_API_URL;
+  } else if (import.meta.env.PROD) {
+    // Production fallback - use the known backend URL
+    url = 'https://blink-battle-7dcdf0aa361a.herokuapp.com';
+  } else {
+    // Development default
+    url = 'http://localhost:3001';
   }
   
-  // Production fallback - use the known backend URL
-  if (import.meta.env.PROD) {
-    return 'https://blink-battle-7dcdf0aa361a.herokuapp.com';
-  }
-  
-  // Development default
-  return 'http://localhost:3001';
+  // Remove trailing slash to prevent double-slash issues
+  return url.replace(/\/$/, '');
 };
 
 const API_URL = getApiUrl();

@@ -2,10 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useGameContext } from '../context/GameContext';
 import { GlassCard, BottomTabBar } from './ui';
-import axios from 'axios';
+import { apiClient } from '../lib/api';
 import './Leaderboard.css';
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 
 interface LeaderboardEntry {
   rank: number;
@@ -35,7 +33,7 @@ const Leaderboard: React.FC = () => {
 
   const fetchLeaderboard = async () => {
     try {
-      const response = await axios.get(`${API_URL}/api/leaderboard`, {
+      const response = await apiClient.get('/api/leaderboard', {
         params: { limit: 50 },
       });
 
@@ -51,9 +49,7 @@ const Leaderboard: React.FC = () => {
 
   const fetchUserRank = async () => {
     try {
-      const response = await axios.get(`${API_URL}/api/leaderboard/me`, {
-        headers: { Authorization: `Bearer ${state.token}` },
-      });
+      const response = await apiClient.get('/api/leaderboard/me');
 
       if (response.data.success) {
         setUserRank(response.data.rank);

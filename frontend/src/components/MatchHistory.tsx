@@ -2,10 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useGameContext } from '../context/GameContext';
 import { GlassCard, BottomTabBar } from './ui';
-import axios from 'axios';
+import { apiClient } from '../lib/api';
 import './MatchHistory.css';
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 
 interface Match {
   matchId: string;
@@ -37,8 +35,7 @@ const MatchHistory: React.FC = () => {
 
   const fetchMatchHistory = async () => {
     try {
-      const response = await axios.get(`${API_URL}/api/matches/history`, {
-        headers: { Authorization: `Bearer ${state.token}` },
+      const response = await apiClient.get('/api/matches/history', {
         params: { limit: 20 },
       });
 
