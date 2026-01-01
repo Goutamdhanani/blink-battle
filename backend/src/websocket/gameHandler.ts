@@ -50,7 +50,7 @@ interface ActiveMatch {
   disconnectedUsers?: Set<string>;
   disconnectTimestamps?: Map<string, number>;
   reconnectAttempts?: Map<string, number>; // Soft reconnects (includes all reconnects)
-  hardReconnectAttempts?: Map<string, number>; // Hard reconnects (only stable connections that disconnected)
+  hardReconnectAttempts?: Map<string, number>; // Hard disconnects: tracks disconnections from stable connections (≥5s duration) that may lead to reconnections
   cancelTimeout?: NodeJS.Timeout;
   matchStartTimeout?: NodeJS.Timeout;
   matchCreatedAt?: number; // Timestamp when match was created (for funding timeout guard)
@@ -256,7 +256,9 @@ export class GameSocketHandler {
     const attempts = (activeMatch.reconnectAttempts.get(userId) || 0) + 1;
     activeMatch.reconnectAttempts.set(userId, attempts);
 
-    // Get hard reconnect attempts (only from stable connections that disconnected)
+    // Get hard reconnect attempts (number of times this user had stable connections that disconnected)
+    // Note: This counter is incremented in handleDisconnect() when a stable connection (≥5s) disconnects
+    // We check this counter here during reconnection to determine if we should allow the reconnect
     if (!activeMatch.hardReconnectAttempts) {
       activeMatch.hardReconnectAttempts = new Map();
     }
@@ -1308,11 +1310,14 @@ export class GameSocketHandler {
       `  Match Created: ${activeMatch.matchCreatedAt ? new Date(activeMatch.matchCreatedAt).toISOString() : 'unknown'}`
     );
 
-    // If hard attempts haven't exceeded the limit, don't cancel
+    // Check if hard attempts have exceeded the limit
+    // Note: We allow up to and including MAX_HARD_RECONNECT_ATTEMPTS (5), so 6 is when we start cancelling
+    // Boundary: hardAttempts <= 5 is OK, hardAttempts > 5 triggers cancellation checks
     if (hardAttempts <= this.MAX_HARD_RECONNECT_ATTEMPTS) {
       console.log(
         `  Decision: ALLOW RECONNECT\n` +
         `  Reason: Hard attempts (${hardAttempts}) <= limit (${this.MAX_HARD_RECONNECT_ATTEMPTS})\n` +
+        `  Boundary: Attempts 1-${this.MAX_HARD_RECONNECT_ATTEMPTS} are allowed, ${this.MAX_HARD_RECONNECT_ATTEMPTS + 1}+ trigger cancellation\n` +
         `========================================================\n`
       );
       return false;
