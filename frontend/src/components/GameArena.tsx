@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useGameContext } from '../context/GameContext';
-import { useWebSocket } from '../hooks/useWebSocket';
+import { useSocket } from '../context/SocketContext';
 import { minikit } from '../lib/minikit';
 import ReactionTestUI, { ReactionPhase } from './ReactionTestUI';
 import './GameArena.css';
@@ -9,7 +9,7 @@ import './GameArena.css';
 const GameArena: React.FC = () => {
   const navigate = useNavigate();
   const { state } = useGameContext();
-  const { playerReady, playerTap, connected } = useWebSocket();
+  const { playerReady, playerTap, connected } = useSocket();
   const [tapped, setTapped] = useState(false);
   const [tapTime, setTapTime] = useState<number | null>(null);
   const readySent = useRef(false);
