@@ -30,6 +30,11 @@ export interface Match {
   player2_ready?: boolean;
   player1_ready_at?: Date;
   player2_ready_at?: Date;
+  // Staking fields
+  player1_staked?: boolean;
+  player2_staked?: boolean;
+  player1_stake_tx?: string;
+  player2_stake_tx?: string;
   // Extended fields for getMatchState (from JOIN with users table)
   player1_wallet?: string;
   player2_wallet?: string;

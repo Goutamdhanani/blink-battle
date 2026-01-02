@@ -143,6 +143,8 @@ export const usePollingGame = () => {
         setError(err.message || 'Failed to poll match state');
         // Don't crash on error, just log it and keep trying
         // If it's a critical auth error, the user will be redirected by the API layer
+        // Transient errors (network issues, server busy) will self-heal on next poll
+        // User will see stale state until next successful poll
       }
     };
 

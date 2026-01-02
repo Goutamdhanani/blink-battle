@@ -87,9 +87,11 @@ export class PollingMatchmakingController {
 
           if (!escrowResult.success) {
             console.error(`[HTTP Matchmaking] Failed to create escrow: ${escrowResult.error}`);
-            // Note: We continue even if escrow fails to avoid blocking gameplay
+            // TODO: Add ESCROW_REQUIRED environment variable to control this behavior
+            // For now, we continue even if escrow fails to avoid blocking gameplay during development
+            // In production, this should likely fail the match creation and return error to users
             // The match can still proceed, but payment will fail at the end
-            // This should be handled properly in production with retry logic
+            // Consider implementing retry logic with exponential backoff
           } else {
             console.log(`[HTTP Matchmaking] Escrow created successfully, tx: ${escrowResult.txHash}`);
           }

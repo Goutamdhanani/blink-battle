@@ -33,8 +33,10 @@ export class PollingMatchController {
         return;
       }
 
-      // TODO: Uncomment this when frontend implements MiniKit stake flow
+      // TODO: SECURITY - Uncomment this when frontend implements MiniKit stake flow
+      // Consider using an environment variable like ENFORCE_STAKES=true instead of commenting
       // For now, we allow ready without staking to avoid breaking existing functionality
+      // This creates a vulnerability where users can play staked games without depositing
       /*
       // Check if stakes are required and deposited
       if (match.stake > 0) {
@@ -349,8 +351,8 @@ export class PollingMatchController {
       }
 
       // Return stake status for both players
-      const player1Staked = (match as any).player1_staked || false;
-      const player2Staked = (match as any).player2_staked || false;
+      const player1Staked = match.player1_staked || false;
+      const player2Staked = match.player2_staked || false;
       const canStart = player1Staked && player2Staked;
 
       res.json({

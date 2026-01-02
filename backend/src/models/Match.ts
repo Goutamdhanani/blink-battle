@@ -204,15 +204,23 @@ export class MatchModel {
     if (!match) throw new Error('Match not found');
 
     const isPlayer1 = match.player1_id === playerId;
-    const stakedColumn = isPlayer1 ? 'player1_staked' : 'player2_staked';
-    const txColumn = isPlayer1 ? 'player1_stake_tx' : 'player2_stake_tx';
-
-    await pool.query(
-      `UPDATE matches 
-       SET ${stakedColumn} = true, ${txColumn} = $1, updated_at = NOW()
-       WHERE match_id = $2`,
-      [txHash || null, matchId]
-    );
+    
+    // Use safe column mapping to prevent SQL injection
+    if (isPlayer1) {
+      await pool.query(
+        `UPDATE matches 
+         SET player1_staked = true, player1_stake_tx = $1, updated_at = NOW()
+         WHERE match_id = $2`,
+        [txHash || null, matchId]
+      );
+    } else {
+      await pool.query(
+        `UPDATE matches 
+         SET player2_staked = true, player2_stake_tx = $1, updated_at = NOW()
+         WHERE match_id = $2`,
+        [txHash || null, matchId]
+      );
+    }
   }
 
   /**
