@@ -156,6 +156,80 @@ export const addMissingColumns = async () => {
     
     console.log('✅ Player ready columns have proper constraints');
     
+    // Check and add player1_staked column if missing
+    const player1StakedExists = await client.query(`
+      SELECT column_name 
+      FROM information_schema.columns 
+      WHERE table_name='matches' AND column_name='player1_staked'
+    `);
+    
+    if (player1StakedExists.rows.length === 0) {
+      console.log('Adding player1_staked column...');
+      await client.query(`
+        ALTER TABLE matches 
+        ADD COLUMN player1_staked BOOLEAN DEFAULT false
+      `);
+      console.log('✅ Added player1_staked column');
+    } else {
+      console.log('✅ player1_staked column already exists');
+    }
+    
+    // Check and add player2_staked column if missing
+    const player2StakedExists = await client.query(`
+      SELECT column_name 
+      FROM information_schema.columns 
+      WHERE table_name='matches' AND column_name='player2_staked'
+    `);
+    
+    if (player2StakedExists.rows.length === 0) {
+      console.log('Adding player2_staked column...');
+      await client.query(`
+        ALTER TABLE matches 
+        ADD COLUMN player2_staked BOOLEAN DEFAULT false
+      `);
+      console.log('✅ Added player2_staked column');
+    } else {
+      console.log('✅ player2_staked column already exists');
+    }
+    
+    // Check and add player1_stake_tx column if missing
+    const player1StakeTxExists = await client.query(`
+      SELECT column_name 
+      FROM information_schema.columns 
+      WHERE table_name='matches' AND column_name='player1_stake_tx'
+    `);
+    
+    if (player1StakeTxExists.rows.length === 0) {
+      console.log('Adding player1_stake_tx column...');
+      await client.query(`
+        ALTER TABLE matches 
+        ADD COLUMN player1_stake_tx TEXT
+      `);
+      console.log('✅ Added player1_stake_tx column');
+    } else {
+      console.log('✅ player1_stake_tx column already exists');
+    }
+    
+    // Check and add player2_stake_tx column if missing
+    const player2StakeTxExists = await client.query(`
+      SELECT column_name 
+      FROM information_schema.columns 
+      WHERE table_name='matches' AND column_name='player2_stake_tx'
+    `);
+    
+    if (player2StakeTxExists.rows.length === 0) {
+      console.log('Adding player2_stake_tx column...');
+      await client.query(`
+        ALTER TABLE matches 
+        ADD COLUMN player2_stake_tx TEXT
+      `);
+      console.log('✅ Added player2_stake_tx column');
+    } else {
+      console.log('✅ player2_stake_tx column already exists');
+    }
+    
+    console.log('✅ Staking columns verified/added');
+    
     await client.query('COMMIT');
     console.log('✅ Migration completed successfully');
   } catch (error) {

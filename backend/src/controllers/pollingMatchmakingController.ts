@@ -4,6 +4,7 @@ import { MatchModel } from '../models/Match';
 import { UserModel } from '../models/User';
 import { MatchStatus } from '../models/types';
 import { generateRandomDelay } from '../services/randomness';
+import { EscrowService } from '../services/escrow';
 
 /**
  * HTTP Polling Matchmaking Controller
@@ -73,6 +74,28 @@ export class PollingMatchmakingController {
         );
 
         console.log(`[HTTP Matchmaking] Instant match: ${player1.user_id} vs ${player2.user_id}, stake: ${stake}`);
+
+        // Create escrow on-chain if stake > 0
+        if (stake > 0 && player1.wallet_address && player2.wallet_address) {
+          console.log(`[HTTP Matchmaking] Creating escrow for match ${match.match_id}`);
+          const escrowResult = await EscrowService.lockFunds(
+            match.match_id,
+            player1.wallet_address,
+            player2.wallet_address,
+            stake
+          );
+
+          if (!escrowResult.success) {
+            console.error(`[HTTP Matchmaking] Failed to create escrow: ${escrowResult.error}`);
+            // Note: We continue even if escrow fails to avoid blocking gameplay
+            // The match can still proceed, but payment will fail at the end
+            // This should be handled properly in production with retry logic
+          } else {
+            console.log(`[HTTP Matchmaking] Escrow created successfully, tx: ${escrowResult.txHash}`);
+          }
+        } else if (stake > 0) {
+          console.warn(`[HTTP Matchmaking] Cannot create escrow - missing wallet addresses`);
+        }
 
         res.json({
           status: 'matched',

@@ -253,6 +253,7 @@ app.delete('/api/matchmaking/cancel/:userId', authenticate, matchmakingRateLimit
 // Rate limiting applied: matchRateLimiter (100 req/min per user)
 app.post('/api/match/ready', authenticate, matchRateLimiter, requestTrackingMiddleware, PollingMatchController.ready);
 app.get('/api/match/state/:matchId', authenticate, matchRateLimiter, requestTrackingMiddleware, PollingMatchController.getState);
+app.get('/api/match/stake-status/:matchId', authenticate, matchRateLimiter, requestTrackingMiddleware, PollingMatchController.getStakeStatus);
 app.post('/api/match/tap', authenticate, matchRateLimiter, requestTrackingMiddleware, PollingMatchController.tap);
 app.get('/api/match/result/:matchId', authenticate, matchRateLimiter, requestTrackingMiddleware, PollingMatchController.getResult);
 

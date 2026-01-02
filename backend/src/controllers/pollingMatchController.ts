@@ -33,6 +33,22 @@ export class PollingMatchController {
         return;
       }
 
+      // TODO: Uncomment this when frontend implements MiniKit stake flow
+      // For now, we allow ready without staking to avoid breaking existing functionality
+      /*
+      // Check if stakes are required and deposited
+      if (match.stake > 0) {
+        const bothStaked = await MatchModel.areBothPlayersStaked(matchId);
+        if (!bothStaked) {
+          res.status(400).json({ 
+            error: 'Both players must deposit stake before game can start',
+            requiresStake: true 
+          });
+          return;
+        }
+      }
+      */
+
       // Mark player as ready (sets ready flag and ready_at timestamp)
       await MatchModel.setPlayerReady(matchId, userId);
 
@@ -308,6 +324,44 @@ export class PollingMatchController {
     } catch (error) {
       console.error('[Polling Match] Error in getResult:', error);
       res.status(500).json({ error: 'Failed to get match result' });
+    }
+  }
+
+  /**
+   * GET /api/match/stake-status/:matchId
+   * Get stake status for both players in a match
+   */
+  static async getStakeStatus(req: Request, res: Response): Promise<void> {
+    try {
+      const { matchId } = req.params;
+      const userId = (req as any).userId;
+
+      const match = await MatchModel.findById(matchId);
+      if (!match) {
+        res.status(404).json({ error: 'Match not found' });
+        return;
+      }
+
+      // Verify user is in this match
+      if (match.player1_id !== userId && match.player2_id !== userId) {
+        res.status(403).json({ error: 'Not a participant in this match' });
+        return;
+      }
+
+      // Return stake status for both players
+      const player1Staked = (match as any).player1_staked || false;
+      const player2Staked = (match as any).player2_staked || false;
+      const canStart = player1Staked && player2Staked;
+
+      res.json({
+        player1Staked,
+        player2Staked,
+        canStart,
+        stake: match.stake
+      });
+    } catch (error) {
+      console.error('[Polling Match] Error in getStakeStatus:', error);
+      res.status(500).json({ error: 'Failed to get stake status' });
     }
   }
 

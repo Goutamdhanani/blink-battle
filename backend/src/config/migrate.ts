@@ -41,7 +41,11 @@ export const createTables = async () => {
         player1_ready BOOLEAN DEFAULT false NOT NULL,
         player2_ready BOOLEAN DEFAULT false NOT NULL,
         player1_ready_at TIMESTAMPTZ,
-        player2_ready_at TIMESTAMPTZ
+        player2_ready_at TIMESTAMPTZ,
+        player1_staked BOOLEAN DEFAULT false,
+        player2_staked BOOLEAN DEFAULT false,
+        player1_stake_tx TEXT,
+        player2_stake_tx TEXT
       );
     `);
 

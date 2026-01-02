@@ -110,7 +110,7 @@ export const usePollingGame = () => {
           setGamePhase('signal');
           setSignalTimestamp(matchState.greenLightTime || Date.now());
           setCountdown(null);
-        } else if (matchState.state === 'resolved') {
+        } else if (matchState.state === 'resolved' || matchState.status === 'completed') {
           // Match is complete - stop polling immediately
           if (pollIntervalRef.current) {
             clearInterval(pollIntervalRef.current);
@@ -141,6 +141,8 @@ export const usePollingGame = () => {
       } catch (err: any) {
         console.error('[Polling] Error polling match state:', err);
         setError(err.message || 'Failed to poll match state');
+        // Don't crash on error, just log it and keep trying
+        // If it's a critical auth error, the user will be redirected by the API layer
       }
     };
 
