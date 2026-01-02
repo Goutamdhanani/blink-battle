@@ -28,6 +28,8 @@ export interface Match {
   green_light_time?: number;
   player1_ready?: boolean;
   player2_ready?: boolean;
+  player1_ready_at?: Date;
+  player2_ready_at?: Date;
   // Extended fields for getMatchState (from JOIN with users table)
   player1_wallet?: string;
   player2_wallet?: string;
@@ -35,6 +37,8 @@ export interface Match {
 
 export enum MatchStatus {
   PENDING = 'pending',
+  MATCHED = 'matched',
+  COUNTDOWN = 'countdown',
   IN_PROGRESS = 'in_progress',
   COMPLETED = 'completed',
   CANCELLED = 'cancelled',

@@ -33,7 +33,7 @@ export class PollingMatchController {
         return;
       }
 
-      // Mark player as ready
+      // Mark player as ready (sets ready flag and ready_at timestamp)
       await MatchModel.setPlayerReady(matchId, userId);
 
       console.log(`[Polling Match] Player ${userId} marked ready in match ${matchId}`);
@@ -50,15 +50,16 @@ export class PollingMatchController {
         const greenLightTime = Date.now() + randomDelay + 3000; // 3s countdown + random delay
         
         await MatchModel.setGreenLightTime(matchId, greenLightTime);
-        await MatchModel.updateStatus(matchId, MatchStatus.IN_PROGRESS);
+        // Transition to COUNTDOWN status (not IN_PROGRESS)
+        await MatchModel.updateStatus(matchId, MatchStatus.COUNTDOWN);
 
-        console.log(`[Polling Match] Both players ready! Green light scheduled for ${new Date(greenLightTime).toISOString()} (${randomDelay}ms delay)`);
+        console.log(`[Polling Match] 🚦 Both players ready! Match ${matchId} transitioning to COUNTDOWN. Green light scheduled for ${new Date(greenLightTime).toISOString()} (${randomDelay}ms delay after countdown)`);
 
         res.json({
           success: true,
           bothReady: true,
           greenLightTime,
-          status: MatchStatus.IN_PROGRESS
+          status: MatchStatus.COUNTDOWN
         });
         return;
       }
@@ -119,6 +120,12 @@ export class PollingMatchController {
           // Green light is active!
           state = 'go';
           greenLightActive = true;
+          
+          // Transition status to IN_PROGRESS when go signal is active (only once)
+          if (matchState.status === MatchStatus.COUNTDOWN) {
+            await MatchModel.updateStatus(matchId, MatchStatus.IN_PROGRESS);
+            console.log(`[Polling Match] 🟢 Green light active! Match ${matchId} transitioning to IN_PROGRESS (go signal). Green light time: ${new Date(matchState.green_light_time).toISOString()}`);
+          }
         }
       } else if (matchState.player1_ready && matchState.player2_ready) {
         // Both ready but green light not set yet (edge case)

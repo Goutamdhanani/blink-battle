@@ -66,6 +66,82 @@ export const addMissingColumns = async () => {
       console.log('✅ green_light_time column already exists');
     }
     
+    // Check and add player1_ready_at column if missing
+    const player1ReadyAtExists = await client.query(`
+      SELECT column_name 
+      FROM information_schema.columns 
+      WHERE table_name='matches' AND column_name='player1_ready_at'
+    `);
+    
+    if (player1ReadyAtExists.rows.length === 0) {
+      console.log('Adding player1_ready_at column...');
+      await client.query(`
+        ALTER TABLE matches 
+        ADD COLUMN player1_ready_at TIMESTAMPTZ
+      `);
+      console.log('✅ Added player1_ready_at column');
+    } else {
+      console.log('✅ player1_ready_at column already exists');
+    }
+    
+    // Check and add player2_ready_at column if missing
+    const player2ReadyAtExists = await client.query(`
+      SELECT column_name 
+      FROM information_schema.columns 
+      WHERE table_name='matches' AND column_name='player2_ready_at'
+    `);
+    
+    if (player2ReadyAtExists.rows.length === 0) {
+      console.log('Adding player2_ready_at column...');
+      await client.query(`
+        ALTER TABLE matches 
+        ADD COLUMN player2_ready_at TIMESTAMPTZ
+      `);
+      console.log('✅ Added player2_ready_at column');
+    } else {
+      console.log('✅ player2_ready_at column already exists');
+    }
+    
+    // Ensure player1_ready and player2_ready are NOT NULL with default false
+    console.log('Ensuring player ready columns have proper constraints...');
+    
+    // First backfill any NULL values to false
+    await client.query(`
+      UPDATE matches 
+      SET player1_ready = false 
+      WHERE player1_ready IS NULL
+    `);
+    
+    await client.query(`
+      UPDATE matches 
+      SET player2_ready = false 
+      WHERE player2_ready IS NULL
+    `);
+    
+    // Then add NOT NULL constraint if it doesn't exist
+    await client.query(`
+      DO $$ 
+      BEGIN
+        BEGIN
+          ALTER TABLE matches 
+          ALTER COLUMN player1_ready SET DEFAULT false,
+          ALTER COLUMN player1_ready SET NOT NULL;
+        EXCEPTION
+          WHEN others THEN NULL;
+        END;
+        
+        BEGIN
+          ALTER TABLE matches 
+          ALTER COLUMN player2_ready SET DEFAULT false,
+          ALTER COLUMN player2_ready SET NOT NULL;
+        EXCEPTION
+          WHEN others THEN NULL;
+        END;
+      END $$;
+    `);
+    
+    console.log('✅ Player ready columns have proper constraints');
+    
     await client.query('COMMIT');
     console.log('✅ Migration completed successfully');
   } catch (error) {

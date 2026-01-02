@@ -38,8 +38,10 @@ export const createTables = async () => {
         completed_at TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         green_light_time BIGINT,
-        player1_ready BOOLEAN DEFAULT false,
-        player2_ready BOOLEAN DEFAULT false
+        player1_ready BOOLEAN DEFAULT false NOT NULL,
+        player2_ready BOOLEAN DEFAULT false NOT NULL,
+        player1_ready_at TIMESTAMPTZ,
+        player2_ready_at TIMESTAMPTZ
       );
     `);
 
