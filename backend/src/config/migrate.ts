@@ -20,7 +20,7 @@ export const createTables = async () => {
       );
     `);
 
-    // Matches table
+    // Matches table (with HTTP polling fields)
     await client.query(`
       CREATE TABLE IF NOT EXISTS matches (
         match_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -35,7 +35,11 @@ export const createTables = async () => {
         signal_timestamp BIGINT,
         false_start_count INTEGER DEFAULT 0,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        completed_at TIMESTAMP
+        completed_at TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        green_light_time BIGINT,
+        player1_ready BOOLEAN DEFAULT false,
+        player2_ready BOOLEAN DEFAULT false
       );
     `);
 
@@ -69,6 +73,35 @@ export const createTables = async () => {
       );
     `);
 
+    // Match Queue table (for HTTP polling matchmaking)
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS match_queue (
+        queue_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id UUID REFERENCES users(user_id) NOT NULL,
+        stake DECIMAL(10, 4) NOT NULL,
+        status VARCHAR(50) NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        expires_at TIMESTAMP NOT NULL
+      );
+    `);
+
+    // Tap Events table (server-authoritative tap recording)
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS tap_events (
+        tap_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        match_id UUID REFERENCES matches(match_id) NOT NULL,
+        user_id UUID REFERENCES users(user_id) NOT NULL,
+        client_timestamp BIGINT NOT NULL,
+        server_timestamp BIGINT NOT NULL,
+        reaction_ms INTEGER NOT NULL,
+        is_valid BOOLEAN NOT NULL,
+        disqualified BOOLEAN NOT NULL DEFAULT false,
+        disqualification_reason VARCHAR(100),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
     // Create indexes
     await client.query(`
       CREATE INDEX IF NOT EXISTS idx_users_wallet ON users(wallet_address);
@@ -78,6 +111,11 @@ export const createTables = async () => {
       CREATE INDEX IF NOT EXISTS idx_payments_reference ON payments(reference);
       CREATE INDEX IF NOT EXISTS idx_payments_user ON payments(user_id);
       CREATE INDEX IF NOT EXISTS idx_payments_status ON payments(status);
+      CREATE INDEX IF NOT EXISTS idx_queue_user ON match_queue(user_id);
+      CREATE INDEX IF NOT EXISTS idx_queue_status ON match_queue(status, stake);
+      CREATE INDEX IF NOT EXISTS idx_queue_expires ON match_queue(expires_at);
+      CREATE INDEX IF NOT EXISTS idx_tap_events_match ON tap_events(match_id);
+      CREATE INDEX IF NOT EXISTS idx_tap_events_user ON tap_events(user_id);
     `);
 
     await client.query('COMMIT');
