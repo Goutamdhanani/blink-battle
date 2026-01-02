@@ -11,6 +11,7 @@ import { PaymentController } from './controllers/paymentController';
 import { VerificationController } from './controllers/verificationController';
 import { PollingMatchmakingController } from './controllers/pollingMatchmakingController';
 import { PollingMatchController } from './controllers/pollingMatchController';
+import { PingController } from './controllers/pingController';
 import { authenticate } from './middleware/auth';
 import { requestIdMiddleware } from './middleware/requestId';
 import { GameSocketHandler } from './websocket/gameHandler';
@@ -237,6 +238,10 @@ app.get('/api/match/state/:matchId', authenticate, PollingMatchController.getSta
 app.post('/api/match/tap', authenticate, PollingMatchController.tap);
 app.get('/api/match/result/:matchId', authenticate, PollingMatchController.getResult);
 
+// Ping/Latency endpoints
+app.post('/api/ping', authenticate, PingController.recordLatency);
+app.get('/api/ping/stats', authenticate, PingController.getStats);
+
 // WebSockets - DEPRECATED for gameplay, kept for other features if needed
 // TODO: Remove entirely if not used for other features
 // new GameSocketHandler(io);
@@ -283,6 +288,8 @@ const startServer = async () => {
       console.log(`  GET  /api/match/state/:matchId`);
       console.log(`  POST /api/match/tap`);
       console.log(`  GET  /api/match/result/:matchId`);
+      console.log(`  POST /api/ping`);
+      console.log(`  GET  /api/ping/stats`);
     });
   } catch (error) {
     console.error('Failed to start server:', error);

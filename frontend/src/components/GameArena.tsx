@@ -1,7 +1,7 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useGameContext } from '../context/GameContext';
-import { useSocket } from '../context/SocketContext';
+import { usePollingGame } from '../hooks/usePollingGame';
 import { minikit } from '../lib/minikit';
 import ReactionTestUI, { ReactionPhase } from './ReactionTestUI';
 import './GameArena.css';
@@ -9,10 +9,9 @@ import './GameArena.css';
 const GameArena: React.FC = () => {
   const navigate = useNavigate();
   const { state } = useGameContext();
-  const { playerReady, playerTap, connected } = useSocket();
+  const { recordTap } = usePollingGame();
   const [tapped, setTapped] = useState(false);
   const [tapTime, setTapTime] = useState<number | null>(null);
-  const readySent = useRef(false);
 
   useEffect(() => {
     if (!state.user || !state.matchId) {
@@ -25,24 +24,6 @@ const GameArena: React.FC = () => {
       navigate('/result');
     }
   }, [state.user, state.matchId, state.gamePhase, navigate]);
-
-  // Send player ready when entering game and connected
-  useEffect(() => {
-    if (state.gamePhase === 'countdown' && state.matchId && connected && !readySent.current) {
-      console.log('[GameArena] Sending player_ready (connected)');
-      playerReady(state.matchId);
-      readySent.current = true;
-    }
-  }, [state.gamePhase, state.matchId, connected, playerReady]);
-
-  // Retry sending player ready if we reconnect
-  useEffect(() => {
-    if (connected && state.matchId && state.gamePhase === 'countdown' && !readySent.current) {
-      console.log('[GameArena] Reconnected, sending player_ready');
-      playerReady(state.matchId);
-      readySent.current = true;
-    }
-  }, [connected, state.matchId, state.gamePhase, playerReady]);
 
   // Send haptic feedback for countdown
   useEffect(() => {
@@ -58,20 +39,27 @@ const GameArena: React.FC = () => {
     }
   }, [state.gamePhase]);
 
-  const handleTap = () => {
+  const handleTap = async () => {
     if (tapped || !state.matchId || state.gamePhase !== 'signal') return;
 
     const clientTimestamp = Date.now();
     setTapped(true);
     setTapTime(clientTimestamp);
-    playerTap(state.matchId, clientTimestamp);
-
-    // Send haptic feedback
-    minikit.sendHaptic('success');
     
-    // Fallback vibration for browsers
-    if (navigator.vibrate) {
-      navigator.vibrate(50);
+    try {
+      await recordTap(state.matchId);
+      
+      // Send haptic feedback
+      minikit.sendHaptic('success');
+      
+      // Fallback vibration for browsers
+      if (navigator.vibrate) {
+        navigator.vibrate(50);
+      }
+    } catch (error) {
+      console.error('[GameArena] Error recording tap:', error);
+      // Still provide feedback even if recording failed
+      minikit.sendHaptic('error');
     }
   };
 
@@ -107,7 +95,7 @@ const GameArena: React.FC = () => {
               Stake: {state.stake || 0} WLD
             </span>
             <span className="connection-status">
-              {connected ? '🟢 Connected' : '🔴 Disconnected'}
+              🟢 Connected
             </span>
           </div>
         </div>

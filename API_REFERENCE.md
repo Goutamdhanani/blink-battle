@@ -294,7 +294,263 @@ Authorization: Bearer <token>
 
 ---
 
-## WebSocket API
+### HTTP Polling (Matchmaking & Gameplay)
+
+The game uses HTTP polling for matchmaking and gameplay instead of WebSockets. This provides better stability on mobile networks and prevents reconnection storms.
+
+#### POST /api/matchmaking/join
+Join matchmaking queue by stake amount.
+
+**Headers:**
+```
+Authorization: Bearer <token>
+```
+
+**Request Body:**
+```json
+{
+  "stake": 0.5
+}
+```
+
+**Response (Instant Match):**
+```json
+{
+  "status": "matched",
+  "matchId": "uuid-here",
+  "opponent": {
+    "userId": "uuid-here",
+    "wallet": "0xabc..."
+  },
+  "stake": 0.5
+}
+```
+
+**Response (Searching):**
+```json
+{
+  "status": "searching",
+  "queueId": "uuid-here",
+  "stake": 0.5,
+  "expiresAt": "2024-01-01T12:00:00Z"
+}
+```
+
+#### GET /api/matchmaking/status/:userId
+Poll matchmaking status (client should poll every 1 second while searching).
+
+**Headers:**
+```
+Authorization: Bearer <token>
+```
+
+**Response:**
+```json
+{
+  "status": "matched",
+  "matchId": "uuid-here",
+  "opponent": {
+    "userId": "uuid-here",
+    "wallet": "0xabc..."
+  },
+  "stake": 0.5
+}
+```
+
+#### DELETE /api/matchmaking/cancel/:userId
+Cancel matchmaking.
+
+**Headers:**
+```
+Authorization: Bearer <token>
+```
+
+**Response:**
+```json
+{
+  "success": true
+}
+```
+
+#### POST /api/match/ready
+Mark player as ready. When both players are ready, the countdown starts.
+
+**Headers:**
+```
+Authorization: Bearer <token>
+```
+
+**Request Body:**
+```json
+{
+  "matchId": "uuid-here"
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "bothReady": true,
+  "greenLightTime": 1704099600000,
+  "status": "in_progress"
+}
+```
+
+#### GET /api/match/state/:matchId
+Poll match state (client should poll every 100-500ms during gameplay).
+
+**Headers:**
+```
+Authorization: Bearer <token>
+```
+
+**Response:**
+```json
+{
+  "matchId": "uuid-here",
+  "state": "go",
+  "status": "in_progress",
+  "stake": 0.5,
+  "player1Ready": true,
+  "player2Ready": true,
+  "greenLightTime": 1704099600000,
+  "greenLightActive": true,
+  "countdown": null,
+  "playerTapped": false,
+  "opponentTapped": false,
+  "opponent": {
+    "userId": "uuid-here",
+    "wallet": "0xabc..."
+  }
+}
+```
+
+**States:**
+- `matched` - Match created, waiting for ready
+- `ready_wait` - Waiting for both players to ready up
+- `countdown` - Countdown active (3, 2, 1)
+- `waiting_for_go` - Random delay before green light
+- `go` - Green light active, players can tap
+- `resolved` - Match complete
+
+#### POST /api/match/tap
+Record tap (server timestamp is authoritative, client timestamp for audit only).
+
+**Headers:**
+```
+Authorization: Bearer <token>
+```
+
+**Request Body:**
+```json
+{
+  "matchId": "uuid-here",
+  "clientTimestamp": 1704099600000
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "tap": {
+    "reactionMs": 234,
+    "isValid": true,
+    "disqualified": false
+  },
+  "waitingForOpponent": true
+}
+```
+
+#### GET /api/match/result/:matchId
+Get final match result.
+
+**Headers:**
+```
+Authorization: Bearer <token>
+```
+
+**Response:**
+```json
+{
+  "matchId": "uuid-here",
+  "winnerId": "uuid-here",
+  "player1ReactionMs": 234,
+  "player2ReactionMs": 267,
+  "stake": 0.5,
+  "fee": 0.03,
+  "completedAt": "2024-01-01T12:05:00Z",
+  "taps": [
+    {
+      "userId": "uuid-here",
+      "reactionMs": 234,
+      "isValid": true,
+      "disqualified": false
+    }
+  ],
+  "isWinner": true
+}
+```
+
+---
+
+### Latency / Network
+
+#### POST /api/ping
+Record latency sample for network compensation and anti-cheat analysis.
+
+**Headers:**
+```
+Authorization: Bearer <token>
+```
+
+**Request Body:**
+```json
+{
+  "clientTimestamp": 1704099600000
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "serverTimestamp": 1704099600050,
+  "roundTripMs": 50,
+  "avgLatency": 45.5
+}
+```
+
+#### GET /api/ping/stats
+Get latency statistics for current user.
+
+**Headers:**
+```
+Authorization: Bearer <token>
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "avgLatency": 45.5,
+  "recentSamples": [
+    {
+      "latencyMs": 50,
+      "timestamp": "2024-01-01T12:00:00Z"
+    }
+  ]
+}
+```
+
+---
+
+## WebSocket API (DEPRECATED)
+
+**⚠️ WebSocket gameplay is deprecated. Use HTTP polling endpoints above instead.**
+
+The WebSocket API is maintained for backward compatibility but should not be used for new integrations.
 
 ### Connection
 Connect to WebSocket server:

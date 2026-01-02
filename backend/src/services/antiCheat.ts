@@ -11,6 +11,7 @@ export class AntiCheatService {
     10
   );
   private static readonly SUSPICIOUS_PATTERN_THRESHOLD = 3;
+  private static readonly BOT_REACTION_THRESHOLD_MS = 100; // Reactions under 100ms flagged as suspicious
 
   /**
    * Validate if reaction time is humanly possible
@@ -20,6 +21,13 @@ export class AntiCheatService {
       reactionMs >= this.MIN_HUMAN_REACTION_MS &&
       reactionMs <= this.MAX_REACTION_MS
     );
+  }
+
+  /**
+   * Check if reaction is suspiciously fast (possible bot)
+   */
+  static isSuspiciouslyFast(reactionMs: number): boolean {
+    return reactionMs < this.BOT_REACTION_THRESHOLD_MS;
   }
 
   /**
@@ -40,6 +48,7 @@ export class AntiCheatService {
     valid: boolean;
     reactionMs: number;
     reason?: string;
+    suspicious?: boolean;
   } {
     // Use server timestamp as the source of truth
     const reactionMs = serverTapTimestamp - signalTimestamp;
@@ -53,18 +62,23 @@ export class AntiCheatService {
       };
     }
 
+    // Check if suspiciously fast (possible bot)
+    const suspicious = this.isSuspiciouslyFast(reactionMs);
+
     // Check if reaction is humanly possible
     if (!this.isHumanReaction(reactionMs)) {
       return {
         valid: false,
         reactionMs,
         reason: reactionMs < this.MIN_HUMAN_REACTION_MS ? 'too_fast' : 'timeout',
+        suspicious,
       };
     }
 
     return {
       valid: true,
       reactionMs,
+      suspicious,
     };
   }
 
@@ -83,7 +97,7 @@ export class AntiCheatService {
     // Check for impossible consistency (all reactions within 5ms)
     const variance = this.calculateVariance(recentReactionTimes);
     if (variance < 5) {
-      console.warn(`Suspicious pattern detected for user ${userId}: too consistent`);
+      console.warn(`[AntiCheat] Suspicious pattern detected for user ${userId}: too consistent (variance: ${variance}ms)`);
       return true;
     }
 
@@ -92,10 +106,41 @@ export class AntiCheatService {
       (time) => time < 100
     ).length;
     if (fastReactions / recentReactionTimes.length > 0.5) {
-      console.warn(`Suspicious pattern detected for user ${userId}: too many fast reactions`);
+      console.warn(`[AntiCheat] Suspicious pattern detected for user ${userId}: too many fast reactions (${fastReactions}/${recentReactionTimes.length})`);
       return true;
     }
 
+    // Check for bot-like consistency (std dev < 10ms with avg < 150ms)
+    const mean = recentReactionTimes.reduce((sum, val) => sum + val, 0) / recentReactionTimes.length;
+    if (mean < 150 && variance < 10) {
+      console.warn(`[AntiCheat] Bot-like pattern detected for user ${userId}: mean ${mean}ms, variance ${variance}ms`);
+      return true;
+    }
+
+    return false;
+  }
+
+  /**
+   * Check for spam tapping pattern (multiple rapid taps)
+   * This is detected server-side by only accepting first tap
+   */
+  static detectSpamTapping(tapCount: number, timeWindowMs: number): boolean {
+    // If more than 3 taps in 500ms window, likely spam
+    if (tapCount > 3 && timeWindowMs < 500) {
+      console.warn(`[AntiCheat] Spam tapping detected: ${tapCount} taps in ${timeWindowMs}ms`);
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * Hook for VPN/Proxy detection
+   * Returns true if IP address is suspicious
+   */
+  static async checkVPN(ipAddress: string): Promise<boolean> {
+    // Placeholder for VPN/proxy detection
+    // In production, this would integrate with a VPN detection service
+    console.log(`[AntiCheat] VPN check for IP: ${ipAddress} (not implemented)`);
     return false;
   }
 
@@ -116,9 +161,11 @@ export class AntiCheatService {
     player2ReactionMs: number;
     signalTimestamp: number;
     winnerId?: string;
+    suspicious?: boolean;
   }): void {
     // In production, this would write to a secure audit log
-    console.log('[AUDIT]', {
+    const auditLevel = data.suspicious ? '[AUDIT-SUSPICIOUS]' : '[AUDIT]';
+    console.log(auditLevel, {
       matchId,
       timestamp: new Date().toISOString(),
       ...data,

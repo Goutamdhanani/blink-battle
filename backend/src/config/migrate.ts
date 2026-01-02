@@ -102,6 +102,16 @@ export const createTables = async () => {
       );
     `);
 
+    // Latency Samples table (for network compensation)
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS latency_samples (
+        sample_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id UUID REFERENCES users(user_id) NOT NULL,
+        latency_ms INTEGER NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
     // Create indexes
     await client.query(`
       CREATE INDEX IF NOT EXISTS idx_users_wallet ON users(wallet_address);
@@ -116,6 +126,8 @@ export const createTables = async () => {
       CREATE INDEX IF NOT EXISTS idx_queue_expires ON match_queue(expires_at);
       CREATE INDEX IF NOT EXISTS idx_tap_events_match ON tap_events(match_id);
       CREATE INDEX IF NOT EXISTS idx_tap_events_user ON tap_events(user_id);
+      CREATE INDEX IF NOT EXISTS idx_latency_samples_user ON latency_samples(user_id);
+      CREATE INDEX IF NOT EXISTS idx_latency_samples_created ON latency_samples(created_at);
     `);
 
     await client.query('COMMIT');

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useGameContext } from '../context/GameContext';
-import { useSocket } from '../context/SocketContext';
+import { usePollingGame } from '../hooks/usePollingGame';
 import { minikit } from '../lib/minikit';
 import { useMiniKit } from '../hooks/useMiniKit';
 import { GlassCard, NeonButton } from './ui';
@@ -13,7 +13,7 @@ const Matchmaking: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { state, setToken } = useGameContext();
-  const { joinMatchmaking, cancelMatchmaking, paymentConfirmed, connected, isConnecting } = useSocket();
+  const { joinMatchmaking, cancelMatchmaking, isPolling } = usePollingGame();
   const { isInstalled } = useMiniKit();
   const [selectedStake, setSelectedStake] = useState<number>(0.1);
   const [searching, setSearching] = useState(false);
@@ -21,7 +21,6 @@ const Matchmaking: React.FC = () => {
   const [processingPayment, setProcessingPayment] = useState(false);
   const [paymentError, setPaymentError] = useState<string | null>(null);
   const [needsAuth, setNeedsAuth] = useState(false);
-  const [bothPaid, _setBothPaid] = useState(false);
   const [_paymentReference, setPaymentReference] = useState<string | null>(null);
   const isFree = location.state?.isFree || false;
 
@@ -37,11 +36,11 @@ const Matchmaking: React.FC = () => {
       setSearching(false);
     }
 
-    // If game phase is countdown and both paid, navigate to game
-    if (state.gamePhase === 'countdown' && state.matchId && (bothPaid || isFree)) {
+    // If game phase is countdown or waiting, navigate to game
+    if ((state.gamePhase === 'countdown' || state.gamePhase === 'waiting') && state.matchId) {
       navigate('/game');
     }
-  }, [state.user, state.token, state.gamePhase, state.matchId, navigate, matchFound, bothPaid, isFree]);
+  }, [state.user, state.token, state.gamePhase, state.matchId, navigate, matchFound, isFree]);
 
   const handleJoinQueue = async () => {
     if (!state.user) return;
@@ -57,10 +56,10 @@ const Matchmaking: React.FC = () => {
       return;
     }
 
-    // NEW FLOW: Join matchmaking WITHOUT paying first
+    // Join matchmaking using HTTP polling
     setSearching(true);
     try {
-      await joinMatchmaking(state.user.userId, isFree ? 0 : selectedStake, state.user.walletAddress);
+      await joinMatchmaking(state.user.userId, isFree ? 0 : selectedStake);
     } catch (matchmakingError: any) {
       console.error('[Matchmaking] Failed to join matchmaking:', matchmakingError);
       setSearching(false);
@@ -100,8 +99,8 @@ const Matchmaking: React.FC = () => {
         setProcessingPayment(false);
 
         // Notify backend that payment is confirmed
-        paymentConfirmed(state.matchId, state.user.userId, result.reference);
-        
+        // Note: This will be handled when we integrate payment flow with HTTP polling
+        // For now, matches start without payment in the HTTP polling flow
         console.log('[Matchmaking] Payment confirmed, reference:', result.reference);
         // The backend will notify us when both players have paid via 'both_players_paid' event
       } else {
@@ -130,15 +129,17 @@ const Matchmaking: React.FC = () => {
     }
   };
 
-  const handleCancel = () => {
+  const handleCancel = async () => {
     if (!state.user) return;
 
     setSearching(false);
     setMatchFound(false);
-    if (state.matchId) {
-      // TODO: Emit match cancel event to backend
+    
+    try {
+      await cancelMatchmaking(state.user.userId);
+    } catch (error) {
+      console.error('[Matchmaking] Error cancelling:', error);
     }
-    cancelMatchmaking(state.user.userId, isFree ? 0 : selectedStake);
   };
 
   const handleBack = () => {
@@ -249,9 +250,9 @@ const Matchmaking: React.FC = () => {
               size="large"
               fullWidth
               onClick={handleJoinQueue}
-              disabled={!connected || needsAuth || isConnecting}
+              disabled={needsAuth || isPolling}
             >
-              {needsAuth ? 'Sign In Required' : (isConnecting || !connected) ? 'Connecting...' : 'Find Opponent'}
+              {needsAuth ? 'Sign In Required' : isPolling ? 'Connecting...' : 'Find Opponent'}
             </NeonButton>
           </div>
         ) : processingPayment ? (
