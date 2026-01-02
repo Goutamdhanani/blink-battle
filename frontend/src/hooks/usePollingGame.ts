@@ -32,7 +32,7 @@ export const usePollingGame = () => {
 
   /**
    * Start polling matchmaking status
-   * Uses 5s interval with exponential backoff
+   * Uses fixed 5s interval to reduce server load
    */
   const startMatchmakingPolling = useCallback((userId: string) => {
     if (pollIntervalRef.current) {

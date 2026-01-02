@@ -88,6 +88,11 @@ export const runMigrations = async () => {
   }
 };
 
-if (require.main === module) {
+// Only run if executed directly (not imported)
+// This checks if the module is the main entry point
+const isMainModule = require.main === module || 
+  (typeof process !== 'undefined' && process.argv[1] && process.argv[1].includes('migrations'));
+
+if (isMainModule) {
   runMigrations();
 }

@@ -13,6 +13,7 @@ interface RequestStats {
 
 const stats: Map<string, RequestStats> = new Map();
 const STATS_WINDOW_MS = 60000; // 1 minute
+let statsInterval: NodeJS.Timeout | null = null;
 
 export const requestTrackingMiddleware = (req: Request, res: Response, next: NextFunction) => {
   const userId = (req as any).userId;
@@ -34,45 +35,64 @@ export const requestTrackingMiddleware = (req: Request, res: Response, next: Nex
     
     userStats.count++;
     userStats.endpoints.set(endpoint, (userStats.endpoints.get(endpoint) || 0) + 1);
+    
+    // Start stats logging if not already running
+    if (!statsInterval) {
+      startStatsLogging();
+    }
   }
   
   next();
 };
 
-// Log aggregated stats every minute
-setInterval(() => {
-  if (stats.size === 0) return;
+// Start logging aggregated stats every minute
+function startStatsLogging() {
+  if (statsInterval) return;
   
-  const now = Date.now();
-  let totalRequests = 0;
-  const endpointTotals = new Map<string, number>();
-  
-  for (const [userId, userStats] of stats.entries()) {
-    if ((now - userStats.lastReset) > STATS_WINDOW_MS) {
-      // Only count recent stats
-      continue;
+  statsInterval = setInterval(() => {
+    if (stats.size === 0) return;
+    
+    const now = Date.now();
+    let totalRequests = 0;
+    const endpointTotals = new Map<string, number>();
+    
+    for (const [userId, userStats] of stats.entries()) {
+      if ((now - userStats.lastReset) > STATS_WINDOW_MS) {
+        // Only count recent stats
+        continue;
+      }
+      
+      totalRequests += userStats.count;
+      
+      for (const [endpoint, count] of userStats.endpoints.entries()) {
+        endpointTotals.set(endpoint, (endpointTotals.get(endpoint) || 0) + count);
+      }
     }
     
-    totalRequests += userStats.count;
-    
-    for (const [endpoint, count] of userStats.endpoints.entries()) {
-      endpointTotals.set(endpoint, (endpointTotals.get(endpoint) || 0) + count);
+    if (totalRequests > 0) {
+      console.log(`[Request Stats] Last minute: ${totalRequests} requests from ${stats.size} users`);
+      
+      // Log top endpoints
+      const sorted = Array.from(endpointTotals.entries())
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 5);
+      
+      for (const [endpoint, count] of sorted) {
+        console.log(`  ${endpoint}: ${count} requests`);
+      }
     }
+  }, 60000);
+}
+
+/**
+ * Stop stats logging (useful for testing or graceful shutdown)
+ */
+export const stopStatsLogging = () => {
+  if (statsInterval) {
+    clearInterval(statsInterval);
+    statsInterval = null;
   }
-  
-  if (totalRequests > 0) {
-    console.log(`[Request Stats] Last minute: ${totalRequests} requests from ${stats.size} users`);
-    
-    // Log top endpoints
-    const sorted = Array.from(endpointTotals.entries())
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 5);
-    
-    for (const [endpoint, count] of sorted) {
-      console.log(`  ${endpoint}: ${count} requests`);
-    }
-  }
-}, 60000);
+};
 
 /**
  * Get current request rate for a user

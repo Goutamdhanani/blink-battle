@@ -312,6 +312,32 @@ const startServer = async () => {
   }
 };
 
+// Graceful shutdown
+const shutdown = async (signal: string) => {
+  console.log(`\n${signal} received, shutting down gracefully...`);
+  
+  // Stop request tracking
+  const { stopStatsLogging } = await import('./middleware/requestTracking');
+  stopStatsLogging();
+  
+  httpServer.close(() => {
+    console.log('HTTP server closed');
+    pool.end(() => {
+      console.log('Database pool closed');
+      process.exit(0);
+    });
+  });
+  
+  // Force exit after 10 seconds
+  setTimeout(() => {
+    console.error('Forced shutdown after timeout');
+    process.exit(1);
+  }, 10000);
+};
+
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT', () => shutdown('SIGINT'));
+
 startServer();
 
 export { app, io };
