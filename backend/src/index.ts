@@ -9,6 +9,8 @@ import { MatchController } from './controllers/matchController';
 import { LeaderboardController } from './controllers/leaderboardController';
 import { PaymentController } from './controllers/paymentController';
 import { VerificationController } from './controllers/verificationController';
+import { PollingMatchmakingController } from './controllers/pollingMatchmakingController';
+import { PollingMatchController } from './controllers/pollingMatchController';
 import { authenticate } from './middleware/auth';
 import { requestIdMiddleware } from './middleware/requestId';
 import { GameSocketHandler } from './websocket/gameHandler';
@@ -224,8 +226,22 @@ app.get('/api/matches/:matchId/status', authenticate, MatchController.getMatchSt
 app.get('/api/leaderboard', LeaderboardController.getLeaderboard);
 app.get('/api/leaderboard/me', authenticate, LeaderboardController.getUserRank);
 
-// WebSockets
-new GameSocketHandler(io);
+// HTTP Polling Matchmaking (replaces WebSocket matchmaking)
+app.post('/api/matchmaking/join', authenticate, PollingMatchmakingController.join);
+app.get('/api/matchmaking/status/:userId', authenticate, PollingMatchmakingController.getStatus);
+app.delete('/api/matchmaking/cancel/:userId', authenticate, PollingMatchmakingController.cancel);
+
+// HTTP Polling Match Flow (replaces WebSocket game flow)
+app.post('/api/match/ready', authenticate, PollingMatchController.ready);
+app.get('/api/match/state/:matchId', authenticate, PollingMatchController.getState);
+app.post('/api/match/tap', authenticate, PollingMatchController.tap);
+app.get('/api/match/result/:matchId', authenticate, PollingMatchController.getResult);
+
+// WebSockets - DEPRECATED for gameplay, kept for other features if needed
+// TODO: Remove entirely if not used for other features
+// new GameSocketHandler(io);
+console.log('⚠️  WebSocket gameplay handlers DISABLED - using HTTP polling instead');
+
 
 // Error handler
 app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
@@ -243,8 +259,30 @@ const startServer = async () => {
     await pool.query('SELECT NOW()');
     console.log('Connected to PostgreSQL');
 
+    // Start cleanup interval for expired queue entries
+    const CLEANUP_INTERVAL_MS = 60000; // 1 minute
+    setInterval(async () => {
+      try {
+        const cleaned = await PollingMatchmakingController.cleanupExpired();
+        if (cleaned > 0) {
+          console.log(`[Cleanup] Cleaned up ${cleaned} expired queue entries`);
+        }
+      } catch (error) {
+        console.error('[Cleanup] Error cleaning expired queue entries:', error);
+      }
+    }, CLEANUP_INTERVAL_MS);
+    console.log(`✅ Queue cleanup job started (interval: ${CLEANUP_INTERVAL_MS}ms)`);
+
     httpServer.listen(PORT, () => {
       console.log(`Server running on port ${PORT}`);
+      console.log(`HTTP Polling endpoints enabled:`);
+      console.log(`  POST /api/matchmaking/join`);
+      console.log(`  GET  /api/matchmaking/status/:userId`);
+      console.log(`  DELETE /api/matchmaking/cancel/:userId`);
+      console.log(`  POST /api/match/ready`);
+      console.log(`  GET  /api/match/state/:matchId`);
+      console.log(`  POST /api/match/tap`);
+      console.log(`  GET  /api/match/result/:matchId`);
     });
   } catch (error) {
     console.error('Failed to start server:', error);

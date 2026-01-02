@@ -114,4 +114,69 @@ export class MatchModel {
     );
     return result.rows;
   }
+
+  // HTTP Polling Methods
+
+  /**
+   * Set green light time (server-picked random delay)
+   */
+  static async setGreenLightTime(matchId: string, greenLightTime: number): Promise<void> {
+    await pool.query(
+      `UPDATE matches 
+       SET green_light_time = $1, updated_at = NOW()
+       WHERE match_id = $2`,
+      [greenLightTime, matchId]
+    );
+  }
+
+  /**
+   * Mark player as ready
+   */
+  static async setPlayerReady(matchId: string, playerId: string): Promise<void> {
+    const match = await this.findById(matchId);
+    if (!match) throw new Error('Match not found');
+
+    const isPlayer1 = match.player1_id === playerId;
+    const column = isPlayer1 ? 'player1_ready' : 'player2_ready';
+
+    await pool.query(
+      `UPDATE matches 
+       SET ${column} = true, updated_at = NOW()
+       WHERE match_id = $1`,
+      [matchId]
+    );
+  }
+
+  /**
+   * Check if both players are ready
+   */
+  static async areBothPlayersReady(matchId: string): Promise<boolean> {
+    const result = await pool.query(
+      `SELECT player1_ready, player2_ready 
+       FROM matches 
+       WHERE match_id = $1`,
+      [matchId]
+    );
+    
+    if (!result.rows[0]) return false;
+    return result.rows[0].player1_ready && result.rows[0].player2_ready;
+  }
+
+  /**
+   * Get match state for polling
+   */
+  static async getMatchState(matchId: string): Promise<Match | null> {
+    const result = await pool.query(
+      `SELECT m.*, 
+        u1.wallet_address as player1_wallet,
+        u2.wallet_address as player2_wallet
+       FROM matches m
+       LEFT JOIN users u1 ON m.player1_id = u1.user_id
+       LEFT JOIN users u2 ON m.player2_id = u2.user_id
+       WHERE m.match_id = $1`,
+      [matchId]
+    );
+    
+    return result.rows[0] || null;
+  }
 }

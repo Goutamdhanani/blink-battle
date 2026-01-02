@@ -23,6 +23,14 @@ export interface Match {
   false_start_count: number;
   created_at: Date;
   completed_at?: Date;
+  updated_at?: Date;
+  // HTTP Polling fields
+  green_light_time?: number;
+  player1_ready?: boolean;
+  player2_ready?: boolean;
+  // Extended fields for getMatchState (from JOIN with users table)
+  player1_wallet?: string;
+  player2_wallet?: string;
 }
 
 export enum MatchStatus {
