@@ -21,7 +21,8 @@ export interface MatchState {
   stake: number;
   player1Ready: boolean;
   player2Ready: boolean;
-  greenLightTime?: number;
+  greenLightTime?: number | null;
+  greenLightTimeISO?: string | null;
   greenLightActive: boolean;
   countdown?: number;
   playerTapped: boolean;
