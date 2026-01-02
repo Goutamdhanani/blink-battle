@@ -70,6 +70,19 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
   const [error, setError] = useState<string | null>(null);
   const [authStarted, setAuthStarted] = useState(false);
 
+  // Log state changes for debugging
+  React.useEffect(() => {
+    console.log('🔐 [AuthWrapper] State:', {
+      isReady,
+      isInstalled,
+      hasToken: !!state.token,
+      hasUser: !!state.user,
+      loading,
+      error: error ? 'present' : 'none',
+      authStarted,
+    });
+  }, [isReady, isInstalled, state.token, state.user, loading, error, authStarted]);
+
   const sendHaptic = (style: 'success' | 'error') => {
     try {
       if (MiniKit.isInstalled()) {
