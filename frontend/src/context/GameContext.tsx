@@ -55,6 +55,8 @@ const initialState: GameState = {
 
 export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [state, setState] = useState<GameState>(() => {
+    console.log('🎮 [GameProvider] Initializing state...');
+    
     // Restore token + user
     const storedToken = localStorage.getItem('token');
     const storedUser = localStorage.getItem('user');
@@ -64,10 +66,19 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (storedUser) {
       try {
         initialUser = JSON.parse(storedUser);
+        console.log('✅ [GameProvider] Restored user from localStorage');
       } catch (e) {
-        console.error('Failed to parse stored user:', e);
+        console.error('❌ [GameProvider] Failed to parse stored user:', e);
         localStorage.removeItem('user');
       }
+    }
+
+    if (storedToken) {
+      console.log('✅ [GameProvider] Restored token from localStorage');
+    }
+
+    if (storedMatchId) {
+      console.log('✅ [GameProvider] Restored active match ID from localStorage');
     }
 
     return {
