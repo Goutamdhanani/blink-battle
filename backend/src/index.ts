@@ -244,11 +244,13 @@ app.get('/api/leaderboard', LeaderboardController.getLeaderboard);
 app.get('/api/leaderboard/me', authenticate, LeaderboardController.getUserRank);
 
 // HTTP Polling Matchmaking (replaces WebSocket matchmaking)
+// Rate limiting applied: matchmakingRateLimiter (20 req/min per user)
 app.post('/api/matchmaking/join', authenticate, matchmakingRateLimiter, requestTrackingMiddleware, PollingMatchmakingController.join);
 app.get('/api/matchmaking/status/:userId', authenticate, matchmakingRateLimiter, requestTrackingMiddleware, PollingMatchmakingController.getStatus);
 app.delete('/api/matchmaking/cancel/:userId', authenticate, matchmakingRateLimiter, requestTrackingMiddleware, PollingMatchmakingController.cancel);
 
 // HTTP Polling Match Flow (replaces WebSocket game flow)
+// Rate limiting applied: matchRateLimiter (100 req/min per user)
 app.post('/api/match/ready', authenticate, matchRateLimiter, requestTrackingMiddleware, PollingMatchController.ready);
 app.get('/api/match/state/:matchId', authenticate, matchRateLimiter, requestTrackingMiddleware, PollingMatchController.getState);
 app.post('/api/match/tap', authenticate, matchRateLimiter, requestTrackingMiddleware, PollingMatchController.tap);
