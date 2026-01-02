@@ -195,4 +195,46 @@ export class MatchModel {
     
     return result.rows[0] || null;
   }
+
+  /**
+   * Mark player stake as deposited
+   */
+  static async setPlayerStaked(matchId: string, playerId: string, txHash?: string): Promise<void> {
+    const match = await this.findById(matchId);
+    if (!match) throw new Error('Match not found');
+
+    const isPlayer1 = match.player1_id === playerId;
+    
+    // Use safe column mapping to prevent SQL injection
+    if (isPlayer1) {
+      await pool.query(
+        `UPDATE matches 
+         SET player1_staked = true, player1_stake_tx = $1, updated_at = NOW()
+         WHERE match_id = $2`,
+        [txHash || null, matchId]
+      );
+    } else {
+      await pool.query(
+        `UPDATE matches 
+         SET player2_staked = true, player2_stake_tx = $1, updated_at = NOW()
+         WHERE match_id = $2`,
+        [txHash || null, matchId]
+      );
+    }
+  }
+
+  /**
+   * Check if both players have staked
+   */
+  static async areBothPlayersStaked(matchId: string): Promise<boolean> {
+    const result = await pool.query(
+      `SELECT player1_staked, player2_staked 
+       FROM matches 
+       WHERE match_id = $1`,
+      [matchId]
+    );
+    
+    if (!result.rows[0]) return false;
+    return result.rows[0].player1_staked && result.rows[0].player2_staked;
+  }
 }
