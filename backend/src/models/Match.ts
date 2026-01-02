@@ -116,16 +116,16 @@ export class MatchModel {
   }
 
   /**
-   * Find active match for a user (pending or in_progress)
+   * Find active match for a user (pending, countdown, or in_progress)
    */
   static async findActiveMatch(userId: string): Promise<Match | null> {
     const result = await pool.query(
       `SELECT * FROM matches 
        WHERE (player1_id = $1 OR player2_id = $1) 
-         AND status IN ($2, $3)
+         AND status IN ($2, $3, $4)
        ORDER BY created_at DESC 
        LIMIT 1`,
-      [userId, MatchStatus.PENDING, MatchStatus.IN_PROGRESS]
+      [userId, MatchStatus.PENDING, MatchStatus.COUNTDOWN, MatchStatus.IN_PROGRESS]
     );
     return result.rows[0] || null;
   }
@@ -133,12 +133,12 @@ export class MatchModel {
   // HTTP Polling Methods
 
   /**
-   * Set green light time (server-picked random delay)
+   * Set green light time (server-picked random delay) as milliseconds since epoch
    */
   static async setGreenLightTime(matchId: string, greenLightTime: number): Promise<void> {
     await pool.query(
       `UPDATE matches 
-       SET green_light_time = $1, updated_at = NOW()
+       SET green_light_time = $1::bigint, updated_at = NOW()
        WHERE match_id = $2`,
       [greenLightTime, matchId]
     );
@@ -152,11 +152,12 @@ export class MatchModel {
     if (!match) throw new Error('Match not found');
 
     const isPlayer1 = match.player1_id === playerId;
-    const column = isPlayer1 ? 'player1_ready' : 'player2_ready';
+    const readyColumn = isPlayer1 ? 'player1_ready' : 'player2_ready';
+    const readyAtColumn = isPlayer1 ? 'player1_ready_at' : 'player2_ready_at';
 
     await pool.query(
       `UPDATE matches 
-       SET ${column} = true, updated_at = NOW()
+       SET ${readyColumn} = true, ${readyAtColumn} = NOW(), updated_at = NOW()
        WHERE match_id = $1`,
       [matchId]
     );

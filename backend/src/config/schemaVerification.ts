@@ -13,6 +13,8 @@ export const verifyPollingSchema = async (): Promise<{
       { table: 'matches', column: 'player1_ready' },
       { table: 'matches', column: 'player2_ready' },
       { table: 'matches', column: 'green_light_time' },
+      { table: 'matches', column: 'player1_ready_at' },
+      { table: 'matches', column: 'player2_ready_at' },
     ];
 
     const missingColumns: string[] = [];

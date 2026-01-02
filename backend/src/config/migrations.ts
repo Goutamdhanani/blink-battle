@@ -50,21 +50,111 @@ export const addMissingColumns = async () => {
     
     // Check and add green_light_time column if missing
     const greenLightExists = await client.query(`
-      SELECT column_name 
+      SELECT column_name, data_type
       FROM information_schema.columns 
       WHERE table_name='matches' AND column_name='green_light_time'
     `);
     
     if (greenLightExists.rows.length === 0) {
-      console.log('Adding green_light_time column...');
+      console.log('Adding green_light_time column as BIGINT...');
       await client.query(`
         ALTER TABLE matches 
         ADD COLUMN green_light_time BIGINT
       `);
       console.log('✅ Added green_light_time column');
     } else {
-      console.log('✅ green_light_time column already exists');
+      const currentType = greenLightExists.rows[0].data_type;
+      console.log(`✅ green_light_time column already exists with type: ${currentType}`);
+      
+      // If it's not BIGINT, we need to convert it
+      if (currentType !== 'bigint') {
+        console.log(`⚠️  Converting green_light_time from ${currentType} to BIGINT...`);
+        await client.query(`
+          ALTER TABLE matches 
+          ALTER COLUMN green_light_time TYPE BIGINT USING CASE 
+            WHEN green_light_time IS NULL THEN NULL
+            ELSE EXTRACT(EPOCH FROM green_light_time) * 1000
+          END
+        `);
+        console.log('✅ Converted green_light_time to BIGINT');
+      }
     }
+    
+    // Check and add player1_ready_at column if missing
+    const player1ReadyAtExists = await client.query(`
+      SELECT column_name 
+      FROM information_schema.columns 
+      WHERE table_name='matches' AND column_name='player1_ready_at'
+    `);
+    
+    if (player1ReadyAtExists.rows.length === 0) {
+      console.log('Adding player1_ready_at column...');
+      await client.query(`
+        ALTER TABLE matches 
+        ADD COLUMN player1_ready_at TIMESTAMPTZ
+      `);
+      console.log('✅ Added player1_ready_at column');
+    } else {
+      console.log('✅ player1_ready_at column already exists');
+    }
+    
+    // Check and add player2_ready_at column if missing
+    const player2ReadyAtExists = await client.query(`
+      SELECT column_name 
+      FROM information_schema.columns 
+      WHERE table_name='matches' AND column_name='player2_ready_at'
+    `);
+    
+    if (player2ReadyAtExists.rows.length === 0) {
+      console.log('Adding player2_ready_at column...');
+      await client.query(`
+        ALTER TABLE matches 
+        ADD COLUMN player2_ready_at TIMESTAMPTZ
+      `);
+      console.log('✅ Added player2_ready_at column');
+    } else {
+      console.log('✅ player2_ready_at column already exists');
+    }
+    
+    // Ensure player1_ready and player2_ready are NOT NULL with default false
+    console.log('Ensuring player ready columns have proper constraints...');
+    
+    // First backfill any NULL values to false
+    await client.query(`
+      UPDATE matches 
+      SET player1_ready = false 
+      WHERE player1_ready IS NULL
+    `);
+    
+    await client.query(`
+      UPDATE matches 
+      SET player2_ready = false 
+      WHERE player2_ready IS NULL
+    `);
+    
+    // Then add NOT NULL constraint if it doesn't exist
+    await client.query(`
+      DO $$ 
+      BEGIN
+        BEGIN
+          ALTER TABLE matches 
+          ALTER COLUMN player1_ready SET DEFAULT false,
+          ALTER COLUMN player1_ready SET NOT NULL;
+        EXCEPTION
+          WHEN others THEN NULL;
+        END;
+        
+        BEGIN
+          ALTER TABLE matches 
+          ALTER COLUMN player2_ready SET DEFAULT false,
+          ALTER COLUMN player2_ready SET NOT NULL;
+        EXCEPTION
+          WHEN others THEN NULL;
+        END;
+      END $$;
+    `);
+    
+    console.log('✅ Player ready columns have proper constraints');
     
     await client.query('COMMIT');
     console.log('✅ Migration completed successfully');

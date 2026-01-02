@@ -77,7 +77,7 @@ export const usePollingGame = () => {
 
   /**
    * Start polling match state (for countdown, go, result)
-   * Uses adaptive polling: 2s for waiting, 100ms for active gameplay
+   * Uses adaptive polling: 2s for waiting, 1s for countdown/game states
    */
   const startMatchStatePolling = useCallback((matchId: string) => {
     if (pollIntervalRef.current) {
@@ -121,9 +121,10 @@ export const usePollingGame = () => {
         }
 
         // Adjust polling speed based on state
+        // Use 1s polling during countdown and active game, 2s during waiting
         const newInterval = (matchState.state === 'countdown' || matchState.state === 'waiting_for_go' || matchState.state === 'go')
-          ? 100  // Fast polling during active gameplay (100ms)
-          : 2000; // Slow polling during waiting (2s)
+          ? 1000  // 1s polling during active gameplay
+          : 2000; // 2s polling during waiting
 
         if (newInterval !== currentInterval) {
           currentInterval = newInterval;
