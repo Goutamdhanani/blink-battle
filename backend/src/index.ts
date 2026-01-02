@@ -208,6 +208,17 @@ app.get('/health', (_req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
+// Schema verification endpoint
+app.get('/health/schema', async (_req, res) => {
+  const { verifyPollingSchema } = await import('./config/schemaVerification');
+  const result = await verifyPollingSchema();
+  
+  res.status(result.valid ? 200 : 503).json({
+    ...result,
+    timestamp: new Date().toISOString()
+  });
+});
+
 // Auth routes
 app.get('/api/auth/nonce', AuthController.getNonce);
 app.post('/api/auth/verify-siwe', AuthController.verifySiwe);
