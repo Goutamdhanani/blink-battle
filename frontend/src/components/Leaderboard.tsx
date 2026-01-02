@@ -10,7 +10,7 @@ interface LeaderboardEntry {
   walletAddress: string;
   wins: number;
   losses: number;
-  avgReactionTime: number;
+  avgReactionTime: number | string | null;
   winRate: number;
 }
 
@@ -79,7 +79,7 @@ const Leaderboard: React.FC = () => {
 
         <h1 className="page-title">🏆 Leaderboard</h1>
 
-        {userRank && (
+        {userRank !== null && (
           <GlassCard className="user-rank-card">
             <span className="rank-label">Your Rank:</span>
             <span className="rank-value">{getRankEmoji(userRank)}</span>
@@ -107,41 +107,57 @@ const Leaderboard: React.FC = () => {
             </div>
 
             <div className="table-body">
-              {leaderboard.map((entry) => (
-                <GlassCard
-                  key={entry.walletAddress}
-                  className={`table-row ${isCurrentUser(entry.walletAddress) ? 'current-user' : ''}`}
-                >
-                  <div className="col-rank">
-                    <span className={`rank ${entry.rank <= 3 ? 'top-three' : ''}`}>
-                      {getRankEmoji(entry.rank)}
-                    </span>
-                  </div>
-                  <div className="col-player">
-                    <span className="wallet">
-                      {entry.walletAddress.substring(0, 8)}...
-                      {isCurrentUser(entry.walletAddress) && (
-                        <span className="you-badge">YOU</span>
-                      )}
-                    </span>
-                  </div>
-                  <div className="col-stats">
-                    <span className="wins">{entry.wins}</span>
-                    <span className="separator">/</span>
-                    <span className="losses">{entry.losses}</span>
-                  </div>
-                  <div className="col-winrate">
-                    <span className={`winrate ${entry.winRate >= 0.6 ? 'high' : ''}`}>
-                      {(entry.winRate * 100).toFixed(1)}%
-                    </span>
-                  </div>
-                  <div className="col-reaction">
-                    <span className="reaction-time">
-                      {entry.avgReactionTime.toFixed(0)}ms
-                    </span>
-                  </div>
-                </GlassCard>
-              ))}
+              {leaderboard.map((entry) => {
+                const avg =
+                  typeof entry.avgReactionTime === 'number'
+                    ? entry.avgReactionTime
+                    : Number(entry.avgReactionTime ?? NaN);
+
+                const avgDisplay =
+                  Number.isFinite(avg) && avg > 0
+                    ? `${avg.toFixed(0)}ms`
+                    : '–';
+
+                return (
+                  <GlassCard
+                    key={entry.walletAddress}
+                    className={`table-row ${
+                      isCurrentUser(entry.walletAddress) ? 'current-user' : ''
+                    }`}
+                  >
+                    <div className="col-rank">
+                      <span className={`rank ${entry.rank <= 3 ? 'top-three' : ''}`}>
+                        {getRankEmoji(entry.rank)}
+                      </span>
+                    </div>
+                    <div className="col-player">
+                      <span className="wallet">
+                        {entry.walletAddress.substring(0, 8)}...
+                        {isCurrentUser(entry.walletAddress) && (
+                          <span className="you-badge">YOU</span>
+                        )}
+                      </span>
+                    </div>
+                    <div className="col-stats">
+                      <span className="wins">{entry.wins}</span>
+                      <span className="separator">/</span>
+                      <span className="losses">{entry.losses}</span>
+                    </div>
+                    <div className="col-winrate">
+                      <span
+                        className={`winrate ${
+                          entry.winRate >= 0.6 ? 'high' : ''
+                        }`}
+                      >
+                        {(entry.winRate * 100).toFixed(1)}%
+                      </span>
+                    </div>
+                    <div className="col-reaction">
+                      <span className="reaction-time">{avgDisplay}</span>
+                    </div>
+                  </GlassCard>
+                );
+              })}
             </div>
           </div>
         )}
