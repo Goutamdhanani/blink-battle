@@ -14,6 +14,7 @@ import { PollingMatchController } from './controllers/pollingMatchController';
 import { PingController } from './controllers/pingController';
 import { authenticate } from './middleware/auth';
 import { requestIdMiddleware } from './middleware/requestId';
+import { requestTrackingMiddleware } from './middleware/requestTracking';
 import { GameSocketHandler } from './websocket/gameHandler';
 import { connectRedis } from './config/redis';
 import pool from './config/database';
@@ -199,6 +200,9 @@ app.use((req, _res, next) => {
   next();
 });
 
+app.use(requestIdMiddleware);
+app.use(express.json());
+
 // Health check
 app.get('/health', (_req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
@@ -228,15 +232,15 @@ app.get('/api/leaderboard', LeaderboardController.getLeaderboard);
 app.get('/api/leaderboard/me', authenticate, LeaderboardController.getUserRank);
 
 // HTTP Polling Matchmaking (replaces WebSocket matchmaking)
-app.post('/api/matchmaking/join', authenticate, PollingMatchmakingController.join);
-app.get('/api/matchmaking/status/:userId', authenticate, PollingMatchmakingController.getStatus);
-app.delete('/api/matchmaking/cancel/:userId', authenticate, PollingMatchmakingController.cancel);
+app.post('/api/matchmaking/join', authenticate, requestTrackingMiddleware, PollingMatchmakingController.join);
+app.get('/api/matchmaking/status/:userId', authenticate, requestTrackingMiddleware, PollingMatchmakingController.getStatus);
+app.delete('/api/matchmaking/cancel/:userId', authenticate, requestTrackingMiddleware, PollingMatchmakingController.cancel);
 
 // HTTP Polling Match Flow (replaces WebSocket game flow)
-app.post('/api/match/ready', authenticate, PollingMatchController.ready);
-app.get('/api/match/state/:matchId', authenticate, PollingMatchController.getState);
-app.post('/api/match/tap', authenticate, PollingMatchController.tap);
-app.get('/api/match/result/:matchId', authenticate, PollingMatchController.getResult);
+app.post('/api/match/ready', authenticate, requestTrackingMiddleware, PollingMatchController.ready);
+app.get('/api/match/state/:matchId', authenticate, requestTrackingMiddleware, PollingMatchController.getState);
+app.post('/api/match/tap', authenticate, requestTrackingMiddleware, PollingMatchController.tap);
+app.get('/api/match/result/:matchId', authenticate, requestTrackingMiddleware, PollingMatchController.getResult);
 
 // Ping/Latency endpoints
 app.post('/api/ping', authenticate, PingController.recordLatency);

@@ -58,8 +58,12 @@ export class PollingMatchmakingController {
           return;
         }
 
-        // Mark queue entries as matched
+        // Mark first player's queue entry as matched
         await MatchQueueModel.updateStatus(waitingPlayer.queue_id, QueueStatus.MATCHED);
+
+        // Create queue entry for second player and mark as matched
+        const player2Queue = await MatchQueueModel.enqueue(userId, stake);
+        await MatchQueueModel.updateStatus(player2Queue.queue_id, QueueStatus.MATCHED);
 
         // Create match
         const match = await MatchModel.create(
@@ -133,13 +137,14 @@ export class PollingMatchmakingController {
       }
 
       if (queueEntry.status === QueueStatus.MATCHED) {
-        // Find the match
-        const matches = await MatchModel.getMatchHistory(userId, 1);
-        const match = matches[0];
+        // Find the active match (pending or in_progress)
+        const match = await MatchModel.findActiveMatch(userId);
         
         if (match) {
           const opponentId = match.player1_id === userId ? match.player2_id : match.player1_id;
           const opponent = await UserModel.findById(opponentId);
+          
+          console.log(`[HTTP Matchmaking] Returning matched status for user ${userId}, match ${match.match_id}`);
           
           res.json({
             status: 'matched',

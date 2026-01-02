@@ -115,6 +115,21 @@ export class MatchModel {
     return result.rows;
   }
 
+  /**
+   * Find active match for a user (pending or in_progress)
+   */
+  static async findActiveMatch(userId: string): Promise<Match | null> {
+    const result = await pool.query(
+      `SELECT * FROM matches 
+       WHERE (player1_id = $1 OR player2_id = $1) 
+         AND status IN ($2, $3)
+       ORDER BY created_at DESC 
+       LIMIT 1`,
+      [userId, MatchStatus.PENDING, MatchStatus.IN_PROGRESS]
+    );
+    return result.rows[0] || null;
+  }
+
   // HTTP Polling Methods
 
   /**
