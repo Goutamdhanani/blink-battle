@@ -14,6 +14,8 @@ import { PollingMatchController } from './controllers/pollingMatchController';
 import { PingController } from './controllers/pingController';
 import { authenticate } from './middleware/auth';
 import { requestIdMiddleware } from './middleware/requestId';
+import { requestTrackingMiddleware } from './middleware/requestTracking';
+import { matchmakingRateLimiter, matchRateLimiter } from './middleware/rateLimiter';
 import { GameSocketHandler } from './websocket/gameHandler';
 import { connectRedis } from './config/redis';
 import pool from './config/database';
@@ -199,16 +201,30 @@ app.use((req, _res, next) => {
   next();
 });
 
+app.use(requestIdMiddleware);
+app.use(express.json());
+
 // Health check
 app.get('/health', (_req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+// Schema verification endpoint
+app.get('/health/schema', async (_req, res) => {
+  const { verifyPollingSchema } = await import('./config/schemaVerification');
+  const result = await verifyPollingSchema();
+  
+  res.status(result.valid ? 200 : 503).json({
+    ...result,
+    timestamp: new Date().toISOString()
+  });
 });
 
 // Auth routes
 app.get('/api/auth/nonce', AuthController.getNonce);
 app.post('/api/auth/verify-siwe', AuthController.verifySiwe);
 app.post('/api/auth/login', AuthController.authenticate);
-app.get('/api/auth/me', authenticate, AuthController.getUser);
+app.get('/api/auth/me', authenticate, matchRateLimiter, AuthController.getUser);
 
 // Payment routes
 app.post('/api/initiate-payment', authenticate, PaymentController.initiatePayment);
@@ -228,15 +244,17 @@ app.get('/api/leaderboard', LeaderboardController.getLeaderboard);
 app.get('/api/leaderboard/me', authenticate, LeaderboardController.getUserRank);
 
 // HTTP Polling Matchmaking (replaces WebSocket matchmaking)
-app.post('/api/matchmaking/join', authenticate, PollingMatchmakingController.join);
-app.get('/api/matchmaking/status/:userId', authenticate, PollingMatchmakingController.getStatus);
-app.delete('/api/matchmaking/cancel/:userId', authenticate, PollingMatchmakingController.cancel);
+// Rate limiting applied: matchmakingRateLimiter (20 req/min per user)
+app.post('/api/matchmaking/join', authenticate, matchmakingRateLimiter, requestTrackingMiddleware, PollingMatchmakingController.join);
+app.get('/api/matchmaking/status/:userId', authenticate, matchmakingRateLimiter, requestTrackingMiddleware, PollingMatchmakingController.getStatus);
+app.delete('/api/matchmaking/cancel/:userId', authenticate, matchmakingRateLimiter, requestTrackingMiddleware, PollingMatchmakingController.cancel);
 
 // HTTP Polling Match Flow (replaces WebSocket game flow)
-app.post('/api/match/ready', authenticate, PollingMatchController.ready);
-app.get('/api/match/state/:matchId', authenticate, PollingMatchController.getState);
-app.post('/api/match/tap', authenticate, PollingMatchController.tap);
-app.get('/api/match/result/:matchId', authenticate, PollingMatchController.getResult);
+// Rate limiting applied: matchRateLimiter (100 req/min per user)
+app.post('/api/match/ready', authenticate, matchRateLimiter, requestTrackingMiddleware, PollingMatchController.ready);
+app.get('/api/match/state/:matchId', authenticate, matchRateLimiter, requestTrackingMiddleware, PollingMatchController.getState);
+app.post('/api/match/tap', authenticate, matchRateLimiter, requestTrackingMiddleware, PollingMatchController.tap);
+app.get('/api/match/result/:matchId', authenticate, matchRateLimiter, requestTrackingMiddleware, PollingMatchController.getResult);
 
 // Ping/Latency endpoints
 app.post('/api/ping', authenticate, PingController.recordLatency);
@@ -296,6 +314,32 @@ const startServer = async () => {
     process.exit(1);
   }
 };
+
+// Graceful shutdown
+const shutdown = async (signal: string) => {
+  console.log(`\n${signal} received, shutting down gracefully...`);
+  
+  // Stop request tracking
+  const { stopStatsLogging } = await import('./middleware/requestTracking');
+  stopStatsLogging();
+  
+  httpServer.close(() => {
+    console.log('HTTP server closed');
+    pool.end(() => {
+      console.log('Database pool closed');
+      process.exit(0);
+    });
+  });
+  
+  // Force exit after 10 seconds
+  setTimeout(() => {
+    console.error('Forced shutdown after timeout');
+    process.exit(1);
+  }, 10000);
+};
+
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT', () => shutdown('SIGINT'));
 
 startServer();
 

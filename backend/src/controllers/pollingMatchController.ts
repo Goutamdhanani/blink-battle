@@ -36,7 +36,7 @@ export class PollingMatchController {
       // Mark player as ready
       await MatchModel.setPlayerReady(matchId, userId);
 
-      console.log(`[Polling Match] Player ${userId} ready in match ${matchId}`);
+      console.log(`[Polling Match] Player ${userId} marked ready in match ${matchId}`);
 
       // Check if both players are ready
       const bothReady = await MatchModel.areBothPlayersReady(matchId);
@@ -52,7 +52,7 @@ export class PollingMatchController {
         await MatchModel.setGreenLightTime(matchId, greenLightTime);
         await MatchModel.updateStatus(matchId, MatchStatus.IN_PROGRESS);
 
-        console.log(`[Polling Match] Both ready! Green light scheduled for ${new Date(greenLightTime).toISOString()} (${randomDelay}ms delay)`);
+        console.log(`[Polling Match] Both players ready! Green light scheduled for ${new Date(greenLightTime).toISOString()} (${randomDelay}ms delay)`);
 
         res.json({
           success: true,

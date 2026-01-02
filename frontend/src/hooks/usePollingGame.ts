@@ -5,6 +5,7 @@ import { useGameContext } from '../context/GameContext';
 /**
  * Custom hook for HTTP polling-based gameplay
  * Replaces WebSocket connection with REST polling
+ * Uses reduced polling frequency to minimize server load
  */
 export const usePollingGame = () => {
   const { state, setMatch, setGamePhase, setCountdown, setSignalTimestamp, setMatchResult, resetGame } = useGameContext();
@@ -12,6 +13,7 @@ export const usePollingGame = () => {
   const [error, setError] = useState<string | null>(null);
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const matchStateRef = useRef<MatchState | null>(null);
+  const pollCountRef = useRef<number>(0);
 
   // Update polling service token when it changes
   useEffect(() => {
@@ -30,6 +32,7 @@ export const usePollingGame = () => {
 
   /**
    * Start polling matchmaking status
+   * Uses fixed 5s interval to reduce server load
    */
   const startMatchmakingPolling = useCallback((userId: string) => {
     if (pollIntervalRef.current) {
@@ -38,13 +41,16 @@ export const usePollingGame = () => {
 
     setIsPolling(true);
     setError(null);
+    pollCountRef.current = 0;
 
     const poll = async () => {
       try {
+        pollCountRef.current++;
         const status: MatchmakingStatus = await pollingService.getMatchmakingStatus(userId);
         
         if (status.status === 'matched' && status.matchId && status.opponent) {
           // Match found!
+          console.log(`[Polling] Match found after ${pollCountRef.current} polls`);
           clearInterval(pollIntervalRef.current!);
           pollIntervalRef.current = null;
           setIsPolling(false);
@@ -63,13 +69,15 @@ export const usePollingGame = () => {
       }
     };
 
-    // Poll immediately, then every 1 second
+    // Poll immediately, then every 5 seconds (reduced from 1s)
     poll();
-    pollIntervalRef.current = setInterval(poll, 1000);
+    pollIntervalRef.current = setInterval(poll, 5000);
+    console.log('[Polling] Matchmaking polling started at 5s interval');
   }, [setMatch]);
 
   /**
    * Start polling match state (for countdown, go, result)
+   * Uses adaptive polling: 2s for waiting, 100ms for active gameplay
    */
   const startMatchStatePolling = useCallback((matchId: string) => {
     if (pollIntervalRef.current) {
@@ -78,6 +86,7 @@ export const usePollingGame = () => {
 
     setIsPolling(true);
     setError(null);
+    let currentInterval = 2000; // Start with 2s interval
 
     const poll = async () => {
       try {
@@ -112,11 +121,16 @@ export const usePollingGame = () => {
         }
 
         // Adjust polling speed based on state
-        if (matchState.state === 'countdown' || matchState.state === 'waiting_for_go' || matchState.state === 'go') {
-          // Fast polling during countdown and signal
+        const newInterval = (matchState.state === 'countdown' || matchState.state === 'waiting_for_go' || matchState.state === 'go')
+          ? 100  // Fast polling during active gameplay (100ms)
+          : 2000; // Slow polling during waiting (2s)
+
+        if (newInterval !== currentInterval) {
+          currentInterval = newInterval;
           if (pollIntervalRef.current) {
             clearInterval(pollIntervalRef.current);
-            pollIntervalRef.current = setInterval(poll, 100); // 100ms for smooth UI
+            pollIntervalRef.current = setInterval(poll, currentInterval);
+            console.log(`[Polling] Match state polling adjusted to ${currentInterval}ms`);
           }
         }
       } catch (err: any) {
@@ -125,9 +139,10 @@ export const usePollingGame = () => {
       }
     };
 
-    // Start polling every 500ms initially, will adjust to 100ms during countdown
+    // Start polling at 2s initially
     poll();
-    pollIntervalRef.current = setInterval(poll, 500);
+    pollIntervalRef.current = setInterval(poll, currentInterval);
+    console.log('[Polling] Match state polling started at 2s interval');
   }, [setGamePhase, setCountdown, setSignalTimestamp, setMatchResult]);
 
   /**
