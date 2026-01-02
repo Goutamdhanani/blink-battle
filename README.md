@@ -44,7 +44,7 @@ Blink Battle is a fast-paced multiplayer reaction game where two players face of
 - **Escrow System**: Funds locked securely during matches
 - **Match History**: Track all your games and stats
 - **Global Leaderboard**: Compete for the top spot
-- **Real-time Updates**: WebSocket-powered live gameplay
+- **HTTP Polling Architecture**: Stable, server-authoritative gameplay without WebSocket dependencies
 
 ## 🏗️ Tech Stack
 
@@ -61,9 +61,9 @@ Blink Battle is a fast-paced multiplayer reaction game where two players face of
 - **TypeScript** for type safety
 - **@worldcoin/minikit-js** - MiniKit SDK for backend verification
 - **SIWE** - Sign-In with Ethereum
-- **Socket.io** for WebSocket handling
+- **HTTP Polling** for game state synchronization
 - **PostgreSQL** for data persistence
-- **Redis** for matchmaking queues and caching
+- **Redis** for caching (optional)
 - **JWT** for authentication
 - **Axios** for Developer Portal API calls
 
@@ -267,7 +267,197 @@ CREATE TABLE payments (
 - `VITE_APP_ID`: Must match backend APP_ID
 - `VITE_PLATFORM_WALLET_ADDRESS`: Must match backend address
 
-## 📦 Project Structure
+## 🔄 HTTP Polling Gameplay Architecture
+
+Blink Battle uses HTTP polling for game state synchronization instead of WebSockets, providing superior stability on mobile networks and preventing reconnection storms.
+
+### Architecture Benefits
+
+- **Server-Authoritative**: All game logic runs on the server; clients cannot manipulate timing
+- **Mobile-Friendly**: No WebSocket reconnection issues on network changes
+- **Heroku-Compatible**: Works reliably without sticky sessions
+- **Anti-Cheat Built-in**: Server timestamps prevent time manipulation
+- **Stateless**: Each request is independent; easy to scale horizontally
+
+### HTTP Polling Endpoints
+
+#### Matchmaking
+- **POST /api/matchmaking/join** - Join matchmaking queue by stake amount
+- **GET /api/matchmaking/status/:userId** - Poll queue status (1s interval)
+- **DELETE /api/matchmaking/cancel/:userId** - Cancel matchmaking
+
+#### Match Flow
+- **POST /api/match/ready** - Mark player as ready for countdown
+- **GET /api/match/state/:matchId** - Poll match state (250ms-1s interval)
+- **POST /api/match/tap** - Record tap with server timestamp
+- **GET /api/match/result/:matchId** - Get final match results
+
+### State Machine
+
+```
+searching → matched → ready_wait → countdown → go → resolved
+```
+
+**State Transitions:**
+1. **searching**: Player in matchmaking queue
+2. **matched**: Opponent found, both players notified
+3. **ready_wait**: Waiting for both players to ready up
+4. **countdown**: 3-2-1 countdown (server picks green light time)
+5. **go**: Green light active (players can tap)
+6. **resolved**: Winner determined, results available
+
+### Polling Intervals
+
+**Recommended polling intervals:**
+- Matchmaking queue: **1000ms** (1 second)
+- Ready wait: **500ms** (check if opponent ready)
+- Countdown/Go: **100-250ms** (smooth UI updates)
+- After tap: **500ms** (wait for opponent)
+
+**Example polling pattern:**
+```typescript
+// Poll match state during game
+const pollInterval = 250; // ms
+const pollMatchState = async () => {
+  const state = await fetch(`/api/match/state/${matchId}`);
+  
+  switch(state.state) {
+    case 'go':
+      // Show green light, enable tap
+      break;
+    case 'resolved':
+      // Show results
+      clearInterval(pollTimer);
+      break;
+  }
+};
+
+const pollTimer = setInterval(pollMatchState, pollInterval);
+```
+
+### Server-Authoritative Anti-Cheat
+
+**Green Light Timing:**
+- Server generates random delay (2-5 seconds) after both players ready
+- `greenLightTime` stored in database
+- Clients cannot predict or manipulate timing
+
+**Tap Validation:**
+- Server timestamp (`Date.now()`) is authoritative
+- Early tap: `serverTimestamp < greenLightTime` → Disqualified
+- Valid tap: `0ms ≤ reaction ≤ 5000ms`
+- Late tap: `reaction > 5000ms` → Marked invalid
+
+**Winner Determination:**
+- First valid tap wins
+- Subsequent taps ignored
+- Ties (≤1ms difference) → Split pot 50/50
+
+### Database Schema (Polling-Specific)
+
+```sql
+-- Match queue for persistent matchmaking
+CREATE TABLE match_queue (
+  queue_id UUID PRIMARY KEY,
+  user_id UUID REFERENCES users(user_id),
+  stake DECIMAL(10, 4) NOT NULL,
+  status VARCHAR(50) NOT NULL,  -- searching, matched, cancelled, expired
+  expires_at TIMESTAMP NOT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Tap events (server-authoritative)
+CREATE TABLE tap_events (
+  tap_id UUID PRIMARY KEY,
+  match_id UUID REFERENCES matches(match_id),
+  user_id UUID REFERENCES users(user_id),
+  client_timestamp BIGINT NOT NULL,  -- for audit
+  server_timestamp BIGINT NOT NULL,  -- authoritative
+  reaction_ms INTEGER NOT NULL,
+  is_valid BOOLEAN NOT NULL,
+  disqualified BOOLEAN DEFAULT false,
+  disqualification_reason VARCHAR(100),
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Match table additions
+ALTER TABLE matches ADD COLUMN green_light_time BIGINT;
+ALTER TABLE matches ADD COLUMN player1_ready BOOLEAN DEFAULT false;
+ALTER TABLE matches ADD COLUMN player2_ready BOOLEAN DEFAULT false;
+```
+
+### Frontend Integration Example
+
+```typescript
+// 1. Join matchmaking
+const joinResponse = await fetch('/api/matchmaking/join', {
+  method: 'POST',
+  body: JSON.stringify({ stake: 0.5 }),
+  headers: { Authorization: `Bearer ${token}` }
+});
+
+if (joinResponse.status === 'matched') {
+  // Instant match!
+  startMatch(joinResponse.matchId);
+} else {
+  // Poll for match
+  const pollId = setInterval(async () => {
+    const status = await fetch(`/api/matchmaking/status/${userId}`);
+    if (status.status === 'matched') {
+      clearInterval(pollId);
+      startMatch(status.matchId);
+    }
+  }, 1000);
+}
+
+// 2. Ready up
+await fetch('/api/match/ready', {
+  method: 'POST',
+  body: JSON.stringify({ matchId })
+});
+
+// 3. Poll match state
+const gamePoll = setInterval(async () => {
+  const state = await fetch(`/api/match/state/${matchId}`);
+  
+  if (state.greenLightActive) {
+    // Tap enabled!
+    enableTapButton();
+  }
+  
+  if (state.state === 'resolved') {
+    clearInterval(gamePoll);
+    showResults(state.winnerId);
+  }
+}, 250);
+
+// 4. Record tap
+const tapResponse = await fetch('/api/match/tap', {
+  method: 'POST',
+  body: JSON.stringify({
+    matchId,
+    clientTimestamp: Date.now()  // Optional, for audit
+  })
+});
+
+if (tapResponse.tap.disqualified) {
+  showDisqualified('Too early!');
+}
+```
+
+### Cleanup & Maintenance
+
+**Automated Cleanup:**
+- Expired queue entries cleaned every 60 seconds
+- Matches older than 10 minutes flagged for review
+- Stale tap events archived after match completion
+
+**Environment Variables:**
+- `SIGNAL_DELAY_MIN_MS=2000` - Minimum green light delay
+- `SIGNAL_DELAY_MAX_MS=5000` - Maximum green light delay
+- `MAX_REACTION_MS=5000` - Max valid reaction time
+
+
 
 ```
 blink-battle/
@@ -434,19 +624,28 @@ This project is a Worldcoin Mini-App. For complete setup instructions including 
 
 For detailed setup instructions, troubleshooting, and deployment guides, see **[MINIKIT_SETUP.md](./MINIKIT_SETUP.md)**.
 
-## 🎯 Game Flow
+## 🎯 Game Flow (HTTP Polling)
 
 1. **Open in World App**: Launch the Mini-App inside World App
 2. **Auto-Authentication**: Sign in with World App wallet (SIWE)
 3. **Mode Selection**: Choose Practice or PvP mode
 4. **Matchmaking**: For PvP, stake WLD via MiniKit Pay command
+   - Client polls `/api/matchmaking/status/:userId` every 1s
 5. **Match Confirmation**: Funds locked in escrow, opponent matched
-6. **Countdown**: 3... 2... 1... (with haptic feedback)
-7. **Random Delay**: 2-5 seconds wait
-8. **Signal Appears**: Tap as fast as possible! (with haptic feedback)
-9. **Validation**: Server validates reactions with anti-cheat
-10. **Results**: Winner determined, funds distributed (with haptic feedback)
-11. **Post-Match**: View stats, play again, or return to dashboard
+   - Both players receive matchId
+6. **Ready Up**: Both players mark ready via `/api/match/ready`
+   - Client polls `/api/match/state/:matchId` every 500ms
+7. **Countdown**: Server sends 3... 2... 1... via state updates
+8. **Random Delay**: Server schedules green light (2-5s random delay)
+   - Client polls state every 250ms for smooth UI
+9. **Green Light**: Server sets `greenLightActive=true`
+   - Client enables tap button
+10. **Tap**: Player taps, sends `/api/match/tap` with client timestamp
+    - Server records with authoritative server timestamp
+11. **Validation**: Server validates both taps, determines winner
+    - Early taps disqualified, first valid tap wins
+12. **Results**: State becomes 'resolved', client gets result from `/api/match/result/:matchId`
+13. **Post-Match**: View stats, play again, or return to dashboard
 
 ## 🔒 Security Features
 
@@ -605,20 +804,16 @@ npm test
 - `GET /api/leaderboard` - Get global leaderboard
 - `GET /api/leaderboard/me` - Get user rank
 
-### WebSocket Events
+#### HTTP Polling Endpoints (NEW)
+- `POST /api/matchmaking/join` - Join matchmaking queue
+- `GET /api/matchmaking/status/:userId` - Poll queue status
+- `DELETE /api/matchmaking/cancel/:userId` - Cancel matchmaking
+- `POST /api/match/ready` - Mark player ready
+- `GET /api/match/state/:matchId` - Poll match state
+- `POST /api/match/tap` - Record tap event
+- `GET /api/match/result/:matchId` - Get match results
 
-**Client → Server:**
-- `join_matchmaking` - Join queue
-- `cancel_matchmaking` - Leave queue
-- `player_ready` - Mark ready
-- `player_tap` - Send tap
-
-**Server → Client:**
-- `match_found` - Opponent found
-- `matchmaking_queued` - Queued
-- `countdown` - Countdown number
-- `signal` - Signal to tap
-- `match_result` - Match completed
+~~**WebSocket Events** (DEPRECATED - Replaced by HTTP Polling)~~
 
 For complete API documentation, see **[API_REFERENCE.md](./API_REFERENCE.md)**.
 
