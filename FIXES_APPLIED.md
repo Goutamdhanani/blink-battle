@@ -157,10 +157,19 @@ Consider adding:
 
 ## 5. Code Quality & Safety
 
+### Code Review Improvements Applied
+1. **SQL Injection Fix** - Replaced dynamic column name interpolation with explicit queries in `setPlayerStaked()`
+2. **Type Safety** - Added staking fields to `Match` interface, removed unsafe type assertions
+3. **Error Documentation** - Enhanced error handling comments to explain retry behavior
+4. **Configuration Notes** - Added TODO for feature flags (ENFORCE_STAKES, ESCROW_REQUIRED)
+5. **Security Warnings** - Enhanced documentation of commented-out security-critical code
+
 ### Build Status
 - ✅ Backend compiles (only missing @types warnings)
 - ⚠️ Frontend has pre-existing TypeScript config issues (unrelated to changes)
 - ✅ No syntax errors in modified files
+- ✅ No SQL injection vulnerabilities
+- ✅ All type assertions removed
 
 ### Security Improvements
 1. **No undefined winner** - Winner always determined before escrow call
@@ -243,6 +252,12 @@ VITE_ESCROW_CONTRACT_ADDRESS=0x29B33908F05620826585ea5b34aDC4b688dD0930
 3. Set up alerts for payment failures
 4. Consider adding stake timeout (cancel match if not staked in 5 minutes)
 5. Add admin dashboard to review failed payments
+6. **Code Architecture Improvements (Future):**
+   - Consolidate `state` and `status` fields for match completion (document difference or refactor)
+   - Implement ESCROW_REQUIRED environment variable flag
+   - Add ENFORCE_STAKES environment variable for stake enforcement control
+   - Consider refactoring setPlayerStaked() to reduce query duplication while maintaining security
+   - Add monitoring dashboard for tracking escrow failures and security events
 
 ---
 
