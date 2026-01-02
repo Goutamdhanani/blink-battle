@@ -140,7 +140,7 @@ export class PollingMatchController {
       const opponentTap = taps.find(t => t.user_id === opponentId);
 
       // Safe serialization of green_light_time: return raw ms and ISO string only if numeric
-      let greenLightTimeMs = matchState.green_light_time || null;
+      let greenLightTimeMs = matchState.green_light_time ?? null;
       let greenLightTimeISO: string | null = null;
       
       if (typeof greenLightTimeMs === 'number' && !isNaN(greenLightTimeMs)) {
