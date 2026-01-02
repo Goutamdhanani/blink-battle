@@ -133,12 +133,12 @@ export class MatchModel {
   // HTTP Polling Methods
 
   /**
-   * Set green light time (server-picked random delay)
+   * Set green light time (server-picked random delay) as milliseconds since epoch
    */
   static async setGreenLightTime(matchId: string, greenLightTime: number): Promise<void> {
     await pool.query(
       `UPDATE matches 
-       SET green_light_time = $1, updated_at = NOW()
+       SET green_light_time = $1::bigint, updated_at = NOW()
        WHERE match_id = $2`,
       [greenLightTime, matchId]
     );

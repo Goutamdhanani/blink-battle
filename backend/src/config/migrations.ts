@@ -50,20 +50,34 @@ export const addMissingColumns = async () => {
     
     // Check and add green_light_time column if missing
     const greenLightExists = await client.query(`
-      SELECT column_name 
+      SELECT column_name, data_type
       FROM information_schema.columns 
       WHERE table_name='matches' AND column_name='green_light_time'
     `);
     
     if (greenLightExists.rows.length === 0) {
-      console.log('Adding green_light_time column...');
+      console.log('Adding green_light_time column as BIGINT...');
       await client.query(`
         ALTER TABLE matches 
         ADD COLUMN green_light_time BIGINT
       `);
       console.log('✅ Added green_light_time column');
     } else {
-      console.log('✅ green_light_time column already exists');
+      const currentType = greenLightExists.rows[0].data_type;
+      console.log(`✅ green_light_time column already exists with type: ${currentType}`);
+      
+      // If it's not BIGINT, we need to convert it
+      if (currentType !== 'bigint') {
+        console.log(`⚠️  Converting green_light_time from ${currentType} to BIGINT...`);
+        await client.query(`
+          ALTER TABLE matches 
+          ALTER COLUMN green_light_time TYPE BIGINT USING CASE 
+            WHEN green_light_time IS NULL THEN NULL
+            ELSE EXTRACT(EPOCH FROM green_light_time) * 1000
+          END
+        `);
+        console.log('✅ Converted green_light_time to BIGINT');
+      }
     }
     
     // Check and add player1_ready_at column if missing

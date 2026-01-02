@@ -95,8 +95,15 @@ describe('HTTP Polling Integration Tests', () => {
       expect(readyResult2.success).toBe(true);
       expect(readyResult2.bothReady).toBe(true);
       expect(readyResult2.greenLightTime).toBeDefined();
+      expect(readyResult2.status).toBe('countdown'); // Should be countdown status
 
       const greenLightTime = readyResult2.greenLightTime;
+      
+      // Verify match status is COUNTDOWN in database
+      const matchAfterReady = await MatchModel.findById(matchId);
+      expect(matchAfterReady?.status).toBe('countdown');
+      expect(matchAfterReady?.player1_ready_at).toBeDefined();
+      expect(matchAfterReady?.player2_ready_at).toBeDefined();
 
       // Step 4: Wait for green light, then tap
       // Simulate waiting for green light to be active
