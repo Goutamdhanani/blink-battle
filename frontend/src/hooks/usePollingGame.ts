@@ -111,13 +111,17 @@ export const usePollingGame = () => {
           setSignalTimestamp(matchState.greenLightTime || Date.now());
           setCountdown(null);
         } else if (matchState.state === 'resolved') {
-          // Match is complete
-          clearInterval(pollIntervalRef.current!);
-          pollIntervalRef.current = null;
+          // Match is complete - stop polling immediately
+          if (pollIntervalRef.current) {
+            clearInterval(pollIntervalRef.current);
+            pollIntervalRef.current = null;
+          }
           setIsPolling(false);
           
           setMatchResult(matchState.winnerId || null, 'completed');
           setGamePhase('result');
+          console.log('[Polling] Match resolved, polling stopped');
+          return; // Exit early to prevent further polling adjustments
         }
 
         // Adjust polling speed based on state
