@@ -167,6 +167,20 @@ export class PollingService {
     const response = await this.api.post('/api/ping', { clientTimestamp });
     return response.data;
   }
+
+  /**
+   * GET /api/match/stake-status/:matchId
+   * Get stake status for both players
+   */
+  async getStakeStatus(matchId: string): Promise<{ 
+    player1Staked: boolean; 
+    player2Staked: boolean; 
+    canStart: boolean;
+    stake: number;
+  }> {
+    const response = await this.api.get(`/api/match/stake-status/${matchId}`);
+    return response.data;
+  }
 }
 
 // Export singleton instance
