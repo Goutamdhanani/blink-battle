@@ -16,6 +16,8 @@ interface State {
  * Prevents the entire app from crashing and showing only a blue screen
  */
 class ErrorBoundary extends Component<Props, State> {
+  private isDebugMode: boolean;
+
   constructor(props: Props) {
     super(props);
     this.state = {
@@ -23,6 +25,16 @@ class ErrorBoundary extends Component<Props, State> {
       error: null,
       errorInfo: null,
     };
+    
+    // Cache debug mode check to avoid recreating URLSearchParams on every render
+    this.isDebugMode = (() => {
+      try {
+        return import.meta.env.DEV || 
+          (typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('debug') === '1');
+      } catch {
+        return import.meta.env.DEV;
+      }
+    })();
   }
 
   static getDerivedStateFromError(_error: Error): Partial<State> {
@@ -104,7 +116,7 @@ class ErrorBoundary extends Component<Props, State> {
             </div>
 
             {/* Show detailed error in development or debug mode */}
-            {(import.meta.env.DEV || new URLSearchParams(window.location.search).get('debug') === '1') && (
+            {this.isDebugMode && (
               <details className="error-boundary-details">
                 <summary>Technical Details (for developers)</summary>
                 {this.state.error && (

@@ -1,5 +1,6 @@
 import React from 'react';
 import { MiniKit } from '@worldcoin/minikit-js';
+import '../components/AuthWrapper.css'; // Reuse auth wrapper styles
 
 interface MiniKitProviderProps {
   children: React.ReactNode;
@@ -11,7 +12,7 @@ interface MiniKitProviderProps {
  * This prevents race conditions per World Mini Apps docs
  */
 export const MiniKitProvider: React.FC<MiniKitProviderProps> = ({ children }) => {
-  const [error, setError] = React.useState<string | null>(null);
+  const [error, setError] = React.useState<{ type: 'config' | 'init', message: string } | null>(null);
 
   React.useEffect(() => {
     const initMiniKit = async () => {
@@ -28,7 +29,7 @@ export const MiniKitProvider: React.FC<MiniKitProviderProps> = ({ children }) =>
           const errorMsg = 'VITE_APP_ID is not configured. Please set it in your .env file.';
           console.error('❌ [MiniKitProvider]', errorMsg);
           console.error('Example: VITE_APP_ID=app_staging_your_app_id');
-          setError(errorMsg);
+          setError({ type: 'config', message: errorMsg });
           return;
         }
         
@@ -56,30 +57,25 @@ export const MiniKitProvider: React.FC<MiniKitProviderProps> = ({ children }) =>
         }
       } catch (error) {
         console.error('❌ [MiniKitProvider] Installation failed:', error);
-        setError(error instanceof Error ? error.message : 'Unknown error during MiniKit initialization');
+        setError({ 
+          type: 'init', 
+          message: error instanceof Error ? error.message : 'Unknown error during MiniKit initialization'
+        });
       }
     };
 
     initMiniKit();
   }, []);
 
-  // If there's a critical initialization error, show it
-  if (error && error.includes('VITE_APP_ID')) {
+  // If there's a critical configuration error, show it
+  if (error?.type === 'config') {
     return (
-      <div style={{
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        minHeight: '100vh',
-        background: 'linear-gradient(135deg, #0a0a0f 0%, #1a1a2e 50%, #16213e 100%)',
-        color: 'white',
-        padding: '24px',
-        textAlign: 'center',
-      }}>
-        <div>
-          <h1 style={{ color: '#ff6b6b', fontSize: '2rem', marginBottom: '16px' }}>⚙️ Configuration Error</h1>
-          <p style={{ fontSize: '1.1rem', marginBottom: '24px' }}>{error}</p>
-          <p style={{ color: 'rgba(255, 255, 255, 0.7)', fontSize: '0.9rem' }}>
+      <div className="auth-wrapper auth-error">
+        <div className="auth-content">
+          <h1 className="auth-title">⚙️ Configuration Error</h1>
+          <div className="auth-error-icon">⚠️</div>
+          <p className="auth-error-text">{error.message}</p>
+          <p className="auth-text">
             Please check your .env file and ensure VITE_APP_ID is set correctly.
           </p>
         </div>
