@@ -172,3 +172,34 @@ export function clampReactionTime(reactionMs: number): number {
   
   return Math.max(MIN_REACTION_MS, Math.min(MAX_REACTION_MS, reactionMs));
 }
+
+/**
+ * Calculate platform fee and net payout for a match
+ * Uses PLATFORM_FEE_PERCENT from environment (default 3%)
+ * 
+ * @param stake - Stake amount in WLD (floating point)
+ * @returns Object with totalPool, platformFee, and netPayout (all in wei as BigInt)
+ */
+export function calculatePlatformFee(stake: number): {
+  totalPool: bigint;
+  platformFee: bigint;
+  netPayout: bigint;
+} {
+  // Convert stake to wei
+  const stakeWei = BigInt(Math.floor(stake * 1e18));
+  const totalPool = stakeWei * 2n; // Both players' stakes
+  
+  // Use PLATFORM_FEE_PERCENT from environment (default 3%)
+  const PLATFORM_FEE_PERCENT = parseFloat(process.env.PLATFORM_FEE_PERCENT || '3');
+  const platformFeeBps = BigInt(Math.round(PLATFORM_FEE_PERCENT * 100)); // Convert % to basis points
+  
+  const platformFee = (totalPool * platformFeeBps) / 10000n;
+  const netPayout = totalPool - platformFee;
+  
+  return {
+    totalPool,
+    platformFee,
+    netPayout
+  };
+}
+

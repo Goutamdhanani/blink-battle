@@ -33,7 +33,9 @@ export function startClaimExpiryJob(): void {
   }, 5 * 60 * 1000);
   
   // Run once on startup
-  expireUnclaimedMatches().catch(console.error);
+  expireUnclaimedMatches().catch(err => {
+    console.error('[ClaimExpiry] Startup error:', err.message);
+  });
   
   console.log('[ClaimExpiry] Background job started (every 5 minutes)');
 }

@@ -81,8 +81,14 @@ const ResultScreen: React.FC = () => {
         setClaimTimeLeft(Math.max(0, secondsLeft));
 
         // If expired, reload claim status
-        if (secondsLeft <= 0) {
-          loadClaimStatus();
+        if (secondsLeft <= 0 && state.matchId && state.token) {
+          getClaimStatus(state.matchId, state.token).then(status => {
+            if (status) {
+              setClaimStatus(status);
+            }
+          }).catch(err => {
+            console.error('[ResultScreen] Error reloading claim status:', err);
+          });
         }
       } catch (err) {
         console.error('[ResultScreen] Error updating countdown:', err);
@@ -91,7 +97,7 @@ const ResultScreen: React.FC = () => {
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [claimStatus]);
+  }, [claimStatus, state.matchId, state.token]);
 
   const fireConfetti = () => {
     const duration = 3000;

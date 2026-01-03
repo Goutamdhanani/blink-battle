@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { ClaimModel, ClaimStatus } from '../models/Claim';
 import { MatchModel } from '../models/Match';
 import { TreasuryService } from '../services/treasuryService';
+import { calculatePlatformFee } from '../services/paymentUtils';
 import pool from '../config/database';
 
 /**
@@ -135,16 +136,7 @@ export class ClaimController {
       }
 
       // Calculate payout using integer math (wei)
-      // Convert stake to wei first
-      const stakeWei = BigInt(Math.floor(match.stake * 1e18));
-      const totalPool = stakeWei * 2n; // Both players' stakes
-      
-      // Use PLATFORM_FEE_PERCENT from environment (default 3%)
-      const PLATFORM_FEE_PERCENT = parseFloat(process.env.PLATFORM_FEE_PERCENT || '3');
-      const platformFeeBps = BigInt(Math.round(PLATFORM_FEE_PERCENT * 100)); // Convert % to basis points
-      
-      const platformFee = (totalPool * platformFeeBps) / 10000n;
-      const netPayout = totalPool - platformFee;
+      const { totalPool, platformFee, netPayout } = calculatePlatformFee(match.stake);
 
       console.log(`[Claim] Match ${matchId} - Total: ${totalPool}, Fee: ${platformFee}, Payout: ${netPayout}`);
 
@@ -267,15 +259,7 @@ export class ClaimController {
       const claim = await ClaimModel.findByMatchId(matchId);
 
       // Calculate payout
-      const stakeWei = BigInt(Math.floor(match.stake * 1e18));
-      const totalPool = stakeWei * 2n;
-      
-      // Use PLATFORM_FEE_PERCENT from environment (default 3%)
-      const PLATFORM_FEE_PERCENT = parseFloat(process.env.PLATFORM_FEE_PERCENT || '3');
-      const platformFeeBps = BigInt(Math.round(PLATFORM_FEE_PERCENT * 100)); // Convert % to basis points
-      
-      const platformFee = (totalPool * platformFeeBps) / 10000n;
-      const netPayout = totalPool - platformFee;
+      const { totalPool, platformFee, netPayout } = calculatePlatformFee(match.stake);
 
       // Check deadline
       let deadlineExpired = false;
