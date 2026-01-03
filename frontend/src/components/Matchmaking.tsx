@@ -11,7 +11,7 @@ import './Matchmaking.css';
 // We no longer use custom payment screens - MiniKit drawer is opened before joining queue
 
 const STAKE_OPTIONS = [0.1, 0.25, 0.5, 1.0];
-const MAX_STAKE = 0.1; // Maximum stake until platform wallet is funded
+const MAX_STAKE = 0.1; // Maximum stake enforced by platform
 
 const Matchmaking: React.FC = () => {
   const navigate = useNavigate();
@@ -59,7 +59,7 @@ const Matchmaking: React.FC = () => {
 
     // Validate stake cap
     if (selectedStake > MAX_STAKE) {
-      setPaymentError(`Maximum stake is ${MAX_STAKE} WLD until platform wallet is sufficiently funded for gas fees`);
+      setPaymentError(`Maximum stake is ${MAX_STAKE} WLD`);
       return;
     }
 
@@ -244,17 +244,13 @@ const Matchmaking: React.FC = () => {
                       >
                         <div className="stake-amount">{stake} WLD</div>
                         <div className="stake-payout">
-                          {isDisabled ? '⚠️ Temporarily unavailable' : `Win: ${(stake * 2 * 0.97).toFixed(2)} WLD`}
+                          {isDisabled ? '⚠️ Exceeds platform limit' : `Win: ${(stake * 2 * 0.97).toFixed(2)} WLD`}
                         </div>
                       </GlassCard>
                     );
                   })}
                 </div>
-                {MAX_STAKE < Math.max(...STAKE_OPTIONS) && (
-                  <GlassCard className="warning-box">
-                    ⚠️ Stakes above {MAX_STAKE} WLD are temporarily disabled until platform wallet is funded for gas fees.
-                  </GlassCard>
-                )}
+
               </>
             )}
 
