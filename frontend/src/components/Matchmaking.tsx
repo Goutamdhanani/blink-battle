@@ -4,6 +4,8 @@ import { useGameContext } from '../context/GameContext';
 import { usePollingGame } from '../hooks/usePollingGame';
 import { minikit } from '../lib/minikit';
 import { useMiniKit } from '../hooks/useMiniKit';
+import { pollingService } from '../services/pollingService';
+import { apiClient } from '../lib/api';
 import { GlassCard, NeonButton } from './ui';
 import './Matchmaking.css';
 
@@ -98,13 +100,26 @@ const Matchmaking: React.FC = () => {
         
         // Store payment reference
         setPaymentReference(result.reference);
+
+        // CRITICAL: Confirm stake with backend before allowing game to start
+        console.log('[Matchmaking] Confirming stake with backend, reference:', result.reference);
+        const stakeRes = await apiClient.post('/api/match/confirm-stake', {
+          matchId: state.matchId,
+          paymentReference: result.reference,
+        });
+
+        console.log('[Matchmaking] Stake confirmed:', stakeRes.data);
+
+        // If both players have staked, automatically mark as ready
+        if (stakeRes.data.bothStaked) {
+          console.log('[Matchmaking] Both players staked, marking ready');
+          await pollingService.markReady(state.matchId);
+        }
+
         setProcessingPayment(false);
 
-        // Notify backend that payment is confirmed
-        // Note: This will be handled when we integrate payment flow with HTTP polling
-        // For now, matches start without payment in the HTTP polling flow
-        console.log('[Matchmaking] Payment confirmed, reference:', result.reference);
-        // The backend will notify us when both players have paid via 'both_players_paid' event
+        // Navigate to game arena - game will wait in payment screen until both players pay
+        console.log('[Matchmaking] Payment flow complete, waiting for opponent payment');
       } else {
         minikit.sendHaptic('error');
         const errorMsg = result.error || 'Payment failed';

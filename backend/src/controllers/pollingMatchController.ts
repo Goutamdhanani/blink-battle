@@ -422,6 +422,79 @@ export class PollingMatchController {
   }
 
   /**
+   * POST /api/match/confirm-stake
+   * Confirm that a player has paid their stake
+   * Called after payment intent is confirmed
+   */
+  static async confirmStake(req: Request, res: Response): Promise<void> {
+    try {
+      const userId = (req as any).userId;
+      const { matchId, paymentReference } = req.body;
+
+      if (!matchId || !paymentReference) {
+        res.status(400).json({ error: 'Missing matchId or paymentReference' });
+        return;
+      }
+
+      const match = await MatchModel.findById(matchId);
+      if (!match) {
+        res.status(404).json({ error: 'Match not found' });
+        return;
+      }
+
+      // Verify user is in this match
+      if (match.player1_id !== userId && match.player2_id !== userId) {
+        res.status(403).json({ error: 'Not a participant in this match' });
+        return;
+      }
+
+      // Verify payment intent exists and is confirmed
+      const { PaymentIntentModel } = await import('../models/PaymentIntent');
+      const paymentIntent = await PaymentIntentModel.findByReference(paymentReference);
+      
+      if (!paymentIntent) {
+        res.status(404).json({ error: 'Payment intent not found' });
+        return;
+      }
+
+      if (paymentIntent.user_id !== userId) {
+        res.status(403).json({ error: 'Payment intent does not belong to this user' });
+        return;
+      }
+
+      if (paymentIntent.normalized_status !== 'confirmed') {
+        res.status(400).json({ 
+          error: 'Payment not yet confirmed',
+          status: paymentIntent.normalized_status
+        });
+        return;
+      }
+
+      // Link payment to match if not already linked
+      if (!paymentIntent.match_id) {
+        await PaymentIntentModel.linkToMatch(paymentReference, matchId);
+      }
+
+      // Mark player as staked (with transaction hash if available)
+      await MatchModel.setPlayerStaked(matchId, userId, paymentIntent.transaction_hash || undefined);
+
+      console.log(`[Polling Match] Player ${userId} stake confirmed for match ${matchId}`);
+
+      // Check if both players have now staked
+      const bothStaked = await MatchModel.areBothPlayersStaked(matchId);
+
+      res.json({
+        success: true,
+        bothStaked,
+        canStart: bothStaked
+      });
+    } catch (error) {
+      console.error('[Polling Match] Error in confirmStake:', error);
+      res.status(500).json({ error: 'Failed to confirm stake' });
+    }
+  }
+
+  /**
    * Determine winner based on tap events
    * CRITICAL: Compute winner BEFORE calling escrow/payment to avoid undefined winner
    */

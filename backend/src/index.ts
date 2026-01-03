@@ -254,6 +254,7 @@ app.delete('/api/matchmaking/cancel/:userId', authenticate, matchmakingRateLimit
 app.post('/api/match/ready', authenticate, matchRateLimiter, requestTrackingMiddleware, PollingMatchController.ready);
 app.get('/api/match/state/:matchId', authenticate, matchRateLimiter, requestTrackingMiddleware, PollingMatchController.getState);
 app.get('/api/match/stake-status/:matchId', authenticate, matchRateLimiter, requestTrackingMiddleware, PollingMatchController.getStakeStatus);
+app.post('/api/match/confirm-stake', authenticate, matchRateLimiter, requestTrackingMiddleware, PollingMatchController.confirmStake);
 app.post('/api/match/tap', authenticate, matchRateLimiter, requestTrackingMiddleware, PollingMatchController.tap);
 app.get('/api/match/result/:matchId', authenticate, matchRateLimiter, requestTrackingMiddleware, PollingMatchController.getResult);
 
