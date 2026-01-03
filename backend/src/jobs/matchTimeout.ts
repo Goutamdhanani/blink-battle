@@ -63,9 +63,10 @@ export async function processAbandonedMatches(): Promise<void> {
  * Cancel matches with a specific status that have exceeded their timeout
  */
 async function cancelAbandonedMatchesWithStatus(status: string, timeoutMs: number): Promise<number> {
-  const timeoutMinutes = Math.floor(timeoutMs / 60000);
+  const timeoutInterval = `${Math.floor(timeoutMs / 60000)} minutes`;
   
   // Find matches that have been in this status for too long
+  // SECURITY: Using parameterized query to prevent SQL injection
   const result = await pool.query(`
     UPDATE matches 
     SET cancelled = true,
@@ -73,13 +74,14 @@ async function cancelAbandonedMatchesWithStatus(status: string, timeoutMs: numbe
         status = $2,
         updated_at = NOW()
     WHERE status = $3
-      AND created_at < NOW() - INTERVAL '${timeoutMinutes} minutes'
+      AND created_at < NOW() - $4::INTERVAL
       AND (cancelled IS NULL OR cancelled = false)
     RETURNING match_id, player1_id, player2_id, stake
   `, [
     `${status}_timeout`,
     MatchStatus.CANCELLED,
-    status
+    status,
+    timeoutInterval
   ]);
 
   const matches = result.rows;
@@ -94,7 +96,7 @@ async function cancelAbandonedMatchesWithStatus(status: string, timeoutMs: numbe
       await markPaymentsForRefund(match.match_id, `${status}_timeout`);
     }
     
-    console.log(`[MatchTimeout] Cancelled match ${match.match_id} - stuck in ${status} for >${timeoutMinutes}m`);
+    console.log(`[MatchTimeout] Cancelled match ${match.match_id} - stuck in ${status} for >${timeoutInterval}`);
   }
 
   return matches.length;
@@ -159,6 +161,7 @@ export async function cleanupOldCancelledMatches(): Promise<void> {
  * Start the match timeout background job
  */
 let matchTimeoutInterval: NodeJS.Timeout | null = null;
+let cleanupInterval: NodeJS.Timeout | null = null;
 
 export function startMatchTimeoutJob(): void {
   // Prevent multiple intervals
@@ -175,14 +178,11 @@ export function startMatchTimeoutJob(): void {
   }, 2 * 60 * 1000);
 
   // Also run cleanup once per hour
-  const cleanupInterval = setInterval(() => {
+  cleanupInterval = setInterval(() => {
     cleanupOldCancelledMatches().catch(err => {
       console.error('[MatchTimeout] Error in cleanup:', err);
     });
   }, 60 * 60 * 1000);
-
-  // Store both intervals for shutdown
-  (matchTimeoutInterval as any).cleanupInterval = cleanupInterval;
 
   // First run after 30 seconds (give migrations time)
   setTimeout(() => {
@@ -200,14 +200,13 @@ export function startMatchTimeoutJob(): void {
 export function stopMatchTimeoutJob(): void {
   if (matchTimeoutInterval) {
     clearInterval(matchTimeoutInterval);
-    
-    // Clear cleanup interval if it exists
-    const cleanupInterval = (matchTimeoutInterval as any).cleanupInterval;
-    if (cleanupInterval) {
-      clearInterval(cleanupInterval);
-    }
-    
     matchTimeoutInterval = null;
-    console.log('[MatchTimeout] Stopped');
   }
+  
+  if (cleanupInterval) {
+    clearInterval(cleanupInterval);
+    cleanupInterval = null;
+  }
+  
+  console.log('[MatchTimeout] Stopped');
 }

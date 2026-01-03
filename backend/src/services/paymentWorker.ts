@@ -223,7 +223,8 @@ export class PaymentWorker {
           intent.minikit_transaction_id,
           undefined
         );
-        await PaymentIntentModel.scheduleRetry(intent.payment_reference, 5, 60); // Retry in 5-60s
+        // Schedule retry with exponential backoff: baseDelay=5s, maxDelay=60s
+        await PaymentIntentModel.scheduleRetry(intent.payment_reference, 5, 60);
         await PaymentIntentModel.releaseLock(intent.payment_reference);
         return;
       }

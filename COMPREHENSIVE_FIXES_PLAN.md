@@ -133,14 +133,14 @@ This document outlines the plan to address all 20 issues identified in the Blink
 
 #### Issue #13: Cleanup Job Timing
 **Priority**: MEDIUM
-**Current State**: Runs every 60s, cleans 1 entry at a time
+**Current State**: Runs every 60s, processes all expired entries in bulk (no LIMIT clause)
 **Plan**:
-1. Increase cleanup batch size (currently LIMIT 1)
+1. Verify cleanup efficiency meets needs (currently optimal)
 2. Add cleanup metrics/monitoring
-3. Adjust frequency based on queue size
-**Files to modify**:
+3. Adjust frequency if queue grows larger
+**Files to monitor**:
 - `backend/src/index.ts:408-419`
-- `backend/src/controllers/pollingMatchmakingController.ts`
+- `backend/src/models/MatchQueue.ts:105-116`
 
 #### Issue #14: Transaction Status Normalization
 **Priority**: MEDIUM
