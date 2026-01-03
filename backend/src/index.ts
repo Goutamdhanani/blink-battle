@@ -238,7 +238,7 @@ app.get('/api/payment-status/:reference', authenticate, matchRateLimiter, Paymen
 app.post('/api/verify-world-id', authenticate, VerificationController.verifyWorldID);
 
 // Matches
-app.get('/api/matches/history', authenticate, MatchController.getMatchHistory);
+app.get('/api/matches/history', authenticate, matchRateLimiter, MatchController.getMatchHistory);
 app.get('/api/matches/:matchId', authenticate, MatchController.getMatch);
 app.get('/api/matches/:matchId/status', authenticate, MatchController.getMatchStatus);
 
