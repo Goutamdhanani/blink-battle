@@ -345,5 +345,47 @@ describe('HTTP Polling Integration Tests', () => {
       expect(state.state).toBe('go');
       expect(state.greenLightActive).toBe(true);
     });
+
+    it('should accept ready calls on newly created match with pending status', async () => {
+      // Verify match starts with 'pending' status
+      const match = await MatchModel.findById(matchId);
+      expect(match?.status).toBe('pending');
+
+      // First player calls ready on pending match
+      const readyReq1: any = { userId: testUserId1, body: { matchId } };
+      const readyRes1: any = {
+        json: jest.fn(),
+        status: jest.fn().mockReturnThis(),
+      };
+      await PollingMatchController.ready(readyReq1, readyRes1);
+      
+      const readyResult1: any = readyRes1.json.mock.calls[0][0];
+      
+      // Should succeed, not return alreadyStarted
+      expect(readyResult1.success).toBe(true);
+      expect(readyResult1.alreadyStarted).toBeUndefined();
+      expect(readyResult1.yourReady).toBe(true);
+      expect(readyResult1.bothReady).toBe(false);
+
+      // Second player calls ready
+      const readyReq2: any = { userId: testUserId2, body: { matchId } };
+      const readyRes2: any = {
+        json: jest.fn(),
+        status: jest.fn().mockReturnThis(),
+      };
+      await PollingMatchController.ready(readyReq2, readyRes2);
+      
+      const readyResult2: any = readyRes2.json.mock.calls[0][0];
+      
+      // Both ready should trigger countdown
+      expect(readyResult2.success).toBe(true);
+      expect(readyResult2.bothReady).toBe(true);
+      expect(readyResult2.greenLightTime).toBeDefined();
+      expect(readyResult2.status).toBe('countdown');
+
+      // Verify match transitioned to countdown status
+      const matchAfterReady = await MatchModel.findById(matchId);
+      expect(matchAfterReady?.status).toBe('countdown');
+    });
   });
 });

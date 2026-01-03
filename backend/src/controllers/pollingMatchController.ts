@@ -62,7 +62,8 @@ export class PollingMatchController {
       const matchData = match.rows[0];
 
       // Prevent ready if match already started
-      if (!['waiting', 'ready', 'matched'].includes(matchData.status)) {
+      // Allow 'pending' for newly created matches to proceed with ready flow
+      if (!['pending', 'waiting', 'ready', 'matched'].includes(matchData.status)) {
         await client.query('ROLLBACK');
         console.log(`[Match] Match ${matchId} already in ${matchData.status}, ignoring ready`);
         res.json({ status: matchData.status, alreadyStarted: true });
