@@ -30,7 +30,7 @@ const RATE_LIMITS = {
   // Match state endpoints (more frequent during gameplay)
   match: {
     windowMs: 60000, // 1 minute
-    maxRequests: 100, // 100 requests per minute max (allows ~1.6 req/sec)
+    maxRequests: 500, // 500 requests per minute max - increased for polling (allows ~8.3 req/sec)
   },
 };
 

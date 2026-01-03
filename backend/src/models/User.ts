@@ -52,8 +52,16 @@ export class UserModel {
   static async getLeaderboard(limit: number = 10): Promise<User[]> {
     const result = await pool.query(
       `SELECT * FROM users 
-       WHERE wins > 0 
-       ORDER BY wins DESC, avg_reaction_time ASC 
+       WHERE wins > 0 OR losses > 0
+       ORDER BY 
+         wins DESC,                    -- Primary: Most wins
+         (CASE 
+           WHEN (wins + losses) > 0 
+           THEN wins::decimal / (wins + losses) 
+           ELSE 0 
+         END) DESC,                    -- Secondary: Higher win rate
+         (wins + losses) ASC,          -- Tertiary: Fewer matches (more efficient)
+         avg_reaction_time ASC         -- Quaternary: Faster reaction time
        LIMIT $1`,
       [limit]
     );

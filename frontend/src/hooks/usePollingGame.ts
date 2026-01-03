@@ -14,7 +14,7 @@ import { useGameContext } from '../context/GameContext';
  * 
  * Server load is manageable because:
  * - Very short duration (1-2 seconds per match)
- * - Rate limiting applied via matchRateLimiter (100 req/min)
+ * - Rate limiting applied via matchRateLimiter (500 req/min)
  * - Matches are sequential, not all players polling simultaneously
  */
 const POLLING_RATES = {
@@ -28,6 +28,12 @@ const POLLING_RATES = {
 };
 
 /**
+ * Heartbeat configuration
+ * Must be coordinated with backend disconnect timeout (30s)
+ */
+const HEARTBEAT_INTERVAL_MS = 5000; // 5 seconds - send heartbeat every 5s
+
+/**
  * Custom hook for HTTP polling-based gameplay
  * Replaces WebSocket connection with REST polling
  * Uses adaptive polling rates for ultra-smooth experience
@@ -37,6 +43,7 @@ export const usePollingGame = () => {
   const [isPolling, setIsPolling] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const heartbeatIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const matchStateRef = useRef<MatchState | null>(null);
   const pollCountRef = useRef<number>(0);
   const currentPollingRateRef = useRef<number>(POLLING_RATES.IDLE);
@@ -46,12 +53,16 @@ export const usePollingGame = () => {
     pollingService.setToken(state.token);
   }, [state.token]);
 
-  // Clear polling on unmount
+  // Clear polling and heartbeat on unmount
   useEffect(() => {
     return () => {
       if (pollIntervalRef.current) {
         clearInterval(pollIntervalRef.current);
         pollIntervalRef.current = null;
+      }
+      if (heartbeatIntervalRef.current) {
+        clearInterval(heartbeatIntervalRef.current);
+        heartbeatIntervalRef.current = null;
       }
     };
   }, []);
@@ -110,9 +121,19 @@ export const usePollingGame = () => {
     if (pollIntervalRef.current) {
       clearInterval(pollIntervalRef.current);
     }
+    if (heartbeatIntervalRef.current) {
+      clearInterval(heartbeatIntervalRef.current);
+    }
 
     setIsPolling(true);
     setError(null);
+
+    // Start heartbeat interval
+    heartbeatIntervalRef.current = setInterval(() => {
+      pollingService.sendHeartbeat(matchId).catch(err => {
+        console.error('[Polling] Heartbeat error:', err);
+      });
+    }, HEARTBEAT_INTERVAL_MS);
 
     const poll = async () => {
       try {
@@ -148,6 +169,10 @@ export const usePollingGame = () => {
           newRate = POLLING_RATES.PLAYING; // 50ms during active gameplay
         } else if (matchState.state === 'resolved' || matchState.status === 'completed') {
           // CRITICAL: Match is complete - stop polling IMMEDIATELY
+          if (heartbeatIntervalRef.current) {
+            clearInterval(heartbeatIntervalRef.current);
+            heartbeatIntervalRef.current = null;
+          }
           if (pollIntervalRef.current) {
             clearInterval(pollIntervalRef.current);
             pollIntervalRef.current = null;

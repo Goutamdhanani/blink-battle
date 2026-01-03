@@ -12,6 +12,7 @@ import { VerificationController } from './controllers/verificationController';
 import { PollingMatchmakingController } from './controllers/pollingMatchmakingController';
 import { PollingMatchController } from './controllers/pollingMatchController';
 import { ClaimController } from './controllers/claimController';
+import { RefundController } from './controllers/refundController';
 import { PingController } from './controllers/pingController';
 import { authenticate } from './middleware/auth';
 import { requestIdMiddleware } from './middleware/requestId';
@@ -273,8 +274,15 @@ app.post('/api/ping', authenticate, PingController.recordLatency);
 app.get('/api/ping/stats', authenticate, PingController.getStats);
 
 // Claim endpoints (treasury-based payment architecture)
-app.post('/api/claim', authenticate, matchRateLimiter, ClaimController.claimWinnings);
-app.get('/api/claim/status/:matchId', authenticate, matchRateLimiter, ClaimController.getClaimStatus);
+app.post('/api/claim', authenticate, matchRateLimiter, requestTrackingMiddleware, ClaimController.claimWinnings);
+app.get('/api/claim/status/:matchId', authenticate, matchRateLimiter, requestTrackingMiddleware, ClaimController.getClaimStatus);
+
+// Refund endpoints (rate limited to prevent abuse)
+app.post('/api/refund/claim', authenticate, matchRateLimiter, requestTrackingMiddleware, RefundController.claimRefund);
+app.get('/api/refund/status/:paymentReference', authenticate, matchRateLimiter, requestTrackingMiddleware, RefundController.checkRefundStatus);
+
+// Heartbeat endpoint for disconnect detection (rate limited)
+app.post('/api/match/heartbeat', authenticate, matchRateLimiter, requestTrackingMiddleware, PollingMatchController.heartbeat);
 
 // WebSockets - DEPRECATED for gameplay, kept for other features if needed
 // TODO: Remove entirely if not used for other features
@@ -322,6 +330,16 @@ const startServer = async () => {
     const { startClaimExpiryJob } = await import('./jobs/claimExpiry');
     startClaimExpiryJob();
     console.log(`✅ Claim expiry job started`);
+
+    // Start refund processor for timeout matches
+    const { startRefundProcessor } = await import('./jobs/refundProcessor');
+    startRefundProcessor();
+    console.log(`✅ Refund processor job started`);
+
+    // Start disconnect checker for player disconnects
+    const { startDisconnectChecker } = await import('./jobs/disconnectChecker');
+    startDisconnectChecker();
+    console.log(`✅ Disconnect checker job started`);
 
     httpServer.listen(PORT, () => {
       console.log(`Server running on port ${PORT}`);

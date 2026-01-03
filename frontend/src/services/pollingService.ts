@@ -68,10 +68,14 @@ export interface TapResponse {
 /**
  * HTTP Polling Service for matchmaking and gameplay
  * Replaces WebSocket-based communication
+ * Includes exponential backoff for rate limiting
  */
 export class PollingService {
   private api: AxiosInstance;
   private token: string | null = null;
+  private pollInterval: number = 250; // Start at 250ms
+  private consecutiveErrors: number = 0;
+  private readonly MAX_INTERVAL: number = 5000; // Max 5 seconds
 
   constructor() {
     this.api = axios.create({
@@ -88,10 +92,51 @@ export class PollingService {
       }
       return config;
     });
+
+    // Add response interceptor for rate limiting
+    this.api.interceptors.response.use(
+      (response) => {
+        // Success - reset backoff
+        this.consecutiveErrors = 0;
+        this.pollInterval = 250;
+        return response;
+      },
+      async (error) => {
+        if (error.response?.status === 429) {
+          // Rate limited - slow down exponentially
+          this.consecutiveErrors++;
+          this.pollInterval = Math.min(this.pollInterval * 2, this.MAX_INTERVAL);
+          console.warn(`[PollingService] Rate limited. Backing off to ${this.pollInterval}ms`);
+          
+          // Wait before retrying
+          await new Promise(resolve => setTimeout(resolve, this.pollInterval));
+        } else if (error.code === 'ERR_NETWORK' || error.code === 'ECONNABORTED') {
+          // Network error - slower backoff
+          this.consecutiveErrors++;
+          this.pollInterval = Math.min(this.pollInterval * 1.5, this.MAX_INTERVAL);
+        }
+        throw error;
+      }
+    );
   }
 
   setToken(token: string | null) {
     this.token = token;
+  }
+
+  /**
+   * Get current poll interval (for adaptive polling)
+   */
+  getPollInterval(): number {
+    return this.pollInterval;
+  }
+
+  /**
+   * Reset backoff state
+   */
+  resetBackoff(): void {
+    this.pollInterval = 250;
+    this.consecutiveErrors = 0;
   }
 
   /**
@@ -183,6 +228,15 @@ export class PollingService {
     stake: number;
   }> {
     const response = await this.api.get(`/api/match/stake-status/${matchId}`);
+    return response.data;
+  }
+
+  /**
+   * POST /api/match/heartbeat
+   * Send heartbeat to server to indicate player is still connected
+   */
+  async sendHeartbeat(matchId: string): Promise<{ success: boolean }> {
+    const response = await this.api.post('/api/match/heartbeat', { matchId });
     return response.data;
   }
 }
