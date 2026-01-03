@@ -4,6 +4,7 @@ import * as migration002 from './migrations/002_matches_idempotency';
 import * as migration003 from './migrations/003_tap_events_unique';
 import * as migration004 from './migrations/004_schema_validation';
 import * as migration005 from './migrations/005_payment_intent_transaction_id_index';
+import * as migration006 from './migrations/006_treasury_tables';
 
 interface Migration {
   name: string;
@@ -17,6 +18,7 @@ const migrations: Migration[] = [
   { name: '003_tap_events_unique', ...migration003 },
   { name: '004_schema_validation', ...migration004 },
   { name: '005_payment_intent_transaction_id_index', ...migration005 },
+  { name: '006_treasury_tables', ...migration006 },
 ];
 
 /**
