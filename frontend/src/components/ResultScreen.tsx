@@ -1,14 +1,17 @@
 import React, { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useGameContext } from '../context/GameContext';
+import { useLatency } from '../hooks/useLatency';
 import { minikit } from '../lib/minikit';
 import { GlassCard, NeonButton } from './ui';
+import { clampReactionTime } from '../lib/statusUtils';
 import confetti from 'canvas-confetti';
 import './ResultScreen.css';
 
 const ResultScreen: React.FC = () => {
   const navigate = useNavigate();
   const { state, resetGame } = useGameContext();
+  const { latencyStats, getLatencyRange, getEstimatedOneWayLatency } = useLatency();
 
   useEffect(() => {
     if (!state.user || !state.result) {
@@ -73,8 +76,10 @@ const ResultScreen: React.FC = () => {
 
   const isWinner = state.winnerId === state.user.userId;
   const isTie = state.result === 'tie';
-  const yourReaction = state.yourReaction || 0;
-  const opponentReaction = state.opponentReaction || 0;
+  
+  // CRITICAL: Clamp reaction times to valid range (prevent negative/invalid display)
+  const yourReaction = clampReactionTime(state.yourReaction) || 0;
+  const opponentReaction = clampReactionTime(state.opponentReaction) || 0;
 
   const getResultMessage = () => {
     if (isTie) return 'It\'s a Tie!';
@@ -141,6 +146,17 @@ const ResultScreen: React.FC = () => {
               </div>
               <div className={`winnings-amount ${isWinner || isTie ? 'positive' : 'negative'}`}>
                 {isWinner || isTie ? '+' : '-'}{winnings.toFixed(2)} WLD
+              </div>
+            </GlassCard>
+          )}
+
+          {/* Display latency information if available */}
+          {latencyStats.samples > 0 && (
+            <GlassCard className="latency-info">
+              <div className="latency-label">Network Latency</div>
+              <div className="latency-value">{getLatencyRange()}</div>
+              <div className="latency-note">
+                Estimated one-way: ~{getEstimatedOneWayLatency()}ms
               </div>
             </GlassCard>
           )}

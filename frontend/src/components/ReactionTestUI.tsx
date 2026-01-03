@@ -25,6 +25,11 @@ const ReactionTestUI: React.FC<ReactionTestUIProps> = ({
   reactionTime,
   opponentInfo,
 }) => {
+  // CRITICAL: Clamp countdown to valid range (prevent negative/invalid display)
+  const clampedCountdown = countdown !== null && countdown !== undefined
+    ? Math.max(0, Math.min(10, countdown))  // Valid range: 0-10
+    : null;
+
   const renderContent = () => {
     switch (phase) {
       case 'countdown':
@@ -37,12 +42,12 @@ const ReactionTestUI: React.FC<ReactionTestUIProps> = ({
               )}
             </div>
             
-            <ReactionLights state="red" countdown={countdown} />
+            <ReactionLights state="red" countdown={clampedCountdown} />
             
-            {countdown !== null && countdown !== undefined && (
+            {clampedCountdown !== null && (
               <div className="reaction-countdown-display">
                 <div className="reaction-countdown-number glow-secondary pulse">
-                  {countdown}
+                  {clampedCountdown}
                 </div>
               </div>
             )}

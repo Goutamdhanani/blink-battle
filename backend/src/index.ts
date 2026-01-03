@@ -254,6 +254,7 @@ app.delete('/api/matchmaking/cancel/:userId', authenticate, matchmakingRateLimit
 app.post('/api/match/ready', authenticate, matchRateLimiter, requestTrackingMiddleware, PollingMatchController.ready);
 app.get('/api/match/state/:matchId', authenticate, matchRateLimiter, requestTrackingMiddleware, PollingMatchController.getState);
 app.get('/api/match/stake-status/:matchId', authenticate, matchRateLimiter, requestTrackingMiddleware, PollingMatchController.getStakeStatus);
+app.post('/api/match/confirm-stake', authenticate, matchRateLimiter, requestTrackingMiddleware, PollingMatchController.confirmStake);
 app.post('/api/match/tap', authenticate, matchRateLimiter, requestTrackingMiddleware, PollingMatchController.tap);
 app.get('/api/match/result/:matchId', authenticate, matchRateLimiter, requestTrackingMiddleware, PollingMatchController.getResult);
 
@@ -282,6 +283,12 @@ const startServer = async () => {
 
     await pool.query('SELECT NOW()');
     console.log('Connected to PostgreSQL');
+
+    // Start payment worker for processing payment intents
+    const { startPaymentWorker } = await import('./services/paymentWorker');
+    const PAYMENT_WORKER_INTERVAL_MS = parseInt(process.env.PAYMENT_WORKER_INTERVAL_MS || '10000', 10);
+    startPaymentWorker(PAYMENT_WORKER_INTERVAL_MS);
+    console.log(`✅ Payment worker started (interval: ${PAYMENT_WORKER_INTERVAL_MS}ms)`);
 
     // Start cleanup interval for expired queue entries
     const CLEANUP_INTERVAL_MS = 60000; // 1 minute
@@ -319,6 +326,11 @@ const startServer = async () => {
 // Graceful shutdown
 const shutdown = async (signal: string) => {
   console.log(`\n${signal} received, shutting down gracefully...`);
+  
+  // Stop payment worker
+  const { stopPaymentWorker } = await import('./services/paymentWorker');
+  stopPaymentWorker();
+  console.log('Payment worker stopped');
   
   // Stop request tracking
   const { stopStatsLogging } = await import('./middleware/requestTracking');

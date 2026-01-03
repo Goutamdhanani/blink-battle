@@ -19,6 +19,9 @@ export class PollingMatchController {
   /**
    * POST /api/match/ready
    * Mark player as ready
+   * 
+   * CRITICAL: Enforces dual funding requirement for staked games
+   * Both players MUST have deposited stake before game can start
    */
   static async ready(req: Request, res: Response): Promise<void> {
     try {
@@ -37,23 +40,30 @@ export class PollingMatchController {
         return;
       }
 
-      // TODO: SECURITY - Uncomment this when frontend implements MiniKit stake flow
-      // Consider using an environment variable like ENFORCE_STAKES=true instead of commenting
-      // For now, we allow ready without staking to avoid breaking existing functionality
-      // This creates a vulnerability where users can play staked games without depositing
-      /*
-      // Check if stakes are required and deposited
+      // CRITICAL: Enforce dual funding for staked games
+      // Game MUST NOT start until BOTH players have deposited stake
       if (match.stake > 0) {
         const bothStaked = await MatchModel.areBothPlayersStaked(matchId);
         if (!bothStaked) {
           res.status(400).json({ 
             error: 'Both players must deposit stake before game can start',
-            requiresStake: true 
+            requiresStake: true,
+            player1Staked: match.player1_staked || false,
+            player2Staked: match.player2_staked || false,
           });
           return;
         }
+
+        // Validate wallets are stored
+        if (!match.player1_wallet || !match.player2_wallet) {
+          res.status(500).json({ 
+            error: 'Player wallets not found - cannot start match',
+          });
+          return;
+        }
+
+        console.log(`[Polling Match] Match ${matchId} - Both players staked and wallets validated`);
       }
-      */
 
       // Mark player as ready (sets ready flag and ready_at timestamp)
       await MatchModel.setPlayerReady(matchId, userId);
@@ -224,6 +234,9 @@ export class PollingMatchController {
   /**
    * POST /api/match/tap
    * Record tap (server-time authoritative, client time optional for audit)
+   * 
+   * CRITICAL: Validates timestamps to prevent "Invalid time value" errors
+   * Uses first-write-wins semantics via UNIQUE constraint
    */
   static async tap(req: Request, res: Response): Promise<void> {
     try {
@@ -242,30 +255,49 @@ export class PollingMatchController {
         return;
       }
 
-      // Check if green light time is set
-      if (!match.green_light_time) {
-        res.status(400).json({ error: 'Green light not yet scheduled' });
+      // CRITICAL: Validate green_light_time to prevent "Invalid time value"
+      if (!match.green_light_time || !Number.isFinite(match.green_light_time)) {
+        console.error(`[Polling Match] Invalid green_light_time for match ${matchId}: ${match.green_light_time}`);
+        res.status(400).json({ 
+          error: 'Green light time is invalid',
+          details: 'Match data corrupted - green light time not set properly'
+        });
         return;
       }
 
-      // Check if player already tapped
-      const existingTap = await TapEventModel.findByMatchAndUser(matchId, userId);
-      if (existingTap) {
+      // Validate green_light_time is reasonable (not too far in past or future)
+      const greenLightTime = match.green_light_time;
+      const now = Date.now();
+      const timeSinceGreenLight = now - greenLightTime;
+      
+      // Allow taps up to 10 seconds after green light (generous for network latency)
+      // Reject taps more than 1 minute before green light (clock skew/invalid state)
+      if (timeSinceGreenLight < -60000 || timeSinceGreenLight > 10000) {
+        console.warn(`[Polling Match] Tap rejected - green light time out of range. Match: ${matchId}, Green light: ${greenLightTime}, Now: ${now}, Delta: ${timeSinceGreenLight}ms`);
         res.status(400).json({ 
-          error: 'Already tapped',
-          tap: existingTap
+          error: 'Tap window expired or not yet active',
+          details: {
+            greenLightTime,
+            serverTime: now,
+            deltaMs: timeSinceGreenLight
+          }
         });
         return;
       }
 
       // Record tap with server timestamp (authoritative)
+      // This will return existing tap if duplicate (ON CONFLICT DO NOTHING)
       const serverTimestamp = Date.now();
+      const validatedClientTimestamp = clientTimestamp && Number.isFinite(clientTimestamp) 
+        ? clientTimestamp 
+        : serverTimestamp;
+
       const tap = await TapEventModel.create(
         matchId,
         userId,
-        clientTimestamp || serverTimestamp,
+        validatedClientTimestamp,
         serverTimestamp,
-        match.green_light_time
+        greenLightTime
       );
 
       console.log(`[Polling Match] Tap recorded - User: ${userId}, Match: ${matchId}, Reaction: ${tap.reaction_ms}ms, Valid: ${tap.is_valid}, Disqualified: ${tap.disqualified}`);
@@ -386,6 +418,79 @@ export class PollingMatchController {
     } catch (error) {
       console.error('[Polling Match] Error in getStakeStatus:', error);
       res.status(500).json({ error: 'Failed to get stake status' });
+    }
+  }
+
+  /**
+   * POST /api/match/confirm-stake
+   * Confirm that a player has paid their stake
+   * Called after payment intent is confirmed
+   */
+  static async confirmStake(req: Request, res: Response): Promise<void> {
+    try {
+      const userId = (req as any).userId;
+      const { matchId, paymentReference } = req.body;
+
+      if (!matchId || !paymentReference) {
+        res.status(400).json({ error: 'Missing matchId or paymentReference' });
+        return;
+      }
+
+      const match = await MatchModel.findById(matchId);
+      if (!match) {
+        res.status(404).json({ error: 'Match not found' });
+        return;
+      }
+
+      // Verify user is in this match
+      if (match.player1_id !== userId && match.player2_id !== userId) {
+        res.status(403).json({ error: 'Not a participant in this match' });
+        return;
+      }
+
+      // Verify payment intent exists and is confirmed
+      const { PaymentIntentModel } = await import('../models/PaymentIntent');
+      const paymentIntent = await PaymentIntentModel.findByReference(paymentReference);
+      
+      if (!paymentIntent) {
+        res.status(404).json({ error: 'Payment intent not found' });
+        return;
+      }
+
+      if (paymentIntent.user_id !== userId) {
+        res.status(403).json({ error: 'Payment intent does not belong to this user' });
+        return;
+      }
+
+      if (paymentIntent.normalized_status !== 'confirmed') {
+        res.status(400).json({ 
+          error: 'Payment not yet confirmed',
+          status: paymentIntent.normalized_status
+        });
+        return;
+      }
+
+      // Link payment to match if not already linked
+      if (!paymentIntent.match_id) {
+        await PaymentIntentModel.linkToMatch(paymentReference, matchId);
+      }
+
+      // Mark player as staked (with transaction hash if available)
+      await MatchModel.setPlayerStaked(matchId, userId, paymentIntent.transaction_hash || undefined);
+
+      console.log(`[Polling Match] Player ${userId} stake confirmed for match ${matchId}`);
+
+      // Check if both players have now staked
+      const bothStaked = await MatchModel.areBothPlayersStaked(matchId);
+
+      res.json({
+        success: true,
+        bothStaked,
+        canStart: bothStaked
+      });
+    } catch (error) {
+      console.error('[Polling Match] Error in confirmStake:', error);
+      res.status(500).json({ error: 'Failed to confirm stake' });
     }
   }
 

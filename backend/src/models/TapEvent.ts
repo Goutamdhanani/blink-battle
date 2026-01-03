@@ -19,7 +19,9 @@ export interface TapEvent {
  */
 export class TapEventModel {
   /**
-   * Record a tap event
+   * Record a tap event with first-write-wins semantics
+   * Uses INSERT ... ON CONFLICT DO NOTHING to prevent duplicate taps
+   * Returns existing tap if duplicate detected
    */
   static async create(
     matchId: string,
@@ -33,18 +35,31 @@ export class TapEventModel {
     const disqualified = reactionMs < 0;
     const disqualificationReason = disqualified ? 'early_tap' : undefined;
     
+    // First-write-wins: If a tap already exists for this (match_id, user_id), 
+    // the ON CONFLICT DO NOTHING will prevent the insert
     const result = await pool.query(
       `INSERT INTO tap_events (
         match_id, user_id, client_timestamp, server_timestamp, 
         reaction_ms, is_valid, disqualified, disqualification_reason
       ) 
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8) 
+       ON CONFLICT (match_id, user_id) DO NOTHING
        RETURNING *`,
       [
         matchId, userId, clientTimestamp, serverTimestamp, 
         reactionMs, isValid, disqualified, disqualificationReason
       ]
     );
+    
+    // If no rows returned, conflict occurred - return existing tap
+    if (result.rows.length === 0) {
+      console.log(`[TapEvent] Duplicate tap detected for match ${matchId}, user ${userId} - returning existing tap`);
+      const existing = await this.findByMatchAndUser(matchId, userId);
+      if (!existing) {
+        throw new Error('Duplicate tap detected but existing tap not found');
+      }
+      return existing;
+    }
     
     return result.rows[0];
   }
