@@ -676,6 +676,171 @@ describe('PaymentController', () => {
         undefined
       );
     });
+
+    it('should extract status from transactionStatus field when status is missing', async () => {
+      const userId = 'user-123';
+      const reference = 'test-ref';
+      const transactionId = 'tx-123';
+
+      mockRequest.body = {
+        payload: {
+          status: 'success',
+          reference,
+          transaction_id: transactionId,
+        },
+      };
+      (mockRequest as any).userId = userId;
+
+      const mockPayment = {
+        payment_id: 'payment-uuid',
+        reference,
+        user_id: userId,
+        amount: 0.5,
+        status: PaymentStatus.PENDING,
+        created_at: new Date(),
+        updated_at: new Date(),
+      };
+
+      // Developer Portal returns transactionStatus but not status
+      const mockTransaction = {
+        transactionStatus: 'pending',
+        transaction_id: transactionId,
+        transactionHash: null,
+      };
+
+      (PaymentModel.findByReference as jest.Mock).mockResolvedValue(mockPayment);
+      (PaymentIntentModel.updateStatus as jest.Mock).mockResolvedValue({});
+      (normalizeMiniKitStatus as jest.Mock).mockReturnValue(NormalizedPaymentStatus.PENDING);
+      (extractTransactionHash as jest.Mock).mockReturnValue(null);
+      mockedAxios.get.mockResolvedValue({ data: mockTransaction });
+
+      await PaymentController.confirmPayment(
+        mockRequest as Request,
+        mockResponse as Response
+      );
+
+      // Should call normalizeMiniKitStatus with transactionStatus value
+      expect(normalizeMiniKitStatus).toHaveBeenCalledWith('pending');
+      
+      // Should handle as pending without crashing
+      expect(jsonMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          success: true,
+          pending: true,
+        })
+      );
+    });
+
+    it('should prefer transactionStatus over status when both present', async () => {
+      const userId = 'user-123';
+      const reference = 'test-ref';
+      const transactionId = 'tx-123';
+
+      mockRequest.body = {
+        payload: {
+          status: 'success',
+          reference,
+          transaction_id: transactionId,
+        },
+      };
+      (mockRequest as any).userId = userId;
+
+      const mockPayment = {
+        payment_id: 'payment-uuid',
+        reference,
+        user_id: userId,
+        amount: 0.5,
+        status: PaymentStatus.PENDING,
+        created_at: new Date(),
+        updated_at: new Date(),
+      };
+
+      // Developer Portal returns both fields with different values
+      const mockTransaction = {
+        transactionStatus: 'mined',
+        status: 'pending', // Should be ignored in favor of transactionStatus
+        transaction_id: transactionId,
+        transactionHash: '0xabc123',
+      };
+
+      (PaymentModel.findByReference as jest.Mock).mockResolvedValue(mockPayment);
+      (PaymentModel.updateStatus as jest.Mock).mockResolvedValue({
+        ...mockPayment,
+        status: PaymentStatus.CONFIRMED,
+      });
+      (PaymentIntentModel.updateStatus as jest.Mock).mockResolvedValue({});
+      (normalizeMiniKitStatus as jest.Mock).mockReturnValue(NormalizedPaymentStatus.CONFIRMED);
+      (extractTransactionHash as jest.Mock).mockReturnValue('0xabc123');
+      mockedAxios.get.mockResolvedValue({ data: mockTransaction });
+
+      await PaymentController.confirmPayment(
+        mockRequest as Request,
+        mockResponse as Response
+      );
+
+      // Should call normalizeMiniKitStatus with transactionStatus value, not status
+      expect(normalizeMiniKitStatus).toHaveBeenCalledWith('mined');
+      
+      // Should confirm payment based on transactionStatus
+      expect(PaymentModel.updateStatus).toHaveBeenCalledWith(
+        reference,
+        PaymentStatus.CONFIRMED,
+        transactionId
+      );
+    });
+
+    it('should handle missing transactionStatus and status gracefully', async () => {
+      const userId = 'user-123';
+      const reference = 'test-ref';
+      const transactionId = 'tx-123';
+
+      mockRequest.body = {
+        payload: {
+          status: 'success',
+          reference,
+          transaction_id: transactionId,
+        },
+      };
+      (mockRequest as any).userId = userId;
+
+      const mockPayment = {
+        payment_id: 'payment-uuid',
+        reference,
+        user_id: userId,
+        amount: 0.5,
+        status: PaymentStatus.PENDING,
+        created_at: new Date(),
+        updated_at: new Date(),
+      };
+
+      // Developer Portal returns neither transactionStatus nor status
+      const mockTransaction = {
+        transaction_id: transactionId,
+        transactionHash: null,
+      };
+
+      (PaymentModel.findByReference as jest.Mock).mockResolvedValue(mockPayment);
+      (PaymentIntentModel.updateStatus as jest.Mock).mockResolvedValue({});
+      (normalizeMiniKitStatus as jest.Mock).mockReturnValue(NormalizedPaymentStatus.PENDING);
+      (extractTransactionHash as jest.Mock).mockReturnValue(null);
+      mockedAxios.get.mockResolvedValue({ data: mockTransaction });
+
+      await PaymentController.confirmPayment(
+        mockRequest as Request,
+        mockResponse as Response
+      );
+
+      // Should call normalizeMiniKitStatus with undefined (safely handled)
+      expect(normalizeMiniKitStatus).toHaveBeenCalledWith(undefined);
+      
+      // Should default to pending and not crash
+      expect(jsonMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          success: true,
+          pending: true,
+        })
+      );
+    });
   });
 
   describe('getPaymentStatus', () => {
