@@ -1,4 +1,5 @@
 import pool from '../config/database';
+import { clampReactionTime } from '../services/paymentUtils';
 
 export interface TapEvent {
   tap_id: string;
@@ -22,6 +23,8 @@ export class TapEventModel {
    * Record a tap event with first-write-wins semantics
    * Uses INSERT ... ON CONFLICT DO NOTHING to prevent duplicate taps
    * Returns existing tap if duplicate detected
+   * 
+   * CRITICAL: Clamps reaction_ms to valid range to prevent negative/garbage values
    */
   static async create(
     matchId: string,
@@ -30,10 +33,21 @@ export class TapEventModel {
     serverTimestamp: number,
     greenLightTime: number
   ): Promise<TapEvent> {
-    const reactionMs = serverTimestamp - greenLightTime;
-    const isValid = reactionMs >= 0 && reactionMs <= 5000; // 5 second max window
-    const disqualified = reactionMs < 0;
+    const rawReactionMs = serverTimestamp - greenLightTime;
+    
+    // CRITICAL: Clamp reaction time to MIN_REACTION_MS..MAX_REACTION_MS
+    // This prevents negative values and unreasonably large values
+    const reactionMs = clampReactionTime(rawReactionMs);
+    
+    // Validate using raw value but store clamped value
+    const isValid = rawReactionMs >= 0 && rawReactionMs <= 5000; // 5 second max window
+    const disqualified = rawReactionMs < 0;
     const disqualificationReason = disqualified ? 'early_tap' : undefined;
+    
+    // Log if clamping occurred (for monitoring)
+    if (rawReactionMs !== reactionMs) {
+      console.log(`[TapEvent] Clamped reaction time from ${rawReactionMs}ms to ${reactionMs}ms for match ${matchId}, user ${userId}`);
+    }
     
     // First-write-wins: If a tap already exists for this (match_id, user_id), 
     // the ON CONFLICT DO NOTHING will prevent the insert
