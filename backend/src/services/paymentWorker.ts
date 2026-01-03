@@ -209,6 +209,25 @@ export class PaymentWorker {
 
       console.log(`[PaymentWorker:${this.workerId}] Payment ${intent.payment_reference} raw status: "${rawStatus}" (transactionStatus: ${transaction.transactionStatus}, status: ${transaction.status}) → normalized: ${normalizedStatus}`);
 
+      // ISSUE #4 FIX: Handle missing transaction hash gracefully
+      // Transaction hash may be null for pending transactions or during blockchain confirmation delay
+      // This is expected behavior - don't fail the payment update
+      if (!transactionHash && normalizedStatus === NormalizedPaymentStatus.CONFIRMED) {
+        console.warn(`[PaymentWorker:${this.workerId}] Payment ${intent.payment_reference} confirmed but missing transaction hash - will retry to fetch in next cycle`);
+        // Don't mark as confirmed yet if we don't have the hash - keep as pending
+        // This ensures we retry and eventually get the hash when blockchain confirms
+        await PaymentIntentModel.updateStatus(
+          intent.payment_reference,
+          NormalizedPaymentStatus.PENDING,
+          rawStatus ?? undefined,
+          intent.minikit_transaction_id,
+          undefined
+        );
+        await PaymentIntentModel.scheduleRetry(intent.payment_reference, 5, 60); // Retry in 5-60s
+        await PaymentIntentModel.releaseLock(intent.payment_reference);
+        return;
+      }
+
       // Update payment status
       await PaymentIntentModel.updateStatus(
         intent.payment_reference,
