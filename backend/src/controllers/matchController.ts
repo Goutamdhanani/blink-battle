@@ -12,51 +12,77 @@ export class MatchController {
   static async getMatchHistory(req: Request, res: Response) {
     try {
       const userId = (req as any).userId;
-      const limit = parseInt(req.query.limit as string) || 10;
+      const limit = parseInt(req.query.limit as string) || 20;
 
-      const matches = await MatchModel.getMatchHistory(userId, limit);
+      // Get matches with payment and refund status
+      const { default: pool } = await import('../config/database');
+      const matches = await pool.query(`
+        SELECT 
+          m.*,
+          pi.payment_reference,
+          pi.refund_status,
+          pi.refund_deadline,
+          pi.refund_amount,
+          pi.refund_reason,
+          u1.wallet_address as player1_wallet_addr,
+          u2.wallet_address as player2_wallet_addr
+        FROM matches m
+        LEFT JOIN payment_intents pi ON pi.match_id = m.match_id AND pi.user_id = $1
+        LEFT JOIN users u1 ON u1.user_id = m.player1_id
+        LEFT JOIN users u2 ON u2.user_id = m.player2_id
+        WHERE m.player1_id = $1 OR m.player2_id = $1
+        ORDER BY m.created_at DESC
+        LIMIT $2
+      `, [userId, limit]);
 
-      // Enhance match data with opponent info and claim status
-      const enhancedMatches = await Promise.all(
-        matches.map(async (match) => {
-          const opponentId = match.player1_id === userId ? match.player2_id : match.player1_id;
-          const opponent = await UserModel.findById(opponentId);
-          const isWinner = match.winner_id === userId;
-          
-          // Calculate claim deadline info for winners
-          let claimInfo: any = {};
-          if (isWinner && match.stake > 0 && match.claim_deadline) {
-            const deadline = new Date(match.claim_deadline);
-            const now = new Date();
-            const msRemaining = deadline.getTime() - now.getTime();
-            
-            claimInfo = {
-              claimDeadline: deadline.toISOString(),
-              claimStatus: match.claim_status || 'unclaimed',
-              claimTimeRemaining: Math.max(0, Math.floor(msRemaining / 1000)), // seconds
-              claimable: match.claim_status === 'unclaimed' && msRemaining > 0
-            };
-          }
-          
-          return {
-            matchId: match.match_id,
-            stake: match.stake,
-            yourReaction: match.player1_id === userId ? match.player1_reaction_ms : match.player2_reaction_ms,
-            opponentReaction: match.player1_id === userId ? match.player2_reaction_ms : match.player1_reaction_ms,
-            won: isWinner,
-            opponent: opponent ? {
-              wallet: opponent.wallet_address,
-              avgReaction: opponent.avg_reaction_time,
-            } : null,
-            completedAt: match.completed_at,
-            ...claimInfo
-          };
-        })
-      );
+      // Also get orphaned payments (paid but never matched)
+      const orphanedPayments = await pool.query(`
+        SELECT 
+          pi.payment_reference,
+          pi.amount,
+          pi.created_at,
+          pi.refund_status,
+          pi.refund_deadline,
+          pi.refund_reason
+        FROM payment_intents pi
+        WHERE pi.user_id = $1 
+          AND pi.match_id IS NULL
+          AND pi.normalized_status = 'confirmed'
+        ORDER BY pi.created_at DESC
+        LIMIT 10
+      `, [userId]);
+
+      const now = Date.now();
 
       res.json({
-        success: true,
-        matches: enhancedMatches,
+        matches: matches.rows.map((m: any) => ({
+          matchId: m.match_id,
+          stake: m.stake,
+          status: m.status,
+          isWinner: m.winner_id === userId,
+          canClaim: m.winner_id === userId && m.claim_status === 'unclaimed' && new Date() < new Date(m.claim_deadline),
+          canRefund: m.refund_status === 'eligible' && new Date() < new Date(m.refund_deadline),
+          refundExpired: m.refund_status === 'eligible' && new Date() > new Date(m.refund_deadline),
+          refundStatus: m.refund_status,
+          refundReason: m.refund_reason,
+          paymentReference: m.payment_reference,
+          yourReaction: m.player1_id === userId ? m.player1_reaction_ms : m.player2_reaction_ms,
+          opponentReaction: m.player1_id === userId ? m.player2_reaction_ms : m.player1_reaction_ms,
+          completedAt: m.completed_at,
+          createdAt: m.created_at,
+          cancelled: m.cancelled,
+          cancellationReason: m.cancellation_reason
+        })),
+        cancelledPayments: orphanedPayments.rows.map((p: any) => ({
+          paymentReference: p.payment_reference,
+          amount: p.amount,
+          createdAt: p.created_at,
+          type: 'matchmaking_cancelled',
+          canRefund: p.refund_status === 'eligible' && new Date() < new Date(p.refund_deadline),
+          refundExpired: p.refund_status === 'eligible' && new Date() > new Date(p.refund_deadline),
+          refundStatus: p.refund_status,
+          refundReason: p.refund_reason
+        }))
       });
     } catch (error) {
       console.error('Error fetching match history:', error);
