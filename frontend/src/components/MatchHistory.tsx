@@ -44,24 +44,35 @@ const MatchHistory: React.FC = () => {
   }, [state.user, state.token, navigate]);
 
   // Update claim countdown timers every second
+  // Only update matches that have active claim timers for better performance
   useEffect(() => {
     const interval = setInterval(() => {
-      setMatches(prevMatches => 
-        prevMatches.map(match => {
+      setMatches(prevMatches => {
+        let hasChanges = false;
+        
+        const updatedMatches = prevMatches.map(match => {
+          // Only process matches with active claim timers
           if (match.claimDeadline && match.claimStatus === 'unclaimed') {
             const deadline = new Date(match.claimDeadline).getTime();
             const now = Date.now();
             const secondsLeft = Math.max(0, Math.floor((deadline - now) / 1000));
             
-            return {
-              ...match,
-              claimTimeRemaining: secondsLeft,
-              claimable: secondsLeft > 0
-            };
+            // Only update if time has changed
+            if (match.claimTimeRemaining !== secondsLeft) {
+              hasChanges = true;
+              return {
+                ...match,
+                claimTimeRemaining: secondsLeft,
+                claimable: secondsLeft > 0
+              };
+            }
           }
           return match;
-        })
-      );
+        });
+        
+        // Only trigger re-render if something changed
+        return hasChanges ? updatedMatches : prevMatches;
+      });
     }, 1000);
 
     return () => clearInterval(interval);

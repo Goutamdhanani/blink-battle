@@ -314,15 +314,23 @@ export class PollingMatchController {
         
         // Mark player as disqualified
         const isPlayer1 = match.player1_id === userId;
-        const disqualColumn = isPlayer1 ? 'player1_disqualified' : 'player2_disqualified';
-        const reactionColumn = isPlayer1 ? 'player1_reaction_ms' : 'player2_reaction_ms';
         
-        await pool.query(`
-          UPDATE matches 
-          SET ${disqualColumn} = true,
-              ${reactionColumn} = -1
-          WHERE match_id = $1
-        `, [matchId]);
+        // SECURITY: Use separate queries to avoid SQL injection via column names
+        if (isPlayer1) {
+          await pool.query(`
+            UPDATE matches 
+            SET player1_disqualified = true,
+                player1_reaction_ms = -1
+            WHERE match_id = $1
+          `, [matchId]);
+        } else {
+          await pool.query(`
+            UPDATE matches 
+            SET player2_disqualified = true,
+                player2_reaction_ms = -1
+            WHERE match_id = $1
+          `, [matchId]);
+        }
         
         // Record the early tap in tap_events for audit
         await TapEventModel.create(
