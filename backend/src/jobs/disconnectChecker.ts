@@ -31,12 +31,15 @@ async function verifyColumns(): Promise<boolean> {
 /**
  * Check for player disconnects and resolve matches
  */
+let lastLogTime = 0;
 export async function checkPlayerDisconnects(): Promise<void> {
   // Check columns once, cache result
   if (!await verifyColumns()) {
     // Only log once per minute to avoid spam
-    if (Math.floor(Date.now() / 60000) % 1 === 0) {
+    const now = Date.now();
+    if (now - lastLogTime > 60000) {
       console.log('[DisconnectChecker] Waiting for migration...');
+      lastLogTime = now;
     }
     return;
   }

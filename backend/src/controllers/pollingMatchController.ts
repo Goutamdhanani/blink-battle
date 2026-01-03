@@ -658,12 +658,19 @@ export class PollingMatchController {
       }
 
       const isPlayer1 = match.rows[0].player1_id === userId;
-      const pingColumn = isPlayer1 ? 'player1_last_ping' : 'player2_last_ping';
-
-      await pool.query(
-        `UPDATE matches SET ${pingColumn} = NOW() WHERE match_id = $1`,
-        [matchId]
-      );
+      
+      // SECURITY: Use separate queries to avoid SQL injection via column names
+      if (isPlayer1) {
+        await pool.query(
+          'UPDATE matches SET player1_last_ping = NOW() WHERE match_id = $1',
+          [matchId]
+        );
+      } else {
+        await pool.query(
+          'UPDATE matches SET player2_last_ping = NOW() WHERE match_id = $1',
+          [matchId]
+        );
+      }
 
       res.json({ success: true, ping: Date.now() });
     } catch (error: any) {

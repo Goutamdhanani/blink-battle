@@ -55,14 +55,21 @@ export async function processTimeoutRefunds(): Promise<void> {
 async function processMatchTimeout(matchId: string): Promise<void> {
   const refundDeadline = new Date(Date.now() + 4 * 60 * 60 * 1000);
 
-  await pool.query(`
+  // Use atomic UPDATE to prevent race condition - only process if not already processed
+  const result = await pool.query(`
     UPDATE matches 
     SET cancelled = true, 
         cancellation_reason = 'matchmaking_timeout',
         status = 'cancelled',
         refund_processed = true
-    WHERE match_id = $1
+    WHERE match_id = $1 AND (refund_processed = false OR refund_processed IS NULL)
+    RETURNING match_id
   `, [matchId]);
+
+  // If no rows were updated, another process already handled this match
+  if (result.rows.length === 0) {
+    return;
+  }
 
   await pool.query(`
     UPDATE payment_intents 

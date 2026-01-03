@@ -307,6 +307,7 @@ async function runStartupMigrations(): Promise<void> {
     // ============================================
     // MATCHES TABLE - Ping and cancel columns
     // ============================================
+    // SECURITY: Column names and types are from a controlled array, not user input
     const matchColumns = [
       { name: 'player1_last_ping', type: 'TIMESTAMPTZ' },
       { name: 'player2_last_ping', type: 'TIMESTAMPTZ' },
@@ -322,6 +323,7 @@ async function runStartupMigrations(): Promise<void> {
       `, [col.name]);
 
       if (exists.rows.length === 0) {
+        // SECURITY: Safe because col.name and col.type come from controlled array above
         await client.query(`ALTER TABLE matches ADD COLUMN ${col.name} ${col.type}`);
         console.log(`[Migration] ✅ Added matches.${col.name}`);
       }
@@ -355,6 +357,8 @@ async function runStartupMigrations(): Promise<void> {
     // CLAIMS TABLE - Fix numeric overflow
     // ============================================
     // Change payout columns to store WLD not wei
+    // WEI_TO_WLD = 1e18 (10^18) - conversion factor from wei to WLD
+    // WEI_THRESHOLD = 1000000 - amounts above this are likely stored in wei, not WLD
     await client.query(`
       DO $$ 
       BEGIN
@@ -364,6 +368,7 @@ async function runStartupMigrations(): Promise<void> {
           WHERE table_name = 'claims' AND column_name = 'amount'
         ) THEN
           -- Update any existing claims to convert wei to WLD
+          -- Amounts > 1000000 are likely stored in wei (1e18 scale), convert to WLD
           UPDATE claims SET 
             amount = CAST(amount AS NUMERIC) / 1000000000000000000,
             platform_fee = CAST(platform_fee AS NUMERIC) / 1000000000000000000,
