@@ -97,9 +97,13 @@ export class PollingService {
   /**
    * POST /api/matchmaking/join
    * Join matchmaking queue
+   * For staked games, paymentReference is required
    */
-  async joinMatchmaking(stake: number): Promise<MatchmakingStatus> {
-    const response = await this.api.post('/api/matchmaking/join', { stake });
+  async joinMatchmaking(stake: number, paymentReference?: string): Promise<MatchmakingStatus> {
+    const response = await this.api.post('/api/matchmaking/join', { 
+      stake,
+      paymentReference 
+    });
     return response.data;
   }
 

@@ -165,11 +165,12 @@ export const usePollingGame = () => {
 
   /**
    * Join matchmaking
+   * For staked games, paymentReference is required
    */
-  const joinMatchmaking = useCallback(async (userId: string, stake: number) => {
+  const joinMatchmaking = useCallback(async (userId: string, stake: number, paymentReference?: string) => {
     try {
       setError(null);
-      const result: MatchmakingStatus = await pollingService.joinMatchmaking(stake);
+      const result: MatchmakingStatus = await pollingService.joinMatchmaking(stake, paymentReference);
       
       if (result.status === 'matched' && result.matchId && result.opponent) {
         // Instant match!
