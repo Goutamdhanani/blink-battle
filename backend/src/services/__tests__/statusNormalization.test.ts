@@ -1,4 +1,4 @@
-import { normalizeMiniKitStatus, extractTransactionHash } from '../statusNormalization';
+import { normalizeMiniKitStatus, extractTransactionHash, extractRawStatus } from '../statusNormalization';
 import { NormalizedPaymentStatus } from '../../models/PaymentIntent';
 
 describe('statusNormalization', () => {
@@ -82,6 +82,39 @@ describe('statusNormalization', () => {
     it('should return null for null hash value', () => {
       expect(extractTransactionHash({ transactionHash: null })).toBe(null);
       expect(extractTransactionHash({ transaction_hash: null })).toBe(null);
+    });
+  });
+
+  describe('extractRawStatus', () => {
+    it('should extract transactionStatus field', () => {
+      const tx = { transactionStatus: 'pending' };
+      expect(extractRawStatus(tx)).toBe('pending');
+    });
+
+    it('should extract status field as fallback', () => {
+      const tx = { status: 'mined' };
+      expect(extractRawStatus(tx)).toBe('mined');
+    });
+
+    it('should prefer transactionStatus over status', () => {
+      const tx = { 
+        transactionStatus: 'mined',
+        status: 'pending'
+      };
+      expect(extractRawStatus(tx)).toBe('mined');
+    });
+
+    it('should return undefined for missing status fields', () => {
+      expect(extractRawStatus({})).toBe(undefined);
+      expect(extractRawStatus(null)).toBe(undefined);
+      expect(extractRawStatus(undefined)).toBe(undefined);
+    });
+
+    it('should return undefined for null/undefined status values', () => {
+      expect(extractRawStatus({ transactionStatus: null })).toBe(undefined);
+      expect(extractRawStatus({ status: null })).toBe(undefined);
+      expect(extractRawStatus({ transactionStatus: undefined })).toBe(undefined);
+      expect(extractRawStatus({ status: undefined })).toBe(undefined);
     });
   });
 });

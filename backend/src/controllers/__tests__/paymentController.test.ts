@@ -39,6 +39,7 @@ jest.mock('../../models/PaymentIntent', () => ({
 jest.mock('../../services/statusNormalization', () => ({
   normalizeMiniKitStatus: jest.fn(),
   extractTransactionHash: jest.fn(),
+  extractRawStatus: jest.fn((tx) => tx?.transactionStatus || tx?.status),
 }));
 
 // Mock axios

@@ -3,7 +3,7 @@ import crypto from 'crypto';
 import axios from 'axios';
 import { PaymentModel, PaymentStatus } from '../models/Payment';
 import { PaymentIntentModel, NormalizedPaymentStatus } from '../models/PaymentIntent';
-import { normalizeMiniKitStatus, extractTransactionHash } from '../services/statusNormalization';
+import { normalizeMiniKitStatus, extractTransactionHash, extractRawStatus } from '../services/statusNormalization';
 
 export class PaymentController {
   /**
@@ -157,7 +157,7 @@ export class PaymentController {
 
       // Extract status from transactionStatus field with fallback to status field
       // Developer Portal can return transactionStatus or status depending on API version
-      const rawStatus = transaction.transactionStatus || transaction.status;
+      const rawStatus = extractRawStatus(transaction);
       console.log(`[Payment] Transaction status from Developer Portal: ${rawStatus} (transactionStatus: ${transaction.transactionStatus}, status: ${transaction.status})`);
 
       // Normalize the MiniKit transaction status

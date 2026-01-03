@@ -1,7 +1,7 @@
 import axios from 'axios';
 import pool from '../config/database';
 import { PaymentIntentModel, NormalizedPaymentStatus } from '../models/PaymentIntent';
-import { normalizeMiniKitStatus, extractTransactionHash } from './statusNormalization';
+import { normalizeMiniKitStatus, extractTransactionHash, extractRawStatus } from './statusNormalization';
 import { isTerminalStatus } from './paymentUtils';
 
 /**
@@ -188,7 +188,7 @@ export class PaymentWorker {
 
       // Extract status from transactionStatus field with fallback to status field
       // Developer Portal can return transactionStatus or status depending on API version
-      const rawStatus = transaction.transactionStatus || transaction.status;
+      const rawStatus = extractRawStatus(transaction);
       const normalizedStatus = normalizeMiniKitStatus(rawStatus);
       const transactionHash = extractTransactionHash(transaction);
 
