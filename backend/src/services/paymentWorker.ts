@@ -200,7 +200,7 @@ export class PaymentWorker {
         normalizedStatus,
         rawStatus,
         intent.minikit_transaction_id,
-        transactionHash
+        transactionHash || undefined
       );
 
       // Release lock
