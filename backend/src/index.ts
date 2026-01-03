@@ -298,6 +298,90 @@ app.use((err: any, _req: express.Request, res: express.Response, _next: express.
 
 const PORT = process.env.PORT || 3001;
 
+// Run critical migrations on startup
+async function runStartupMigrations(): Promise<void> {
+  const client = await pool.connect();
+  try {
+    console.log('[Migration] Running startup migrations...');
+
+    // ============================================
+    // MATCHES TABLE - Ping and cancel columns
+    // ============================================
+    const matchColumns = [
+      { name: 'player1_last_ping', type: 'TIMESTAMPTZ' },
+      { name: 'player2_last_ping', type: 'TIMESTAMPTZ' },
+      { name: 'refund_processed', type: 'BOOLEAN DEFAULT false' },
+      { name: 'cancelled', type: 'BOOLEAN DEFAULT false' },
+      { name: 'cancellation_reason', type: 'VARCHAR(255)' },
+    ];
+
+    for (const col of matchColumns) {
+      const exists = await client.query(`
+        SELECT column_name FROM information_schema.columns 
+        WHERE table_name = 'matches' AND column_name = $1
+      `, [col.name]);
+
+      if (exists.rows.length === 0) {
+        await client.query(`ALTER TABLE matches ADD COLUMN ${col.name} ${col.type}`);
+        console.log(`[Migration] ✅ Added matches.${col.name}`);
+      }
+    }
+
+    // ============================================
+    // PAYMENT_INTENTS TABLE - Refund columns
+    // ============================================
+    const paymentColumns = [
+      { name: 'refund_status', type: "VARCHAR(50) DEFAULT 'none'" },
+      { name: 'refund_amount', type: 'NUMERIC(18, 8)' },
+      { name: 'refund_reason', type: 'VARCHAR(255)' },
+      { name: 'refund_deadline', type: 'TIMESTAMPTZ' },
+      { name: 'refund_tx_hash', type: 'VARCHAR(66)' },
+      { name: 'refund_claimed_at', type: 'TIMESTAMPTZ' },
+    ];
+
+    for (const col of paymentColumns) {
+      const exists = await client.query(`
+        SELECT column_name FROM information_schema.columns 
+        WHERE table_name = 'payment_intents' AND column_name = $1
+      `, [col.name]);
+
+      if (exists.rows.length === 0) {
+        await client.query(`ALTER TABLE payment_intents ADD COLUMN ${col.name} ${col.type}`);
+        console.log(`[Migration] ✅ Added payment_intents.${col.name}`);
+      }
+    }
+
+    // ============================================
+    // CLAIMS TABLE - Fix numeric overflow
+    // ============================================
+    // Change payout columns to store WLD not wei
+    await client.query(`
+      DO $$ 
+      BEGIN
+        -- Only alter if column exists and is wrong type
+        IF EXISTS (
+          SELECT 1 FROM information_schema.columns 
+          WHERE table_name = 'claims' AND column_name = 'amount'
+        ) THEN
+          -- Update any existing claims to convert wei to WLD
+          UPDATE claims SET 
+            amount = CAST(amount AS NUMERIC) / 1000000000000000000,
+            platform_fee = CAST(platform_fee AS NUMERIC) / 1000000000000000000,
+            net_payout = CAST(net_payout AS NUMERIC) / 1000000000000000000
+          WHERE amount > 1000000;
+        END IF;
+      END $$;
+    `);
+
+    console.log('[Migration] ✅ Startup migrations completed');
+  } catch (error: any) {
+    console.error('[Migration] Error:', error.message);
+    // Don't crash the server - log and continue
+  } finally {
+    client.release();
+  }
+}
+
 const startServer = async () => {
   try {
     await connectRedis();
@@ -305,6 +389,9 @@ const startServer = async () => {
 
     await pool.query('SELECT NOW()');
     console.log('Connected to PostgreSQL');
+
+    // Run startup migrations
+    await runStartupMigrations();
 
     // Start payment worker for processing payment intents
     const { startPaymentWorker } = await import('./services/paymentWorker');

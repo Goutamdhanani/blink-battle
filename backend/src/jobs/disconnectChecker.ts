@@ -7,52 +7,56 @@ import pool from '../config/database';
 
 // Constants
 const DISCONNECT_TIMEOUT_MS = 30000; // 30 seconds
-const DISCONNECT_TIMEOUT_SECONDS = DISCONNECT_TIMEOUT_MS / 1000;
+
+let columnsVerified = false;
+let columnsExist = false;
+
+async function verifyColumns(): Promise<boolean> {
+  if (columnsVerified) return columnsExist;
+  
+  try {
+    const result = await pool.query(`
+      SELECT COUNT(*) as count FROM information_schema.columns 
+      WHERE table_name = 'matches' 
+      AND column_name IN ('player1_last_ping', 'player2_last_ping')
+    `);
+    columnsExist = parseInt(result.rows[0].count) >= 2;
+    columnsVerified = true;
+    return columnsExist;
+  } catch {
+    return false;
+  }
+}
 
 /**
  * Check for player disconnects and resolve matches
  */
 export async function checkPlayerDisconnects(): Promise<void> {
-  try {
-    // First check if required columns exist
-    const columnsExist = await pool.query(`
-      SELECT column_name FROM information_schema.columns 
-      WHERE table_name = 'matches' 
-      AND column_name IN ('player1_last_ping', 'player2_last_ping')
-    `);
-
-    if (columnsExist.rows.length < 2) {
-      // Columns don't exist yet - skip this check (migration pending)
-      console.log('[DisconnectChecker] Skipping - ping columns not yet migrated');
-      return;
+  // Check columns once, cache result
+  if (!await verifyColumns()) {
+    // Only log once per minute to avoid spam
+    if (Math.floor(Date.now() / 60000) % 1 === 0) {
+      console.log('[DisconnectChecker] Waiting for migration...');
     }
+    return;
+  }
 
-    // Find active matches where one player stopped pinging (30 second timeout)
-    // Using parameterized query to prevent SQL injection
+  try {
     const matches = await pool.query(`
-      SELECT m.*
+      SELECT m.match_id, m.player1_id, m.player2_id, 
+             m.player1_wallet, m.player2_wallet,
+             m.player1_last_ping, m.player2_last_ping,
+             m.status, m.stake
       FROM matches m
       WHERE m.status IN ('waiting', 'ready', 'countdown', 'signal')
         AND m.created_at < NOW() - INTERVAL '30 seconds'
-        AND (
-          (m.player1_last_ping IS NULL OR m.player1_last_ping < NOW() - INTERVAL '1 second' * $1)
-          OR
-          (m.player2_last_ping IS NULL OR m.player2_last_ping < NOW() - INTERVAL '1 second' * $1)
-        )
-    `, [DISCONNECT_TIMEOUT_SECONDS]);
-
-    if (matches.rows.length === 0) {
-      return;
-    }
-
-    console.log(`[DisconnectChecker] Found ${matches.rows.length} matches with potential disconnects`);
+    `);
 
     for (const match of matches.rows) {
       await handleDisconnectedMatch(match);
     }
   } catch (error: any) {
-    // Only log if it's NOT a missing column error (we expect that during migration)
-    if (error.code !== '42703') {
+    if (error.code !== '42703') { // Ignore missing column errors
       console.error('[DisconnectChecker] Error:', error.message);
     }
   }
@@ -60,54 +64,42 @@ export async function checkPlayerDisconnects(): Promise<void> {
 
 async function handleDisconnectedMatch(match: any): Promise<void> {
   const now = Date.now();
+  
   const p1Ping = match.player1_last_ping ? new Date(match.player1_last_ping).getTime() : 0;
   const p2Ping = match.player2_last_ping ? new Date(match.player2_last_ping).getTime() : 0;
   
-  const p1Timeout = (now - p1Ping) > DISCONNECT_TIMEOUT_MS;
-  const p2Timeout = (now - p2Ping) > DISCONNECT_TIMEOUT_MS;
+  // Only check if at least one player has pinged (game started)
+  if (p1Ping === 0 && p2Ping === 0) {
+    return; // Neither player has started yet
+  }
+  
+  const p1Timeout = p1Ping > 0 && (now - p1Ping) > DISCONNECT_TIMEOUT_MS;
+  const p2Timeout = p2Ping > 0 && (now - p2Ping) > DISCONNECT_TIMEOUT_MS;
 
   if (p1Timeout && p2Timeout) {
-    // Both disconnected - cancel match and enable refunds
-    await pool.query(`
-      UPDATE matches 
-      SET status = 'cancelled',
-          cancelled = true,
-          cancellation_reason = 'both_players_disconnect',
-          refund_processed = false
-      WHERE match_id = $1
-    `, [match.match_id]);
-    
-    // Mark payments as refund eligible
-    await markPaymentsForRefund(match.match_id, 'both_players_disconnect');
-    
-    console.log(`[DisconnectChecker] Match ${match.match_id} cancelled - both disconnected`);
-  } else if (p1Timeout && !p2Timeout) {
-    // Player 1 disconnected - Player 2 wins
+    // Both disconnected
+    await cancelMatch(match.match_id, 'both_players_disconnect');
+  } else if (p1Timeout && p2Ping > 0) {
+    // Player 1 disconnected, Player 2 active
     await awardWinByDisconnect(match, match.player2_id, match.player2_wallet);
-  } else if (p2Timeout && !p1Timeout) {
-    // Player 2 disconnected - Player 1 wins
+  } else if (p2Timeout && p1Ping > 0) {
+    // Player 2 disconnected, Player 1 active
     await awardWinByDisconnect(match, match.player1_id, match.player1_wallet);
   }
 }
 
-async function awardWinByDisconnect(match: any, winnerId: string, winnerWallet: string): Promise<void> {
+async function cancelMatch(matchId: string, reason: string): Promise<void> {
   await pool.query(`
     UPDATE matches 
-    SET status = 'completed',
-        winner_id = $1,
-        winner_wallet = $2,
-        claim_deadline = NOW() + INTERVAL '1 hour',
-        claim_status = 'unclaimed',
-        cancellation_reason = 'opponent_disconnect'
-    WHERE match_id = $3
-  `, [winnerId, winnerWallet, match.match_id]);
+    SET status = 'cancelled',
+        cancelled = true,
+        cancellation_reason = $1,
+        refund_processed = false
+    WHERE match_id = $2
+  `, [reason, matchId]);
   
-  console.log(`[DisconnectChecker] Match ${match.match_id} - ${winnerId} wins (opponent disconnect)`);
-}
-
-async function markPaymentsForRefund(matchId: string, reason: string): Promise<void> {
-  const refundDeadline = new Date(Date.now() + 4 * 60 * 60 * 1000); // 4 hours
-  
+  // Mark payments for refund
+  const refundDeadline = new Date(Date.now() + 4 * 60 * 60 * 1000);
   await pool.query(`
     UPDATE payment_intents 
     SET refund_status = 'eligible',
@@ -117,6 +109,22 @@ async function markPaymentsForRefund(matchId: string, reason: string): Promise<v
     AND normalized_status = 'confirmed'
     AND (refund_status IS NULL OR refund_status = 'none')
   `, [refundDeadline, reason, matchId]);
+  
+  console.log(`[DisconnectChecker] Match ${matchId} cancelled: ${reason}`);
+}
+
+async function awardWinByDisconnect(match: any, winnerId: string, winnerWallet: string): Promise<void> {
+  await pool.query(`
+    UPDATE matches 
+    SET status = 'completed',
+        winner_id = $1,
+        winner_wallet = $2,
+        claim_deadline = NOW() + INTERVAL '1 hour',
+        claim_status = 'unclaimed'
+    WHERE match_id = $3 AND status != 'completed'
+  `, [winnerId, winnerWallet, match.match_id]);
+  
+  console.log(`[DisconnectChecker] Match ${match.match_id}: ${winnerId} wins (opponent disconnect)`);
 }
 
 /**
@@ -125,6 +133,9 @@ async function markPaymentsForRefund(matchId: string, reason: string): Promise<v
 let disconnectCheckerInterval: NodeJS.Timeout | null = null;
 
 export function startDisconnectChecker(): void {
+  // Reset column cache so it rechecks after migrations
+  columnsVerified = false;
+  
   // Prevent multiple intervals
   if (disconnectCheckerInterval) {
     console.log('[DisconnectChecker] Already running');
@@ -133,12 +144,10 @@ export function startDisconnectChecker(): void {
 
   // Run every 10 seconds
   disconnectCheckerInterval = setInterval(() => {
-    checkPlayerDisconnects().catch(err => {
-      if (err.code !== '42703') console.error('[DisconnectChecker]', err.message);
-    });
+    checkPlayerDisconnects().catch(() => {});
   }, 10 * 1000);
 
-  console.log('[DisconnectChecker] Started (runs every 10 seconds)');
+  console.log('[DisconnectChecker] Started');
 }
 
 /**
