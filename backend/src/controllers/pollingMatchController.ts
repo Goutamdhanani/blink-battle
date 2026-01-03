@@ -15,6 +15,21 @@ import pool from '../config/database';
 // Constants
 const COUNTDOWN_DURATION_MS = 3000; // 3 seconds for countdown display
 
+/**
+ * Parse green_light_time value that may be returned as string from PostgreSQL BIGINT
+ * @param value - The green_light_time value (may be string, number, null, or undefined)
+ * @returns Parsed numeric value or null
+ */
+function parseGreenLightTime(value: any): number | null {
+  if (!value) return null;
+  
+  const parsed = typeof value === 'string' 
+    ? parseInt(value, 10) 
+    : value;
+  
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
 export class PollingMatchController {
   /**
    * POST /api/match/ready
@@ -128,11 +143,7 @@ export class PollingMatchController {
       const opponentId = isPlayer1 ? matchState.player2_id : matchState.player1_id;
 
       // Parse green_light_time - PostgreSQL BIGINT can be returned as string
-      const greenLightTime = matchState.green_light_time 
-        ? (typeof matchState.green_light_time === 'string' 
-            ? parseInt(matchState.green_light_time, 10) 
-            : matchState.green_light_time)
-        : null;
+      const greenLightTime = parseGreenLightTime(matchState.green_light_time);
 
       // Determine state for client
       let state = 'matched';
@@ -259,13 +270,9 @@ export class PollingMatchController {
 
       // CRITICAL: Validate green_light_time to prevent "Invalid time value"
       // PostgreSQL BIGINT can be returned as string, parse it first
-      const greenLightTime = match.green_light_time 
-        ? (typeof match.green_light_time === 'string' 
-            ? parseInt(match.green_light_time, 10) 
-            : match.green_light_time)
-        : null;
+      const greenLightTime = parseGreenLightTime(match.green_light_time);
 
-      if (!greenLightTime || !Number.isFinite(greenLightTime)) {
+      if (!greenLightTime) {
         console.error(`[Polling Match] Invalid green_light_time for match ${matchId}: ${match.green_light_time}`);
         res.status(400).json({ 
           error: 'Green light time is invalid',
