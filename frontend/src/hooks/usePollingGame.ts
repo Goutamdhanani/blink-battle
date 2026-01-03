@@ -149,10 +149,12 @@ export const usePollingGame = () => {
           unchangedStateCountRef.current++;
           
           // After 5 consecutive unchanged states, slow down polling (except during countdown/playing)
+          // Higher polling interval = slower/less frequent polling
           if (unchangedStateCountRef.current >= 5 && 
               matchState.state !== 'countdown' && 
               matchState.state !== 'go' &&
               matchState.state !== 'waiting_for_go') {
+            // Gradually increase interval (slow down) by 1.5x, capped at IDLE rate (5000ms)
             const backoffRate = Math.min(currentPollingRateRef.current * 1.5, POLLING_RATES.IDLE);
             if (backoffRate !== currentPollingRateRef.current) {
               currentPollingRateRef.current = backoffRate;
