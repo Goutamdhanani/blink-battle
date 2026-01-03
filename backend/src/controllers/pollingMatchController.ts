@@ -43,14 +43,32 @@ export class PollingMatchController {
       const userId = (req as any).userId;
       const { matchId } = req.body;
 
-      const match = await MatchModel.findById(matchId);
-      if (!match) {
+      // Get current match status with lock to prevent race conditions
+      const match = await pool.query(
+        'SELECT * FROM matches WHERE match_id = $1 FOR UPDATE',
+        [matchId]
+      );
+
+      if (!match.rows[0]) {
         res.status(404).json({ error: 'Match not found' });
         return;
       }
 
+      const matchData = match.rows[0];
+
+      // PREVENT STATE REGRESSION - Lock state once countdown starts
+      if (matchData.status !== 'waiting' && matchData.status !== 'ready') {
+        console.log(`[Match] Match ${matchId} already in ${matchData.status}, ignoring ready call`);
+        res.json({ 
+          status: matchData.status, 
+          message: 'Match already started',
+          stateLocked: true
+        });
+        return;
+      }
+
       // Verify user is in this match
-      if (match.player1_id !== userId && match.player2_id !== userId) {
+      if (matchData.player1_id !== userId && matchData.player2_id !== userId) {
         res.status(403).json({ error: 'Not a participant in this match' });
         return;
       }
@@ -65,7 +83,7 @@ export class PollingMatchController {
       // - Unclaimed winnings return to treasury after deadline
       // - All transactions are tracked in database for dispute resolution
       // - PaymentWorker continuously monitors and updates payment statuses
-      if (match.stake > 0) {
+      if (matchData.stake > 0) {
         const bothStaked = await MatchModel.areBothPlayersStaked(matchId);
         if (!bothStaked) {
           console.log(`[Polling Match] Match ${matchId} - Not all players staked, continuing with off-chain tracking`);
@@ -228,6 +246,10 @@ export class PollingMatchController {
         };
       }
 
+      // LOCK: Don't allow transitions back once past countdown
+      const lockedStates = ['countdown', 'signal', 'completed', 'cancelled'];
+      const stateLocked = lockedStates.includes(matchState.status);
+
       res.json({
         matchId: matchState.match_id,
         state,
@@ -245,6 +267,7 @@ export class PollingMatchController {
         player1ReactionMs: matchState.player1_reaction_ms,
         player2ReactionMs: matchState.player2_reaction_ms,
         completedAt: matchState.completed_at,
+        stateLocked, // Add state locking flag
         opponent: {
           userId: opponentId,
           wallet: isPlayer1 ? matchState.player2_wallet : matchState.player1_wallet
@@ -571,6 +594,45 @@ export class PollingMatchController {
     } catch (error) {
       console.error('[Polling Match] Error in confirmStake:', error);
       res.status(500).json({ error: 'Failed to confirm stake' });
+    }
+  }
+
+  /**
+   * POST /api/match/heartbeat
+   * Heartbeat endpoint - called every 5 seconds by frontend to track connection
+   */
+  static async heartbeat(req: Request, res: Response): Promise<void> {
+    try {
+      const { matchId } = req.body;
+      const userId = (req as any).userId;
+
+      if (!matchId) {
+        res.status(400).json({ error: 'Missing matchId' });
+        return;
+      }
+
+      const match = await pool.query(
+        'SELECT player1_id, player2_id FROM matches WHERE match_id = $1',
+        [matchId]
+      );
+
+      if (!match.rows[0]) {
+        res.status(404).json({ error: 'Match not found' });
+        return;
+      }
+
+      const isPlayer1 = match.rows[0].player1_id === userId;
+      const pingColumn = isPlayer1 ? 'player1_last_ping' : 'player2_last_ping';
+
+      await pool.query(
+        `UPDATE matches SET ${pingColumn} = NOW() WHERE match_id = $1`,
+        [matchId]
+      );
+
+      res.json({ success: true });
+    } catch (error) {
+      console.error('[Polling Match] Error in heartbeat:', error);
+      res.status(500).json({ error: 'Failed to record heartbeat' });
     }
   }
 

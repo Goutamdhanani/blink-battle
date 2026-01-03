@@ -12,6 +12,7 @@ import { VerificationController } from './controllers/verificationController';
 import { PollingMatchmakingController } from './controllers/pollingMatchmakingController';
 import { PollingMatchController } from './controllers/pollingMatchController';
 import { ClaimController } from './controllers/claimController';
+import { RefundController } from './controllers/refundController';
 import { PingController } from './controllers/pingController';
 import { authenticate } from './middleware/auth';
 import { requestIdMiddleware } from './middleware/requestId';
@@ -276,6 +277,13 @@ app.get('/api/ping/stats', authenticate, PingController.getStats);
 app.post('/api/claim', authenticate, matchRateLimiter, ClaimController.claimWinnings);
 app.get('/api/claim/status/:matchId', authenticate, matchRateLimiter, ClaimController.getClaimStatus);
 
+// Refund endpoints
+app.post('/api/refund/claim', authenticate, matchRateLimiter, RefundController.claimRefund);
+app.get('/api/refund/status/:paymentReference', authenticate, matchRateLimiter, RefundController.checkRefundStatus);
+
+// Heartbeat endpoint for disconnect detection
+app.post('/api/match/heartbeat', authenticate, matchRateLimiter, PollingMatchController.heartbeat);
+
 // WebSockets - DEPRECATED for gameplay, kept for other features if needed
 // TODO: Remove entirely if not used for other features
 // new GameSocketHandler(io);
@@ -322,6 +330,16 @@ const startServer = async () => {
     const { startClaimExpiryJob } = await import('./jobs/claimExpiry');
     startClaimExpiryJob();
     console.log(`✅ Claim expiry job started`);
+
+    // Start refund processor for timeout matches
+    const { startRefundProcessor } = await import('./jobs/refundProcessor');
+    startRefundProcessor();
+    console.log(`✅ Refund processor job started`);
+
+    // Start disconnect checker for player disconnects
+    const { startDisconnectChecker } = await import('./jobs/disconnectChecker');
+    startDisconnectChecker();
+    console.log(`✅ Disconnect checker job started`);
 
     httpServer.listen(PORT, () => {
       console.log(`Server running on port ${PORT}`);

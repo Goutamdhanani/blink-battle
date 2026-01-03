@@ -114,6 +114,13 @@ export const usePollingGame = () => {
     setIsPolling(true);
     setError(null);
 
+    // Start heartbeat interval (every 5 seconds)
+    const heartbeatInterval = setInterval(() => {
+      pollingService.sendHeartbeat(matchId).catch(err => {
+        console.error('[Polling] Heartbeat error:', err);
+      });
+    }, 5000);
+
     const poll = async () => {
       try {
         const matchState: MatchState = await pollingService.getMatchState(matchId);
@@ -148,6 +155,7 @@ export const usePollingGame = () => {
           newRate = POLLING_RATES.PLAYING; // 50ms during active gameplay
         } else if (matchState.state === 'resolved' || matchState.status === 'completed') {
           // CRITICAL: Match is complete - stop polling IMMEDIATELY
+          clearInterval(heartbeatInterval); // Stop heartbeat
           if (pollIntervalRef.current) {
             clearInterval(pollIntervalRef.current);
             pollIntervalRef.current = null;
