@@ -114,7 +114,7 @@ export const usePollingGame = () => {
           setSignalTimestamp(matchState.greenLightTime || Date.now());
           setCountdown(null);
         } else if (matchState.state === 'resolved' || matchState.status === 'completed') {
-          // Match is complete - stop polling immediately
+          // CRITICAL: Match is complete - stop polling IMMEDIATELY
           if (pollIntervalRef.current) {
             clearInterval(pollIntervalRef.current);
             pollIntervalRef.current = null;
@@ -123,8 +123,8 @@ export const usePollingGame = () => {
           
           setMatchResult(matchState.winnerId || null, 'completed');
           setGamePhase('result');
-          console.log('[Polling] Match resolved, polling stopped');
-          return; // Exit early to prevent further polling adjustments
+          console.log('[Polling] Match resolved, polling stopped IMMEDIATELY');
+          return; // Exit early to prevent ANY further polling
         }
 
         // Adjust polling speed based on state
