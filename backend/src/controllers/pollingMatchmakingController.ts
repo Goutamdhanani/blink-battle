@@ -29,13 +29,13 @@ export class PollingMatchmakingController {
         return;
       }
 
-      // CRITICAL: Stake cap enforcement (0.1 WLD max for platform safety)
-      const MAX_STAKE = parseFloat(process.env.MAX_STAKE_WLD || '0.1');
-      if (stake > MAX_STAKE) {
+      // CRITICAL: Minimum stake check (if any stake is used)
+      const MIN_STAKE_WLD = 0.01; // 0.01 WLD minimum
+      if (stake > 0 && stake < MIN_STAKE_WLD) {
         res.status(400).json({ 
-          error: 'Stake amount exceeds maximum',
-          maxStake: MAX_STAKE,
-          details: `Maximum stake is ${MAX_STAKE} WLD`
+          error: 'Stake amount below minimum',
+          minStake: MIN_STAKE_WLD,
+          details: `Minimum stake is ${MIN_STAKE_WLD} WLD`
         });
         return;
       }

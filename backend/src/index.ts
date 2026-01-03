@@ -318,6 +318,11 @@ const startServer = async () => {
     }, CLEANUP_INTERVAL_MS);
     console.log(`✅ Queue cleanup job started (interval: ${CLEANUP_INTERVAL_MS}ms)`);
 
+    // Start claim expiry job for unclaimed matches
+    const { startClaimExpiryJob } = await import('./jobs/claimExpiry');
+    startClaimExpiryJob();
+    console.log(`✅ Claim expiry job started`);
+
     httpServer.listen(PORT, () => {
       console.log(`Server running on port ${PORT}`);
       console.log(`HTTP Polling endpoints enabled:`);
