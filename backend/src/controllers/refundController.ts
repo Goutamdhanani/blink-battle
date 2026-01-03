@@ -12,6 +12,8 @@ export class RefundController {
    * Claim refund for cancelled/timeout match
    */
   static async claimRefund(req: Request, res: Response): Promise<void> {
+    const client = await pool.connect();
+    
     try {
       const userId = (req as any).userId;
       const { paymentReference } = req.body;
@@ -21,33 +23,46 @@ export class RefundController {
         return;
       }
 
-      // Get payment
-      const payment = await pool.query(
-        `SELECT * FROM payment_intents WHERE payment_reference = $1 AND user_id = $2`,
-        [paymentReference, userId]
+      await client.query('BEGIN');
+
+      // Lock the payment row to prevent race conditions
+      const payment = await client.query(
+        `SELECT * FROM payment_intents WHERE payment_reference = $1 FOR UPDATE`,
+        [paymentReference]
       );
 
       if (!payment.rows[0]) {
+        await client.query('ROLLBACK');
         res.status(404).json({ error: 'Payment not found' });
         return;
       }
 
       const paymentData = payment.rows[0];
 
-      // Check if already refunded
+      // EXPLOIT PREVENTION: Verify caller owns this payment
+      if (paymentData.user_id !== userId) {
+        await client.query('ROLLBACK');
+        res.status(403).json({ error: 'Not your payment' });
+        return;
+      }
+
+      // EXPLOIT PREVENTION: Check if already refunded
       if (paymentData.refund_status === 'completed') {
+        await client.query('ROLLBACK');
         res.status(400).json({ error: 'Already refunded' });
         return;
       }
 
       // Check if eligible for refund
       if (paymentData.refund_status !== 'eligible') {
+        await client.query('ROLLBACK');
         res.status(400).json({ error: 'Not eligible for refund' });
         return;
       }
 
       // Check refund deadline (4 hours)
       if (paymentData.refund_deadline && new Date() > new Date(paymentData.refund_deadline)) {
+        await client.query('ROLLBACK');
         res.status(400).json({ error: 'Refund deadline expired' });
         return;
       }
@@ -61,7 +76,7 @@ export class RefundController {
       console.log(`[Refund] Processing for user ${userId}, Payment: ${paymentReference}, Refund: ${refundWLD} WLD`);
 
       // Mark as processing
-      await pool.query(
+      await client.query(
         `UPDATE payment_intents 
          SET refund_status = 'processing', 
              refund_amount = $1,
@@ -71,13 +86,14 @@ export class RefundController {
       );
 
       // Get user wallet
-      const user = await pool.query(
+      const user = await client.query(
         'SELECT wallet_address FROM users WHERE user_id = $1',
         [userId]
       );
       const walletAddress = user.rows[0]?.wallet_address;
 
       if (!walletAddress) {
+        await client.query('ROLLBACK');
         res.status(400).json({ error: 'User wallet not found' });
         return;
       }
@@ -86,13 +102,15 @@ export class RefundController {
       const txHash = await TreasuryService.sendPayout(walletAddress, refundWei);
 
       // Mark as completed
-      await pool.query(
+      await client.query(
         `UPDATE payment_intents 
          SET refund_status = 'completed',
              refund_tx_hash = $1
          WHERE payment_reference = $2`,
         [txHash, paymentReference]
       );
+
+      await client.query('COMMIT');
 
       console.log(`[Refund] Completed for ${paymentReference}, TX: ${txHash}`);
 
@@ -104,8 +122,11 @@ export class RefundController {
       });
 
     } catch (error: any) {
+      await client.query('ROLLBACK');
       console.error('[Refund] Error:', error);
       res.status(500).json({ error: 'Failed to process refund' });
+    } finally {
+      client.release();
     }
   }
 
