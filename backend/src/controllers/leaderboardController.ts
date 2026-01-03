@@ -1,6 +1,22 @@
 import { Request, Response } from 'express';
 import { UserModel } from '../models/User';
 
+/**
+ * Safely parse avgReactionTime to number or null
+ * Handles null, undefined, strings, and invalid numbers from database
+ */
+function parseAvgReactionTime(avgReactionTime: any): number | null {
+  if (avgReactionTime === null || avgReactionTime === undefined) {
+    return null;
+  }
+  
+  const parsed = typeof avgReactionTime === 'number' 
+    ? avgReactionTime 
+    : parseFloat(String(avgReactionTime));
+    
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
 export class LeaderboardController {
   /**
    * Get global leaderboard
@@ -12,13 +28,7 @@ export class LeaderboardController {
 
       const leaderboard = users.map((user, index) => {
         // Safely convert avgReactionTime to number or null
-        let avgReactionTime: number | null = null;
-        if (user.avg_reaction_time !== null && user.avg_reaction_time !== undefined) {
-          const parsed = typeof user.avg_reaction_time === 'number' 
-            ? user.avg_reaction_time 
-            : parseFloat(String(user.avg_reaction_time));
-          avgReactionTime = Number.isFinite(parsed) ? parsed : null;
-        }
+        const avgReactionTime = parseAvgReactionTime(user.avg_reaction_time);
         
         // Safely calculate win rate
         const totalGames = user.wins + user.losses;
@@ -61,13 +71,7 @@ export class LeaderboardController {
       const userRank = leaderboard.findIndex(u => u.user_id === userId) + 1;
 
       // Safely convert avgReactionTime to number or null
-      let avgReactionTime: number | null = null;
-      if (user.avg_reaction_time !== null && user.avg_reaction_time !== undefined) {
-        const parsed = typeof user.avg_reaction_time === 'number' 
-          ? user.avg_reaction_time 
-          : parseFloat(String(user.avg_reaction_time));
-        avgReactionTime = Number.isFinite(parsed) ? parsed : null;
-      }
+      const avgReactionTime = parseAvgReactionTime(user.avg_reaction_time);
       
       // Safely calculate win rate
       const totalGames = user.wins + user.losses;

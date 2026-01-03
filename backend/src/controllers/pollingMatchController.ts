@@ -11,6 +11,10 @@ import { UserModel } from '../models/User';
  * HTTP Polling Match Controller
  * Handles match flow via REST polling instead of WebSockets
  */
+
+// Constants
+const COUNTDOWN_DURATION_MS = 3000; // 3 seconds for countdown display
+
 export class PollingMatchController {
   /**
    * POST /api/match/ready
@@ -65,7 +69,7 @@ export class PollingMatchController {
         const maxDelay = parseInt(process.env.SIGNAL_DELAY_MAX_MS || '5000', 10);
         const randomDelay = generateRandomDelay(minDelay, maxDelay);
         
-        const greenLightTime = Date.now() + randomDelay + 3000; // 3s countdown + random delay
+        const greenLightTime = Date.now() + randomDelay + COUNTDOWN_DURATION_MS;
         
         await MatchModel.setGreenLightTime(matchId, greenLightTime);
         // Transition to COUNTDOWN status (not IN_PROGRESS)
@@ -143,7 +147,7 @@ export class PollingMatchController {
             await MatchModel.updateStatus(matchId, MatchStatus.IN_PROGRESS);
             console.log(`[Polling Match] 🟢 Green light active! Match ${matchId} transitioning to IN_PROGRESS (go signal). Green light time: ${new Date(matchState.green_light_time).toISOString()}`);
           }
-        } else if (timeUntilGo <= 3000) {
+        } else if (timeUntilGo <= COUNTDOWN_DURATION_MS) {
           // Last 3 seconds - show countdown: 3, 2, 1
           state = 'countdown';
           countdown = Math.ceil(timeUntilGo / 1000); // Will be 3, 2, or 1
