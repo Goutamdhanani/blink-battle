@@ -59,8 +59,6 @@ const GameArena: React.FC = () => {
    */
   const handleTap = async () => {
     if (tapped || !state.matchId || state.gamePhase !== 'signal') return;
-
-    const clientTimestamp = performance.now();
     
     // 1. INSTANT visual feedback (before any network call)
     setTapped(true);

@@ -46,22 +46,6 @@ export const usePollingGame = () => {
   }, []);
 
   /**
-   * Update polling rate dynamically
-   */
-  const updatePollingRate = useCallback((rate: number) => {
-    if (rate === currentPollingRateRef.current) return;
-    
-    currentPollingRateRef.current = rate;
-    
-    if (pollIntervalRef.current) {
-      clearInterval(pollIntervalRef.current);
-      pollIntervalRef.current = null;
-    }
-    
-    console.log(`[Polling] Rate changed to ${rate}ms`);
-  }, []);
-
-  /**
    * Start polling matchmaking status
    * Uses 2s interval for matchmaking search
    */
