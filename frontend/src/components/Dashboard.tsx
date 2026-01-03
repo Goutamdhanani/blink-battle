@@ -2,6 +2,7 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useGameContext } from '../context/GameContext';
 import { GlassCard, NeonButton, StatTile, BottomTabBar } from './ui';
+import { formatReactionTime } from '../lib/formatters';
 import './Dashboard.css';
 
 const Dashboard: React.FC = () => {
@@ -38,12 +39,6 @@ const Dashboard: React.FC = () => {
 
   const formatWalletAddress = (address: string) => {
     return `${address.substring(0, 6)}...${address.substring(address.length - 4)}`;
-  };
-
-  const formatReactionTime = (value: any): string => {
-    const num = typeof value === 'number' ? value : Number(value ?? NaN);
-    if (!Number.isFinite(num) || num <= 0) return '-';
-    return `${num.toFixed(0)}ms`;
   };
 
   return (

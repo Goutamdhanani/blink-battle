@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useGameContext } from '../context/GameContext';
 import { GlassCard, BottomTabBar } from './ui';
 import { apiClient } from '../lib/api';
+import { formatReactionTime } from '../lib/formatters';
 import './MatchHistory.css';
 
 interface Match {
@@ -52,12 +53,6 @@ const MatchHistory: React.FC = () => {
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
     return date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
-  };
-
-  const formatReactionTime = (value: any): string => {
-    const num = typeof value === 'number' ? value : Number(value ?? NaN);
-    if (!Number.isFinite(num) || num <= 0) return '-';
-    return `${num.toFixed(0)}ms`;
   };
 
   return (

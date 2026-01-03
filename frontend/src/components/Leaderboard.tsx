@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useGameContext } from '../context/GameContext';
 import { GlassCard, BottomTabBar } from './ui';
 import { apiClient } from '../lib/api';
+import { formatReactionTime, formatWinRate } from '../lib/formatters';
 import './Leaderboard.css';
 
 interface LeaderboardEntry {
@@ -68,28 +69,6 @@ const Leaderboard: React.FC = () => {
 
   const isCurrentUser = (wallet: string) => {
     return state.user?.walletAddress === wallet;
-  };
-
-  const formatReactionTime = (value: any) => {
-    const num =
-      typeof value === 'number'
-        ? value
-        : Number(value ?? NaN);
-
-    if (!Number.isFinite(num) || num <= 0) return '–';
-
-    return `${num.toFixed(0)}ms`;
-  };
-
-  const formatWinRate = (value: any) => {
-    const num =
-      typeof value === 'number'
-        ? value
-        : Number(value ?? NaN);
-
-    if (!Number.isFinite(num) || num < 0) return '0.0';
-
-    return (num * 100).toFixed(1);
   };
 
   return (
