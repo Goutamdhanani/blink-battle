@@ -58,3 +58,13 @@ export function normalizeMiniKitStatus(rawStatus: string | undefined | null): No
 export function extractTransactionHash(transaction: any): string | null {
   return transaction?.transactionHash || transaction?.transaction_hash || null;
 }
+
+/**
+ * Extract raw status from Developer Portal transaction response
+ * Developer Portal can return either 'transactionStatus' or 'status' field
+ * Prefers transactionStatus over status for consistency
+ * Returns string if present, null if explicitly null, undefined if missing
+ */
+export function extractRawStatus(transaction: any): string | null | undefined {
+  return transaction?.transactionStatus ?? transaction?.status;
+}

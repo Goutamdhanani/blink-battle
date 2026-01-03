@@ -3,7 +3,7 @@ import crypto from 'crypto';
 import axios from 'axios';
 import { PaymentModel, PaymentStatus } from '../models/Payment';
 import { PaymentIntentModel, NormalizedPaymentStatus } from '../models/PaymentIntent';
-import { normalizeMiniKitStatus, extractTransactionHash } from '../services/statusNormalization';
+import { normalizeMiniKitStatus, extractTransactionHash, extractRawStatus } from '../services/statusNormalization';
 
 export class PaymentController {
   /**
@@ -155,10 +155,12 @@ export class PaymentController {
         });
       }
 
-      console.log(`[Payment] Transaction status from Developer Portal: ${transaction.status}`);
+      // Extract status from transactionStatus field with fallback to status field
+      // Developer Portal can return transactionStatus or status depending on API version
+      const rawStatus = extractRawStatus(transaction);
+      console.log(`[Payment] Transaction status from Developer Portal: ${rawStatus} (transactionStatus: ${transaction.transactionStatus}, status: ${transaction.status})`);
 
       // Normalize the MiniKit transaction status
-      const rawStatus = transaction.status;
       const transactionHash = extractTransactionHash(transaction);
       const normalizedStatus = normalizeMiniKitStatus(rawStatus);
       
@@ -173,9 +175,9 @@ export class PaymentController {
       await PaymentIntentModel.updateStatus(
         reference,
         normalizedStatus,
-        rawStatus,
+        rawStatus ?? undefined,
         transaction_id,
-        transactionHash || undefined,
+        transactionHash ?? undefined,
         undefined // no error
       );
 

@@ -1,7 +1,8 @@
 import axios from 'axios';
 import pool from '../config/database';
 import { PaymentIntentModel, NormalizedPaymentStatus } from '../models/PaymentIntent';
-import { normalizeMiniKitStatus, isTerminalStatus } from './paymentUtils';
+import { normalizeMiniKitStatus, extractTransactionHash, extractRawStatus } from './statusNormalization';
+import { isTerminalStatus } from './paymentUtils';
 
 /**
  * Payment Worker Service
@@ -185,19 +186,21 @@ export class PaymentWorker {
         return;
       }
 
-      // Normalize status
-      const normalizedStatus = normalizeMiniKitStatus(transaction.status);
-      const transactionHash = transaction.transaction_hash || transaction.txHash;
+      // Extract status from transactionStatus field with fallback to status field
+      // Developer Portal can return transactionStatus or status depending on API version
+      const rawStatus = extractRawStatus(transaction);
+      const normalizedStatus = normalizeMiniKitStatus(rawStatus);
+      const transactionHash = extractTransactionHash(transaction);
 
-      console.log(`[PaymentWorker:${this.workerId}] Payment ${intent.payment_reference} status: ${transaction.status} → ${normalizedStatus}`);
+      console.log(`[PaymentWorker:${this.workerId}] Payment ${intent.payment_reference} raw status: "${rawStatus}" (transactionStatus: ${transaction.transactionStatus}, status: ${transaction.status}) → normalized: ${normalizedStatus}`);
 
       // Update payment status
       await PaymentIntentModel.updateStatus(
         intent.payment_reference,
         normalizedStatus,
-        transaction.status,
+        rawStatus ?? undefined,
         intent.minikit_transaction_id,
-        transactionHash
+        transactionHash ?? undefined
       );
 
       // Release lock
