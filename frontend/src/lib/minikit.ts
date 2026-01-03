@@ -153,7 +153,9 @@ export const minikit = {
         console.log('[MiniKit] Payment confirmed:', confirmRes.data);
 
         // Handle pending transaction (not yet mined)
+        // Return immediately so the caller can start polling
         if (confirmRes.data.pending) {
+          console.log('[MiniKit] Transaction pending on-chain, caller should poll /api/payment-status/:reference');
           return {
             success: true,
             pending: true,
@@ -207,6 +209,78 @@ export const minikit = {
       
       throw error;
     }
+  },
+
+  /**
+   * Poll payment status until confirmed
+   * Used when initiatePayment returns pending: true
+   * Returns a promise that resolves when payment is confirmed
+   */
+  pollPaymentStatus: async (
+    reference: string,
+    options?: {
+      maxAttempts?: number;
+      initialDelay?: number;
+      maxDelay?: number;
+    }
+  ): Promise<{ success: boolean; payment?: any; error?: string }> => {
+    const maxAttempts = options?.maxAttempts || 60; // 2 minutes max
+    const initialDelay = options?.initialDelay || 1000; // 1 second
+    const maxDelay = options?.maxDelay || 30000; // 30 seconds max
+
+    let attempt = 0;
+
+    const poll = async (): Promise<{ success: boolean; payment?: any; error?: string }> => {
+      try {
+        attempt++;
+        console.log(`[MiniKit] Polling payment status (attempt ${attempt}/${maxAttempts})`);
+
+        const res = await apiClient.get(`/api/payment-status/${reference}`);
+        const { payment } = res.data;
+
+        console.log('[MiniKit] Payment status:', payment.normalizedStatus);
+
+        // Check if payment is confirmed
+        if (payment.normalizedStatus === 'confirmed') {
+          console.log('[MiniKit] Payment confirmed!');
+          return { success: true, payment };
+        }
+
+        // Check if payment failed
+        if (payment.normalizedStatus === 'failed' || payment.normalizedStatus === 'cancelled') {
+          console.error('[MiniKit] Payment failed:', payment.lastError);
+          return { 
+            success: false, 
+            error: payment.lastError || `Payment ${payment.normalizedStatus}` 
+          };
+        }
+
+        // Payment still pending
+        if (attempt >= maxAttempts) {
+          console.error('[MiniKit] Payment polling timeout');
+          return { 
+            success: false, 
+            error: 'Payment confirmation timeout. Please check your transaction status later.' 
+          };
+        }
+
+        // Calculate delay with exponential backoff
+        const delay = Math.min(initialDelay * Math.pow(2, attempt - 1), maxDelay);
+        console.log(`[MiniKit] Payment still pending, retrying in ${delay}ms`);
+
+        // Wait and retry
+        await new Promise(resolve => setTimeout(resolve, delay));
+        return poll();
+      } catch (error: any) {
+        console.error('[MiniKit] Error polling payment status:', error);
+        return { 
+          success: false, 
+          error: error.message || 'Failed to check payment status' 
+        };
+      }
+    };
+
+    return poll();
   },
 
   /**

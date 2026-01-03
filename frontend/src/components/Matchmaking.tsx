@@ -75,15 +75,37 @@ const Matchmaking: React.FC = () => {
         console.log('[Matchmaking] MiniKit payment result:', result);
 
         if (result.success) {
-          // Check if transaction is still pending
+          // Check if transaction is still pending - poll for confirmation
           if (result.pending) {
+            console.log('[Matchmaking] Transaction pending, starting polling for reference:', result.reference);
             minikit.sendHaptic('warning');
-            setPaymentError('Transaction is pending confirmation. Please wait and try again in a moment.');
-            setProcessingPayment(false);
+            
+            // Poll for payment status
+            const pollResult = await minikit.pollPaymentStatus(result.reference);
+            
+            if (pollResult.success && pollResult.payment) {
+              // Payment confirmed after polling
+              minikit.sendHaptic('success');
+              console.log('[Matchmaking] Payment confirmed after polling, joining queue with reference:', result.reference);
+              
+              setProcessingPayment(false);
+              setSearching(true);
+              
+              // Join matchmaking with payment reference
+              await joinMatchmaking(state.user.userId, selectedStake, result.reference);
+            } else {
+              // Polling failed or timed out
+              minikit.sendHaptic('error');
+              const errorMsg = pollResult.error || 'Payment confirmation timeout';
+              console.error('[Matchmaking] Payment polling failed:', errorMsg);
+              setPaymentError(errorMsg);
+              setProcessingPayment(false);
+              return;
+            }
             return;
           }
 
-          // Payment confirmed! Now join matchmaking with payment reference
+          // Payment confirmed immediately! Now join matchmaking with payment reference
           minikit.sendHaptic('success');
           console.log('[Matchmaking] Payment confirmed, joining queue with reference:', result.reference);
           
@@ -299,7 +321,7 @@ const Matchmaking: React.FC = () => {
             <div className="spinner pulse"></div>
             <h2 className="searching-title">Processing Payment...</h2>
             <p className="searching-text">
-              Waiting for World App payment confirmation
+              Waiting for blockchain confirmation. This may take up to 2 minutes.
             </p>
             <div className="searching-animation">
               <div className="dot"></div>

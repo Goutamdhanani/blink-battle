@@ -80,6 +80,12 @@ export class PaymentWorker {
     let paymentIntents: any[] = [];
 
     try {
+      // Step 0: Expire stale payments without transaction IDs (older than 5 minutes)
+      const expiredCount = await PaymentIntentModel.expireStalePayments(5);
+      if (expiredCount > 0) {
+        console.log(`[PaymentWorker:${this.workerId}] Expired ${expiredCount} stale payments without transaction IDs`);
+      }
+
       // Step 1: Acquire locks on payments ready for processing
       await client.query('BEGIN');
       
@@ -134,7 +140,7 @@ export class PaymentWorker {
     try {
       // If no MiniKit transaction ID yet, skip (needs confirmation from client first)
       if (!intent.minikit_transaction_id) {
-        console.log(`[PaymentWorker:${this.workerId}] Payment ${intent.payment_reference} has no transaction ID yet, skipping`);
+        console.log(`[PaymentWorker:${this.workerId}] Payment ${intent.payment_reference} has no transaction ID yet (waiting for user to complete MiniKit flow), releasing lock`);
         await PaymentIntentModel.releaseLock(intent.payment_reference);
         return;
       }

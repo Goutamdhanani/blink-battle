@@ -935,4 +935,230 @@ describe('PaymentController', () => {
       });
     });
   });
+
+  describe('getPaymentStatusPolling', () => {
+    it('should return normalized payment status from payment_intents', async () => {
+      const userId = 'user-123';
+      const reference = 'test-ref';
+
+      mockRequest.params = { reference };
+      (mockRequest as any).userId = userId;
+
+      const mockPaymentIntent = {
+        intent_id: 'intent-uuid',
+        payment_reference: reference,
+        user_id: userId,
+        amount: 0.5,
+        normalized_status: NormalizedPaymentStatus.CONFIRMED,
+        minikit_transaction_id: 'tx-123',
+        transaction_hash: '0xabc123',
+        raw_status: 'mined',
+        created_at: new Date(),
+        updated_at: new Date(),
+        confirmed_at: new Date(),
+        last_error: null,
+        retry_count: 0,
+      };
+
+      const mockPayment = {
+        payment_id: 'payment-uuid',
+        reference,
+        user_id: userId,
+        amount: 0.5,
+        status: PaymentStatus.CONFIRMED,
+        transaction_id: 'tx-123',
+        created_at: new Date(),
+        updated_at: new Date(),
+        confirmed_at: new Date(),
+      };
+
+      (PaymentIntentModel.findByReference as jest.Mock).mockResolvedValue(mockPaymentIntent);
+      (PaymentModel.findByReference as jest.Mock).mockResolvedValue(mockPayment);
+
+      await PaymentController.getPaymentStatusPolling(
+        mockRequest as Request,
+        mockResponse as Response
+      );
+
+      expect(jsonMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          success: true,
+          payment: expect.objectContaining({
+            id: reference,
+            amount: 0.5,
+            status: PaymentStatus.CONFIRMED,
+            normalizedStatus: NormalizedPaymentStatus.CONFIRMED,
+            transactionId: 'tx-123',
+            transactionHash: '0xabc123',
+            rawStatus: 'mined',
+          }),
+        })
+      );
+    });
+
+    it('should return pending status for pending payment', async () => {
+      const userId = 'user-123';
+      const reference = 'test-ref';
+
+      mockRequest.params = { reference };
+      (mockRequest as any).userId = userId;
+
+      const mockPaymentIntent = {
+        payment_reference: reference,
+        user_id: userId,
+        amount: 0.5,
+        normalized_status: NormalizedPaymentStatus.PENDING,
+        minikit_transaction_id: 'tx-123',
+        raw_status: 'pending',
+        created_at: new Date(),
+        updated_at: new Date(),
+      };
+
+      const mockPayment = {
+        reference,
+        user_id: userId,
+        amount: 0.5,
+        status: PaymentStatus.PENDING,
+        created_at: new Date(),
+      };
+
+      (PaymentIntentModel.findByReference as jest.Mock).mockResolvedValue(mockPaymentIntent);
+      (PaymentModel.findByReference as jest.Mock).mockResolvedValue(mockPayment);
+
+      await PaymentController.getPaymentStatusPolling(
+        mockRequest as Request,
+        mockResponse as Response
+      );
+
+      expect(jsonMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          success: true,
+          payment: expect.objectContaining({
+            normalizedStatus: NormalizedPaymentStatus.PENDING,
+            status: PaymentStatus.PENDING,
+          }),
+        })
+      );
+    });
+
+    it('should return failed status with error message', async () => {
+      const userId = 'user-123';
+      const reference = 'test-ref';
+
+      mockRequest.params = { reference };
+      (mockRequest as any).userId = userId;
+
+      const mockPaymentIntent = {
+        payment_reference: reference,
+        user_id: userId,
+        amount: 0.5,
+        normalized_status: NormalizedPaymentStatus.FAILED,
+        raw_status: 'expired',
+        last_error: 'Payment expired - no transaction ID received within timeout',
+        created_at: new Date(),
+        updated_at: new Date(),
+      };
+
+      const mockPayment = {
+        reference,
+        user_id: userId,
+        amount: 0.5,
+        status: PaymentStatus.FAILED,
+        created_at: new Date(),
+      };
+
+      (PaymentIntentModel.findByReference as jest.Mock).mockResolvedValue(mockPaymentIntent);
+      (PaymentModel.findByReference as jest.Mock).mockResolvedValue(mockPayment);
+
+      await PaymentController.getPaymentStatusPolling(
+        mockRequest as Request,
+        mockResponse as Response
+      );
+
+      expect(jsonMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          success: true,
+          payment: expect.objectContaining({
+            normalizedStatus: NormalizedPaymentStatus.FAILED,
+            lastError: 'Payment expired - no transaction ID received within timeout',
+          }),
+        })
+      );
+    });
+
+    it('should return 404 if payment intent not found', async () => {
+      mockRequest.params = { reference: 'nonexistent' };
+      (mockRequest as any).userId = 'user-123';
+
+      (PaymentIntentModel.findByReference as jest.Mock).mockResolvedValue(null);
+
+      await PaymentController.getPaymentStatusPolling(
+        mockRequest as Request,
+        mockResponse as Response
+      );
+
+      expect(statusMock).toHaveBeenCalledWith(404);
+      expect(jsonMock).toHaveBeenCalledWith({ error: 'Payment not found' });
+    });
+
+    it('should return 403 if user mismatch', async () => {
+      const reference = 'test-ref';
+      mockRequest.params = { reference };
+      (mockRequest as any).userId = 'user-123';
+
+      const mockPaymentIntent = {
+        payment_reference: reference,
+        user_id: 'different-user',
+        amount: 0.5,
+        normalized_status: NormalizedPaymentStatus.PENDING,
+        created_at: new Date(),
+      };
+
+      (PaymentIntentModel.findByReference as jest.Mock).mockResolvedValue(mockPaymentIntent);
+
+      await PaymentController.getPaymentStatusPolling(
+        mockRequest as Request,
+        mockResponse as Response
+      );
+
+      expect(statusMock).toHaveBeenCalledWith(403);
+      expect(jsonMock).toHaveBeenCalledWith({ 
+        error: 'Payment does not belong to this user' 
+      });
+    });
+
+    it('should handle missing payment gracefully', async () => {
+      const userId = 'user-123';
+      const reference = 'test-ref';
+
+      mockRequest.params = { reference };
+      (mockRequest as any).userId = userId;
+
+      const mockPaymentIntent = {
+        payment_reference: reference,
+        user_id: userId,
+        amount: 0.5,
+        normalized_status: NormalizedPaymentStatus.PENDING,
+        created_at: new Date(),
+      };
+
+      (PaymentIntentModel.findByReference as jest.Mock).mockResolvedValue(mockPaymentIntent);
+      (PaymentModel.findByReference as jest.Mock).mockResolvedValue(null);
+
+      await PaymentController.getPaymentStatusPolling(
+        mockRequest as Request,
+        mockResponse as Response
+      );
+
+      expect(jsonMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          success: true,
+          payment: expect.objectContaining({
+            status: 'pending', // Default fallback
+            normalizedStatus: NormalizedPaymentStatus.PENDING,
+          }),
+        })
+      );
+    });
+  });
 });
