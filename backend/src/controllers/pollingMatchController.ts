@@ -15,6 +15,21 @@ import pool from '../config/database';
 // Constants
 const COUNTDOWN_DURATION_MS = 3000; // 3 seconds for countdown display
 
+/**
+ * Parse green_light_time value that may be returned as string from PostgreSQL BIGINT
+ * @param value - The green_light_time value (may be string, number, null, or undefined)
+ * @returns Parsed numeric value or null
+ */
+function parseGreenLightTime(value: any): number | null {
+  if (!value) return null;
+  
+  const parsed = typeof value === 'string' 
+    ? parseInt(value, 10) 
+    : value;
+  
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
 export class PollingMatchController {
   /**
    * POST /api/match/ready
@@ -127,6 +142,9 @@ export class PollingMatchController {
       const isPlayer1 = matchState.player1_id === userId;
       const opponentId = isPlayer1 ? matchState.player2_id : matchState.player1_id;
 
+      // Parse green_light_time - PostgreSQL BIGINT can be returned as string
+      const greenLightTime = parseGreenLightTime(matchState.green_light_time);
+
       // Determine state for client
       let state = 'matched';
       let greenLightActive = false;
@@ -134,11 +152,10 @@ export class PollingMatchController {
 
       if (matchState.status === MatchStatus.COMPLETED || matchState.status === MatchStatus.CANCELLED) {
         state = 'resolved';
-      } else if (matchState.green_light_time && 
-                 typeof matchState.green_light_time === 'number' && 
-                 Number.isFinite(matchState.green_light_time) && 
-                 matchState.green_light_time > 0) {
-        const timeUntilGo = matchState.green_light_time - now;
+      } else if (greenLightTime && 
+                 Number.isFinite(greenLightTime) && 
+                 greenLightTime > 0) {
+        const timeUntilGo = greenLightTime - now;
         
         // The greenLightTime includes both countdown (3s) and random delay (2-5s)
         // Total time: 5-8 seconds
@@ -154,7 +171,7 @@ export class PollingMatchController {
           // Transition status to IN_PROGRESS when go signal is active (only once)
           if (matchState.status === MatchStatus.COUNTDOWN) {
             await MatchModel.updateStatus(matchId, MatchStatus.IN_PROGRESS);
-            console.log(`[Polling Match] 🟢 Green light active! Match ${matchId} transitioning to IN_PROGRESS (go signal). Green light time: ${new Date(matchState.green_light_time).toISOString()}`);
+            console.log(`[Polling Match] 🟢 Green light active! Match ${matchId} transitioning to IN_PROGRESS (go signal). Green light time: ${new Date(greenLightTime).toISOString()}`);
           }
         } else if (timeUntilGo <= COUNTDOWN_DURATION_MS) {
           // Last 3 seconds - show countdown: 3, 2, 1
@@ -177,11 +194,11 @@ export class PollingMatchController {
       const playerTap = taps.find(t => t.user_id === userId);
       const opponentTap = taps.find(t => t.user_id === opponentId);
 
-      // Safe serialization of green_light_time: return raw ms and ISO string only if numeric
-      let greenLightTimeMs = matchState.green_light_time ?? null;
+      // Use the parsed greenLightTime for response
+      let greenLightTimeMs = greenLightTime;
       let greenLightTimeISO: string | null = null;
       
-      if (typeof greenLightTimeMs === 'number' && !isNaN(greenLightTimeMs) && Number.isFinite(greenLightTimeMs)) {
+      if (greenLightTimeMs !== null && Number.isFinite(greenLightTimeMs)) {
         try {
           greenLightTimeISO = new Date(greenLightTimeMs).toISOString();
         } catch (err) {
@@ -189,9 +206,6 @@ export class PollingMatchController {
           greenLightTimeMs = null;
           greenLightTimeISO = null;
         }
-      } else if (greenLightTimeMs !== null) {
-        console.error(`[Polling Match] green_light_time is not a valid number for match ${matchId}: ${greenLightTimeMs}`);
-        greenLightTimeMs = null;
       }
 
       res.json({
@@ -255,7 +269,10 @@ export class PollingMatchController {
       }
 
       // CRITICAL: Validate green_light_time to prevent "Invalid time value"
-      if (!match.green_light_time || !Number.isFinite(match.green_light_time)) {
+      // PostgreSQL BIGINT can be returned as string, parse it first
+      const greenLightTime = parseGreenLightTime(match.green_light_time);
+
+      if (!greenLightTime) {
         console.error(`[Polling Match] Invalid green_light_time for match ${matchId}: ${match.green_light_time}`);
         res.status(400).json({ 
           error: 'Green light time is invalid',
@@ -265,7 +282,6 @@ export class PollingMatchController {
       }
 
       // Validate green_light_time is reasonable (not too far in past or future)
-      const greenLightTime = match.green_light_time;
       const now = Date.now();
       const timeSinceGreenLight = now - greenLightTime;
       

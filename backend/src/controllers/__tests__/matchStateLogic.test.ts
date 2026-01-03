@@ -49,6 +49,44 @@ describe('Match State Serialization Logic', () => {
       
       expect(greenLightTimeISO).toBeNull();
     });
+
+    it('should parse string green_light_time from PostgreSQL BIGINT', () => {
+      // Simulate PostgreSQL returning BIGINT as string
+      const rawGreenLightTime: any = '1767449162239';
+      
+      // Parse logic from pollingMatchController.ts
+      const greenLightTime = rawGreenLightTime 
+        ? (typeof rawGreenLightTime === 'string' 
+            ? parseInt(rawGreenLightTime, 10) 
+            : rawGreenLightTime)
+        : null;
+      
+      expect(greenLightTime).toBe(1767449162239);
+      expect(typeof greenLightTime).toBe('number');
+      expect(Number.isFinite(greenLightTime)).toBe(true);
+      
+      // Verify it can be used to create ISO string
+      const isoString = new Date(greenLightTime).toISOString();
+      expect(isoString).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+    });
+
+    it('should handle both string and number green_light_time', () => {
+      const testCases = [
+        { input: 1767449162239, expected: 1767449162239 },
+        { input: '1767449162239', expected: 1767449162239 },
+      ];
+
+      testCases.forEach(({ input, expected }) => {
+        const greenLightTime = input 
+          ? (typeof input === 'string' 
+              ? parseInt(input, 10) 
+              : input)
+          : null;
+        
+        expect(greenLightTime).toBe(expected);
+        expect(Number.isFinite(greenLightTime)).toBe(true);
+      });
+    });
   });
 
   describe('Winner Determination Logic', () => {
