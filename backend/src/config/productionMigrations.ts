@@ -1,7 +1,8 @@
-import pool from '../database';
+import pool from './database';
 import * as migration001 from './migrations/001_payment_intents';
 import * as migration002 from './migrations/002_matches_idempotency';
 import * as migration003 from './migrations/003_tap_events_unique';
+import * as migration004 from './migrations/004_schema_validation';
 
 interface Migration {
   name: string;
@@ -13,6 +14,7 @@ const migrations: Migration[] = [
   { name: '001_payment_intents', ...migration001 },
   { name: '002_matches_idempotency', ...migration002 },
   { name: '003_tap_events_unique', ...migration003 },
+  { name: '004_schema_validation', ...migration004 },
 ];
 
 /**

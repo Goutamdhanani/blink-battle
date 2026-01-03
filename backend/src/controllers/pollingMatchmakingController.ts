@@ -5,6 +5,7 @@ import { UserModel } from '../models/User';
 import { MatchStatus } from '../models/types';
 import { generateRandomDelay } from '../services/randomness';
 import { EscrowService } from '../services/escrow';
+import { PaymentIntentModel, NormalizedPaymentStatus } from '../models/PaymentIntent';
 
 /**
  * HTTP Polling Matchmaking Controller
@@ -14,15 +15,70 @@ export class PollingMatchmakingController {
   /**
    * POST /api/matchmaking/join
    * Join matchmaking queue by stake amount
+   * 
+   * CRITICAL: Enforces payment gating for staked matches
+   * - Free matches (stake = 0) can proceed without payment
+   * - Staked matches require confirmed payment before joining queue
    */
   static async join(req: Request, res: Response): Promise<void> {
     try {
       const userId = (req as any).userId;
-      const { stake } = req.body;
+      const { stake, paymentReference } = req.body;
 
       if (typeof stake !== 'number' || stake < 0) {
         res.status(400).json({ error: 'Invalid stake amount' });
         return;
+      }
+
+      // CRITICAL: Stake cap enforcement (0.1 WLD max until platform wallet funded)
+      const MAX_STAKE = parseFloat(process.env.MAX_STAKE_WLD || '0.1');
+      if (stake > MAX_STAKE) {
+        res.status(400).json({ 
+          error: 'Stake amount exceeds maximum',
+          maxStake: MAX_STAKE,
+          details: `Maximum stake is ${MAX_STAKE} WLD until platform wallet is sufficiently funded for gas fees`
+        });
+        return;
+      }
+
+      // CRITICAL: Payment gating for staked matches
+      // Require confirmed payment before joining matchmaking queue
+      if (stake > 0) {
+        if (!paymentReference) {
+          res.status(400).json({ 
+            error: 'Payment required for staked matches',
+            requiresPayment: true,
+            stake
+          });
+          return;
+        }
+
+        // Verify payment exists and is confirmed
+        const paymentIntent = await PaymentIntentModel.findByReference(paymentReference);
+
+        if (!paymentIntent) {
+          res.status(404).json({ 
+            error: 'Payment not found',
+            paymentReference
+          });
+          return;
+        }
+
+        if (paymentIntent.user_id !== userId) {
+          res.status(403).json({ error: 'Payment does not belong to this user' });
+          return;
+        }
+
+        if (paymentIntent.normalized_status !== NormalizedPaymentStatus.CONFIRMED) {
+          res.status(400).json({ 
+            error: 'Payment not confirmed',
+            status: paymentIntent.normalized_status,
+            requiresPayment: true
+          });
+          return;
+        }
+
+        console.log(`[HTTP Matchmaking] Payment verified for user ${userId}, reference ${paymentReference}`);
       }
 
       // Check if user already in queue

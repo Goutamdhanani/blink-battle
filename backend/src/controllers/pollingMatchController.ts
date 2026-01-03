@@ -138,7 +138,10 @@ export class PollingMatchController {
 
       if (matchState.status === MatchStatus.COMPLETED || matchState.status === MatchStatus.CANCELLED) {
         state = 'resolved';
-      } else if (matchState.green_light_time) {
+      } else if (matchState.green_light_time && 
+                 typeof matchState.green_light_time === 'number' && 
+                 Number.isFinite(matchState.green_light_time) && 
+                 matchState.green_light_time > 0) {
         const timeUntilGo = matchState.green_light_time - now;
         
         // The greenLightTime includes both countdown (3s) and random delay (2-5s)
