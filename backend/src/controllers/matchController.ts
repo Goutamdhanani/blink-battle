@@ -4,6 +4,7 @@ import { UserModel } from '../models/User';
 import { TransactionModel } from '../models/Transaction';
 import { EscrowService } from '../services/escrow';
 import { EscrowStatus } from '../models/types';
+import pool from '../config/database';
 
 export class MatchController {
   /**
@@ -14,45 +15,75 @@ export class MatchController {
       const userId = (req as any).userId;
       const limit = parseInt(req.query.limit as string) || 20;
 
-      // Get matches with payment and refund status
-      const { default: pool } = await import('../config/database');
-      const matches = await pool.query(`
-        SELECT 
-          m.*,
-          pi.payment_reference,
-          pi.refund_status,
-          pi.refund_deadline,
-          pi.refund_amount,
-          pi.refund_reason,
-          u1.wallet_address as player1_wallet_addr,
-          u2.wallet_address as player2_wallet_addr
-        FROM matches m
-        LEFT JOIN payment_intents pi ON pi.match_id = m.match_id AND pi.user_id = $1
-        LEFT JOIN users u1 ON u1.user_id = m.player1_id
-        LEFT JOIN users u2 ON u2.user_id = m.player2_id
-        WHERE m.player1_id = $1 OR m.player2_id = $1
-        ORDER BY m.created_at DESC
-        LIMIT $2
-      `, [userId, limit]);
+      // Check if refund columns exist before using them
+      const refundColumnsExist = await pool.query(`
+        SELECT column_name FROM information_schema.columns 
+        WHERE table_name = 'payment_intents' AND column_name = 'refund_status'
+      `);
 
-      // Also get orphaned payments (paid but never matched)
-      const orphanedPayments = await pool.query(`
-        SELECT 
-          pi.payment_reference,
-          pi.amount,
-          pi.created_at,
-          pi.refund_status,
-          pi.refund_deadline,
-          pi.refund_reason
-        FROM payment_intents pi
-        WHERE pi.user_id = $1 
-          AND pi.match_id IS NULL
-          AND pi.normalized_status = 'confirmed'
-        ORDER BY pi.created_at DESC
-        LIMIT 10
-      `, [userId]);
+      let query: string;
+      let params: any[];
 
-      const now = Date.now();
+      if (refundColumnsExist.rows.length > 0) {
+        // Use full query with refund columns
+        query = `
+          SELECT 
+            m.*,
+            pi.payment_reference,
+            pi.refund_status,
+            pi.refund_deadline,
+            pi.refund_amount,
+            pi.refund_reason,
+            u1.wallet_address as player1_wallet_addr,
+            u2.wallet_address as player2_wallet_addr
+          FROM matches m
+          LEFT JOIN payment_intents pi ON pi.match_id = m.match_id AND pi.user_id = $1
+          LEFT JOIN users u1 ON u1.user_id = m.player1_id
+          LEFT JOIN users u2 ON u2.user_id = m.player2_id
+          WHERE m.player1_id = $1 OR m.player2_id = $1
+          ORDER BY m.created_at DESC
+          LIMIT $2
+        `;
+      } else {
+        // Fallback query without refund columns (migration not run yet)
+        query = `
+          SELECT 
+            m.*,
+            pi.payment_reference,
+            u1.wallet_address as player1_wallet_addr,
+            u2.wallet_address as player2_wallet_addr
+          FROM matches m
+          LEFT JOIN payment_intents pi ON pi.match_id = m.match_id AND pi.user_id = $1
+          LEFT JOIN users u1 ON u1.user_id = m.player1_id
+          LEFT JOIN users u2 ON u2.user_id = m.player2_id
+          WHERE m.player1_id = $1 OR m.player2_id = $1
+          ORDER BY m.created_at DESC
+          LIMIT $2
+        `;
+      }
+
+      params = [userId, limit];
+      const matches = await pool.query(query, params);
+
+      // Also get orphaned payments (paid but never matched) - only if refund columns exist
+      let orphanedPayments: any = { rows: [] };
+      if (refundColumnsExist.rows.length > 0) {
+        orphanedPayments = await pool.query(`
+          SELECT 
+            pi.payment_reference,
+            pi.amount,
+            pi.created_at,
+            pi.refund_status,
+            pi.refund_deadline,
+            pi.refund_reason
+          FROM payment_intents pi
+          WHERE pi.user_id = $1 
+            AND pi.match_id IS NULL
+            AND pi.normalized_status = 'confirmed'
+          ORDER BY pi.created_at DESC
+          LIMIT 10
+        `, [userId]);
+      }
 
       res.json({
         matches: matches.rows.map((m: any) => ({
@@ -60,9 +91,17 @@ export class MatchController {
           stake: m.stake,
           status: m.status,
           isWinner: m.winner_id === userId,
-          canClaim: m.winner_id === userId && m.claim_status === 'unclaimed' && new Date() < new Date(m.claim_deadline),
-          canRefund: m.refund_status === 'eligible' && new Date() < new Date(m.refund_deadline),
-          refundExpired: m.refund_status === 'eligible' && new Date() > new Date(m.refund_deadline),
+          canClaim: m.winner_id === userId && 
+                    m.claim_status === 'unclaimed' && 
+                    m.claim_deadline &&
+                    new Date() < new Date(m.claim_deadline),
+          // Only include refund fields if they exist
+          canRefund: m.refund_status === 'eligible' && 
+                     m.refund_deadline && 
+                     new Date() < new Date(m.refund_deadline),
+          refundExpired: m.refund_status === 'eligible' && 
+                         m.refund_deadline && 
+                         new Date() > new Date(m.refund_deadline),
           refundStatus: m.refund_status,
           refundReason: m.refund_reason,
           paymentReference: m.payment_reference,
@@ -78,15 +117,16 @@ export class MatchController {
           amount: p.amount,
           createdAt: p.created_at,
           type: 'matchmaking_cancelled',
-          canRefund: p.refund_status === 'eligible' && new Date() < new Date(p.refund_deadline),
-          refundExpired: p.refund_status === 'eligible' && new Date() > new Date(p.refund_deadline),
+          canRefund: p.refund_status === 'eligible' && p.refund_deadline && new Date() < new Date(p.refund_deadline),
+          refundExpired: p.refund_status === 'eligible' && p.refund_deadline && new Date() > new Date(p.refund_deadline),
           refundStatus: p.refund_status,
           refundReason: p.refund_reason
-        }))
+        })),
+        migrationPending: refundColumnsExist.rows.length === 0
       });
-    } catch (error) {
-      console.error('Error fetching match history:', error);
-      res.status(500).json({ error: 'Failed to fetch match history' });
+    } catch (error: any) {
+      console.error('[History] Error:', error.message);
+      res.status(500).json({ error: 'Failed to get history', details: error.message });
     }
   }
 
