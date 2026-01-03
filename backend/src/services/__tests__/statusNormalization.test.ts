@@ -110,11 +110,18 @@ describe('statusNormalization', () => {
       expect(extractRawStatus(undefined)).toBe(undefined);
     });
 
-    it('should return undefined for null/undefined status values', () => {
+    it('should return undefined/null for null/undefined status values', () => {
+      // When transactionStatus is null, it's nullish so checks status
       expect(extractRawStatus({ transactionStatus: null })).toBe(undefined);
-      expect(extractRawStatus({ status: null })).toBe(undefined);
+      // When only status exists and is null, returns null
+      expect(extractRawStatus({ status: null })).toBe(null);
+      // When transactionStatus is undefined, checks status
       expect(extractRawStatus({ transactionStatus: undefined })).toBe(undefined);
+      // When only status exists and is undefined, returns undefined  
       expect(extractRawStatus({ status: undefined })).toBe(undefined);
+      // When transactionStatus is null/undefined but status has value, returns status
+      expect(extractRawStatus({ transactionStatus: null, status: 'pending' })).toBe('pending');
+      expect(extractRawStatus({ transactionStatus: undefined, status: 'mined' })).toBe('mined');
     });
   });
 });

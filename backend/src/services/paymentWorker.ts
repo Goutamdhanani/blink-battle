@@ -198,7 +198,7 @@ export class PaymentWorker {
       await PaymentIntentModel.updateStatus(
         intent.payment_reference,
         normalizedStatus,
-        rawStatus,
+        rawStatus ?? undefined,
         intent.minikit_transaction_id,
         transactionHash ?? undefined
       );

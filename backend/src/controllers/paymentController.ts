@@ -175,9 +175,9 @@ export class PaymentController {
       await PaymentIntentModel.updateStatus(
         reference,
         normalizedStatus,
-        rawStatus,
+        rawStatus ?? undefined,
         transaction_id,
-        transactionHash || undefined,
+        transactionHash ?? undefined,
         undefined // no error
       );
 

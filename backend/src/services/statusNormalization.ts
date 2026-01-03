@@ -63,8 +63,8 @@ export function extractTransactionHash(transaction: any): string | null {
  * Extract raw status from Developer Portal transaction response
  * Developer Portal can return either 'transactionStatus' or 'status' field
  * Prefers transactionStatus over status for consistency
+ * Returns string if present, null if explicitly null, undefined if missing
  */
-export function extractRawStatus(transaction: any): string | undefined {
-  const status = transaction?.transactionStatus ?? transaction?.status;
-  return status ?? undefined;
+export function extractRawStatus(transaction: any): string | null | undefined {
+  return transaction?.transactionStatus ?? transaction?.status;
 }
