@@ -2,6 +2,8 @@ import { Request, Response } from 'express';
 import crypto from 'crypto';
 import axios from 'axios';
 import { PaymentModel, PaymentStatus } from '../models/Payment';
+import { PaymentIntentModel, NormalizedPaymentStatus } from '../models/PaymentIntent';
+import { normalizeMiniKitStatus, extractTransactionHash } from '../services/statusNormalization';
 
 export class PaymentController {
   /**
@@ -22,6 +24,9 @@ export class PaymentController {
 
       // Store payment reference in database (idempotent)
       const payment = await PaymentModel.create(uuid, userId, amount);
+      
+      // Also create payment intent for new flow (idempotent)
+      await PaymentIntentModel.create(uuid, userId, amount);
 
       console.log(`[Payment] Initiated payment reference=${uuid} userId=${userId} amount=${amount} status=${payment.status}`);
 
@@ -152,8 +157,30 @@ export class PaymentController {
 
       console.log(`[Payment] Transaction status from Developer Portal: ${transaction.status}`);
 
-      // Handle different transaction statuses
-      if (transaction.status === 'failed') {
+      // Normalize the MiniKit transaction status
+      const rawStatus = transaction.status;
+      const transactionHash = extractTransactionHash(transaction);
+      const normalizedStatus = normalizeMiniKitStatus(rawStatus);
+      
+      console.log(
+        `[Payment] Status normalization:\n` +
+        `  Raw status: "${rawStatus}"\n` +
+        `  Normalized: "${normalizedStatus}"\n` +
+        `  Transaction hash: ${transactionHash || 'null'}`
+      );
+
+      // Update payment intent with normalized status and raw data
+      await PaymentIntentModel.updateStatus(
+        reference,
+        normalizedStatus,
+        rawStatus,
+        transaction_id,
+        transactionHash || undefined,
+        undefined // no error
+      );
+
+      // Handle different normalized statuses
+      if (normalizedStatus === NormalizedPaymentStatus.FAILED) {
         console.error('[Payment] Transaction failed on-chain:', JSON.stringify(transaction, null, 2));
         await PaymentModel.updateStatus(reference, PaymentStatus.FAILED, transaction_id);
         return res.status(400).json({ 
@@ -162,7 +189,16 @@ export class PaymentController {
         });
       }
 
-      if (transaction.status === 'pending') {
+      if (normalizedStatus === NormalizedPaymentStatus.CANCELLED) {
+        console.error('[Payment] Transaction cancelled:', JSON.stringify(transaction, null, 2));
+        await PaymentModel.updateStatus(reference, PaymentStatus.FAILED, transaction_id);
+        return res.status(400).json({ 
+          error: 'Transaction cancelled',
+          transaction,
+        });
+      }
+
+      if (normalizedStatus === NormalizedPaymentStatus.PENDING) {
         // Transaction is still pending on-chain, keep payment as pending
         console.log(`[Payment] Transaction still pending reference=${reference}`);
         return res.json({
@@ -177,7 +213,7 @@ export class PaymentController {
         });
       }
 
-      // Transaction is confirmed (mined)
+      // Transaction is confirmed (only if normalizedStatus === CONFIRMED)
       const updatedPayment = await PaymentModel.updateStatus(
         reference,
         PaymentStatus.CONFIRMED,
