@@ -433,6 +433,11 @@ const startServer = async () => {
     startDisconnectChecker();
     console.log(`✅ Disconnect checker job started`);
 
+    // Start match timeout job for abandoned matches (Issue #17)
+    const { startMatchTimeoutJob } = await import('./jobs/matchTimeout');
+    startMatchTimeoutJob();
+    console.log(`✅ Match timeout job started - cancels abandoned matches`);
+
     httpServer.listen(PORT, () => {
       console.log(`Server running on port ${PORT}`);
       console.log(`HTTP Polling endpoints enabled:`);
@@ -463,6 +468,11 @@ const shutdown = async (signal: string) => {
   const { stopPaymentWorker } = await import('./services/paymentWorker');
   stopPaymentWorker();
   console.log('Payment worker stopped');
+  
+  // Stop match timeout job
+  const { stopMatchTimeoutJob } = await import('./jobs/matchTimeout');
+  stopMatchTimeoutJob();
+  console.log('Match timeout job stopped');
   
   // Stop request tracking
   const { stopStatsLogging } = await import('./middleware/requestTracking');
