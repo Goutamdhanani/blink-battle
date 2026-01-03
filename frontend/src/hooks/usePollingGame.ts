@@ -42,6 +42,8 @@ export const usePollingGame = () => {
   const matchStateRef = useRef<MatchState | null>(null);
   const pollCountRef = useRef<number>(0);
   const currentPollingRateRef = useRef<number>(POLLING_RATES.IDLE);
+  const unchangedStateCountRef = useRef<number>(0);
+  const lastStateHashRef = useRef<string>('');
 
   // Update polling service token when it changes
   useEffect(() => {
@@ -122,6 +124,10 @@ export const usePollingGame = () => {
 
     setIsPolling(true);
     setError(null);
+    
+    // Reset backoff state
+    unchangedStateCountRef.current = 0;
+    lastStateHashRef.current = '';
 
     // Start heartbeat interval
     heartbeatIntervalRef.current = setInterval(() => {
@@ -134,6 +140,36 @@ export const usePollingGame = () => {
       try {
         const matchState: MatchState = await pollingService.getMatchState(matchId);
         matchStateRef.current = matchState;
+
+        // Create state hash to detect changes
+        const stateHash = `${matchState.state}-${matchState.status}-${matchState.countdown}-${matchState.playerTapped}-${matchState.opponentTapped}`;
+        
+        // Detect unchanged state for backoff
+        if (stateHash === lastStateHashRef.current) {
+          unchangedStateCountRef.current++;
+          
+          // After 5 consecutive unchanged states, slow down polling (except during countdown/playing)
+          // Higher polling interval = slower/less frequent polling
+          if (unchangedStateCountRef.current >= 5 && 
+              matchState.state !== 'countdown' && 
+              matchState.state !== 'go' &&
+              matchState.state !== 'waiting_for_go') {
+            // Gradually increase interval (slow down) by 1.5x, capped at IDLE rate (5000ms)
+            const backoffRate = Math.min(currentPollingRateRef.current * 1.5, POLLING_RATES.IDLE);
+            if (backoffRate !== currentPollingRateRef.current) {
+              currentPollingRateRef.current = backoffRate;
+              if (pollIntervalRef.current) {
+                clearInterval(pollIntervalRef.current);
+                pollIntervalRef.current = setInterval(poll, backoffRate);
+                console.log(`[Polling] State unchanged, backing off to ${Math.round(backoffRate)}ms`);
+              }
+            }
+          }
+        } else {
+          // State changed, reset backoff
+          unchangedStateCountRef.current = 0;
+          lastStateHashRef.current = stateHash;
+        }
 
         // Log state for debugging
         console.log(`[Polling] Match state: ${matchState.state}, status: ${matchState.status}, countdown: ${matchState.countdown}`);
@@ -180,8 +216,8 @@ export const usePollingGame = () => {
           return; // Exit early to prevent ANY further polling
         }
 
-        // Adjust polling rate if needed
-        if (newRate !== currentPollingRateRef.current) {
+        // Adjust polling rate if needed (only if not backing off)
+        if (unchangedStateCountRef.current < 5 && newRate !== currentPollingRateRef.current) {
           currentPollingRateRef.current = newRate;
           if (pollIntervalRef.current) {
             clearInterval(pollIntervalRef.current);
