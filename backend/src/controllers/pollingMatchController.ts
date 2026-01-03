@@ -362,7 +362,8 @@ export class PollingMatchController {
       const timeSinceGreenLight = now - greenLightTime;
       
       // Validate client timestamp if provided (prevent manipulation)
-      if (clientTimestamp) {
+      // Check for explicit presence (not just truthy) to catch 0 and negative values
+      if (clientTimestamp !== undefined && clientTimestamp !== null) {
         // Reject negative or zero timestamps
         if (clientTimestamp <= 0) {
           console.warn(`[Polling Match] Invalid client timestamp: ${clientTimestamp}`);
