@@ -2,18 +2,55 @@ import pool from '../config/database';
 import { Match, MatchStatus, GameResult } from './types';
 
 export class MatchModel {
+  /**
+   * Create a new match with idempotency support
+   * Stores player wallet addresses at match creation time
+   */
   static async create(
     player1Id: string,
     player2Id: string,
-    stake: number
+    stake: number,
+    idempotencyKey?: string
   ): Promise<Match> {
+    // If idempotency key provided, check for existing match
+    if (idempotencyKey) {
+      const existing = await this.findByIdempotencyKey(idempotencyKey);
+      if (existing) {
+        console.log(`[Match] Idempotent match creation - returning existing match ${existing.match_id}`);
+        return existing;
+      }
+    }
+
+    // Fetch player wallet addresses
+    const player1 = await pool.query('SELECT wallet_address FROM users WHERE user_id = $1', [player1Id]);
+    const player2 = await pool.query('SELECT wallet_address FROM users WHERE user_id = $1', [player2Id]);
+
+    const player1Wallet = player1.rows[0]?.wallet_address;
+    const player2Wallet = player2.rows[0]?.wallet_address;
+
+    if (!player1Wallet || !player2Wallet) {
+      throw new Error('Player wallet addresses not found');
+    }
+
     const result = await pool.query(
-      `INSERT INTO matches (player1_id, player2_id, stake, status) 
-       VALUES ($1, $2, $3, $4) 
+      `INSERT INTO matches 
+        (player1_id, player2_id, stake, status, player1_wallet, player2_wallet, idempotency_key) 
+       VALUES ($1, $2, $3, $4, $5, $6, $7) 
        RETURNING *`,
-      [player1Id, player2Id, stake, MatchStatus.PENDING]
+      [player1Id, player2Id, stake, MatchStatus.PENDING, player1Wallet, player2Wallet, idempotencyKey || null]
     );
     return result.rows[0];
+  }
+
+  /**
+   * Find match by idempotency key
+   */
+  static async findByIdempotencyKey(key: string): Promise<Match | null> {
+    const result = await pool.query(
+      'SELECT * FROM matches WHERE idempotency_key = $1',
+      [key]
+    );
+    return result.rows[0] || null;
   }
 
   static async findById(matchId: string): Promise<Match | null> {
@@ -65,6 +102,24 @@ export class MatchModel {
     const platformFeePercent = parseFloat(process.env.PLATFORM_FEE_PERCENT || '3');
     const match = await this.findById(result.matchId);
     if (!match) throw new Error('Match not found');
+
+    // Validate winner if specified
+    if (result.winnerId) {
+      const isPlayer1 = match.player1_id === result.winnerId;
+      const isPlayer2 = match.player2_id === result.winnerId;
+      
+      if (!isPlayer1 && !isPlayer2) {
+        throw new Error(`Winner ID ${result.winnerId} is not a participant in match ${result.matchId}`);
+      }
+
+      // Validate winner wallet is available
+      const winnerWallet = isPlayer1 ? match.player1_wallet : match.player2_wallet;
+      if (!winnerWallet) {
+        throw new Error(`Winner wallet not found for winner ${result.winnerId} in match ${result.matchId}`);
+      }
+      
+      console.log(`[Match] Completing match ${result.matchId} - winner: ${result.winnerId}, wallet: ${winnerWallet}`);
+    }
 
     const totalPot = match.stake * 2;
     const fee = totalPot * (platformFeePercent / 100);

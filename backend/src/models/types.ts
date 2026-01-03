@@ -35,9 +35,11 @@ export interface Match {
   player2_staked?: boolean;
   player1_stake_tx?: string;
   player2_stake_tx?: string;
-  // Extended fields for getMatchState (from JOIN with users table)
+  // Wallet fields (stored at match creation)
   player1_wallet?: string;
   player2_wallet?: string;
+  // Idempotency
+  idempotency_key?: string;
 }
 
 export enum MatchStatus {

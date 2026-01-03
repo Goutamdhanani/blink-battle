@@ -283,6 +283,12 @@ const startServer = async () => {
     await pool.query('SELECT NOW()');
     console.log('Connected to PostgreSQL');
 
+    // Start payment worker for processing payment intents
+    const { startPaymentWorker } = await import('./services/paymentWorker');
+    const PAYMENT_WORKER_INTERVAL_MS = parseInt(process.env.PAYMENT_WORKER_INTERVAL_MS || '10000', 10);
+    startPaymentWorker(PAYMENT_WORKER_INTERVAL_MS);
+    console.log(`✅ Payment worker started (interval: ${PAYMENT_WORKER_INTERVAL_MS}ms)`);
+
     // Start cleanup interval for expired queue entries
     const CLEANUP_INTERVAL_MS = 60000; // 1 minute
     setInterval(async () => {
@@ -319,6 +325,11 @@ const startServer = async () => {
 // Graceful shutdown
 const shutdown = async (signal: string) => {
   console.log(`\n${signal} received, shutting down gracefully...`);
+  
+  // Stop payment worker
+  const { stopPaymentWorker } = await import('./services/paymentWorker');
+  stopPaymentWorker();
+  console.log('Payment worker stopped');
   
   // Stop request tracking
   const { stopStatsLogging } = await import('./middleware/requestTracking');
