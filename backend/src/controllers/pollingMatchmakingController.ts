@@ -29,8 +29,11 @@ export class PollingMatchmakingController {
         return;
       }
 
-      // CRITICAL: Minimum stake check (if any stake is used)
-      const MIN_STAKE_WLD = 0.01; // 0.01 WLD minimum
+      // FIXED: Support all stake tiers (0.1, 0.25, 0.5, 1.0 WLD)
+      const ALLOWED_STAKES = [0.1, 0.25, 0.5, 1.0];
+      const MIN_STAKE_WLD = 0.01; // Absolute minimum
+      const MAX_STAKE_WLD = 1.0;   // Maximum stake
+      
       if (stake > 0 && stake < MIN_STAKE_WLD) {
         res.status(400).json({ 
           error: 'Stake amount below minimum',
@@ -39,6 +42,25 @@ export class PollingMatchmakingController {
         });
         return;
       }
+
+      if (stake > MAX_STAKE_WLD) {
+        res.status(400).json({ 
+          error: 'Stake amount exceeds maximum',
+          maxStake: MAX_STAKE_WLD,
+          details: `Maximum stake is ${MAX_STAKE_WLD} WLD`
+        });
+        return;
+      }
+
+      // Optional: Validate exact stake amounts (commented out to allow any value within range)
+      // if (stake > 0 && !ALLOWED_STAKES.includes(stake)) {
+      //   res.status(400).json({ 
+      //     error: 'Invalid stake amount',
+      //     allowedStakes: ALLOWED_STAKES,
+      //     details: `Please use one of the allowed stake amounts: ${ALLOWED_STAKES.join(', ')} WLD`
+      //   });
+      //   return;
+      // }
 
       // CRITICAL: Payment gating for staked matches
       // Require confirmed payment before joining matchmaking queue

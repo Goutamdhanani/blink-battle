@@ -11,7 +11,7 @@ import './Matchmaking.css';
 // We no longer use custom payment screens - MiniKit drawer is opened before joining queue
 
 const STAKE_OPTIONS = [0.1, 0.25, 0.5, 1.0];
-const MAX_STAKE = 0.1; // Maximum stake enforced by platform
+const MAX_STAKE = 1.0; // FIXED: Maximum stake increased to 1.0 WLD (from 0.1)
 
 const Matchmaking: React.FC = () => {
   const navigate = useNavigate();

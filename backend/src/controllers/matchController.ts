@@ -16,23 +16,40 @@ export class MatchController {
 
       const matches = await MatchModel.getMatchHistory(userId, limit);
 
-      // Enhance match data with opponent info
+      // Enhance match data with opponent info and claim status
       const enhancedMatches = await Promise.all(
         matches.map(async (match) => {
           const opponentId = match.player1_id === userId ? match.player2_id : match.player1_id;
           const opponent = await UserModel.findById(opponentId);
+          const isWinner = match.winner_id === userId;
+          
+          // Calculate claim deadline info for winners
+          let claimInfo: any = {};
+          if (isWinner && match.stake > 0 && match.claim_deadline) {
+            const deadline = new Date(match.claim_deadline);
+            const now = new Date();
+            const msRemaining = deadline.getTime() - now.getTime();
+            
+            claimInfo = {
+              claimDeadline: deadline.toISOString(),
+              claimStatus: match.claim_status || 'unclaimed',
+              claimTimeRemaining: Math.max(0, Math.floor(msRemaining / 1000)), // seconds
+              claimable: match.claim_status === 'unclaimed' && msRemaining > 0
+            };
+          }
           
           return {
             matchId: match.match_id,
             stake: match.stake,
             yourReaction: match.player1_id === userId ? match.player1_reaction_ms : match.player2_reaction_ms,
             opponentReaction: match.player1_id === userId ? match.player2_reaction_ms : match.player1_reaction_ms,
-            won: match.winner_id === userId,
+            won: isWinner,
             opponent: opponent ? {
               wallet: opponent.wallet_address,
               avgReaction: opponent.avg_reaction_time,
             } : null,
             completedAt: match.completed_at,
+            ...claimInfo
           };
         })
       );
