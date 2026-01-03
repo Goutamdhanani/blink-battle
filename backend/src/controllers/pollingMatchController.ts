@@ -85,7 +85,7 @@ export class PollingMatchController {
       const bothReady = await MatchModel.areBothPlayersReady(matchId);
 
       if (bothReady) {
-        // Both ready! Schedule green light time
+        // Both ready! Schedule green light time with RANDOM delay
         const minDelay = parseInt(process.env.SIGNAL_DELAY_MIN_MS || '2000', 10);
         const maxDelay = parseInt(process.env.SIGNAL_DELAY_MAX_MS || '5000', 10);
         const randomDelay = generateRandomDelay(minDelay, maxDelay);
@@ -96,7 +96,13 @@ export class PollingMatchController {
         // Transition to COUNTDOWN status (not IN_PROGRESS)
         await MatchModel.updateStatus(matchId, MatchStatus.COUNTDOWN);
 
-        console.log(`[Polling Match] 🚦 Both players ready! Match ${matchId} transitioning to COUNTDOWN. Green light scheduled for ${new Date(greenLightTime).toISOString()} (${randomDelay}ms delay after countdown)`);
+        // FIXED: Store random delay in database for audit/debugging
+        await pool.query(
+          'UPDATE matches SET random_delay_ms = $1 WHERE match_id = $2',
+          [randomDelay, matchId]
+        );
+
+        console.log(`[Polling Match] 🚦 Both players ready! Match ${matchId} transitioning to COUNTDOWN. Green light scheduled for ${new Date(greenLightTime).toISOString()} (${randomDelay}ms random delay + ${COUNTDOWN_DURATION_MS}ms countdown = ${randomDelay + COUNTDOWN_DURATION_MS}ms total)`);
 
         res.json({
           success: true,
@@ -300,12 +306,56 @@ export class PollingMatchController {
       const now = Date.now();
       const timeSinceGreenLight = now - greenLightTime;
       
+      // FIXED: Check for early tap (tap BEFORE green light)
+      // This is critical anti-cheat - prevents players from tapping before signal
+      if (timeSinceGreenLight < 0) {
+        const earlyMs = Math.abs(timeSinceGreenLight);
+        console.log(`[Polling Match] ❌ EARLY TAP DETECTED - User ${userId} tapped ${earlyMs}ms BEFORE green light in match ${matchId}`);
+        
+        // Mark player as disqualified
+        const isPlayer1 = match.player1_id === userId;
+        
+        // SECURITY: Use separate queries to avoid SQL injection via column names
+        if (isPlayer1) {
+          await pool.query(`
+            UPDATE matches 
+            SET player1_disqualified = true,
+                player1_reaction_ms = -1
+            WHERE match_id = $1
+          `, [matchId]);
+        } else {
+          await pool.query(`
+            UPDATE matches 
+            SET player2_disqualified = true,
+                player2_reaction_ms = -1
+            WHERE match_id = $1
+          `, [matchId]);
+        }
+        
+        // Record the early tap in tap_events for audit
+        await TapEventModel.create(
+          matchId,
+          userId,
+          clientTimestamp && Number.isFinite(clientTimestamp) ? clientTimestamp : now,
+          now,
+          greenLightTime
+        );
+        
+        res.json({ 
+          success: true, 
+          disqualified: true,
+          reason: 'early_tap',
+          earlyByMs: earlyMs,
+          message: 'You tapped before the green light! You are disqualified.'
+        });
+        return;
+      }
+      
       // Allow taps up to 10 seconds after green light (generous for network latency)
-      // Reject taps more than 1 minute before green light (clock skew/invalid state)
-      if (timeSinceGreenLight < -60000 || timeSinceGreenLight > 10000) {
-        console.warn(`[Polling Match] Tap rejected - green light time out of range. Match: ${matchId}, Green light: ${greenLightTime}, Now: ${now}, Delta: ${timeSinceGreenLight}ms`);
+      if (timeSinceGreenLight > 10000) {
+        console.warn(`[Polling Match] Tap rejected - too late. Match: ${matchId}, Green light: ${greenLightTime}, Now: ${now}, Delta: ${timeSinceGreenLight}ms`);
         res.status(400).json({ 
-          error: 'Tap window expired or not yet active',
+          error: 'Tap window expired',
           details: {
             greenLightTime,
             serverTime: now,
@@ -622,18 +672,18 @@ export class PollingMatchController {
         await pool.query(
           `UPDATE matches 
            SET winner_wallet = $1, loser_wallet = $2, claim_deadline = $3, 
-               claim_status = 'unclaimed', result_finalized_at = NOW()
-           WHERE match_id = $4`,
-          [winnerWallet, loserWallet, claimDeadline, match.match_id]
+               claim_status = 'unclaimed', result_finalized_at = NOW(), result_type = $4
+           WHERE match_id = $5`,
+          [winnerWallet, loserWallet, claimDeadline, result, match.match_id]
         );
-        console.log(`[Polling Match] Set winner wallet: ${winnerWallet}, claim deadline: ${claimDeadline.toISOString()}`);
+        console.log(`[Polling Match] Set winner wallet: ${winnerWallet}, claim deadline: ${claimDeadline.toISOString()}, result_type: ${result}`);
       } else {
         // No winner (tie or both disqualified)
         await pool.query(
           `UPDATE matches 
-           SET claim_status = 'expired', result_finalized_at = NOW()
-           WHERE match_id = $1`,
-          [match.match_id]
+           SET claim_status = 'expired', result_finalized_at = NOW(), result_type = $1
+           WHERE match_id = $2`,
+          [result, match.match_id]
         );
         console.log(`[Polling Match] No winner for match ${match.match_id} - ${result}`);
       }

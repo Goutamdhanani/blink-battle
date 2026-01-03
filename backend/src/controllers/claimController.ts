@@ -140,16 +140,18 @@ export class ClaimController {
 
       console.log(`[Claim] Match ${matchId} - Total: ${totalPool}, Fee: ${platformFee}, Payout: ${netPayout}`);
 
-      // Create claim record with PROCESSING status
+      // FIXED: Store wei amounts as strings in VARCHAR columns (prevents numeric overflow)
+      // Database columns are VARCHAR(78) which can store up to 2^256 in decimal
+      // Wei amounts are stored as strings: e.g., "180000000000000000" for 0.18 WLD
       await client.query(`
         INSERT INTO claims (match_id, winner_wallet, amount, platform_fee, net_payout, idempotency_key, status)
         VALUES ($1, $2, $3, $4, $5, $6, $7)
       `, [
         matchId, 
         claimingWallet.toLowerCase(), 
-        totalPool.toString(), 
-        platformFee.toString(), 
-        netPayout.toString(), 
+        totalPool.toString(),      // Store as string (wei)
+        platformFee.toString(),    // Store as string (wei)
+        netPayout.toString(),      // Store as string (wei)
         idempotencyKey,
         ClaimStatus.PROCESSING
       ]);
