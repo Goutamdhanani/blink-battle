@@ -17,11 +17,13 @@ import { MatchStatus } from '../models/types';
  * - in_progress: 10 minutes (tap window + result processing)
  */
 
+const MILLISECONDS_PER_MINUTE = 60000;
+
 const TIMEOUT_THRESHOLDS = {
-  [MatchStatus.PENDING]: 30 * 60 * 1000,      // 30 minutes
-  [MatchStatus.MATCHED]: 30 * 60 * 1000,      // 30 minutes
-  [MatchStatus.COUNTDOWN]: 5 * 60 * 1000,     // 5 minutes
-  [MatchStatus.IN_PROGRESS]: 10 * 60 * 1000,  // 10 minutes
+  [MatchStatus.PENDING]: 30 * MILLISECONDS_PER_MINUTE,      // 30 minutes
+  [MatchStatus.MATCHED]: 30 * MILLISECONDS_PER_MINUTE,      // 30 minutes
+  [MatchStatus.COUNTDOWN]: 5 * MILLISECONDS_PER_MINUTE,     // 5 minutes
+  [MatchStatus.IN_PROGRESS]: 10 * MILLISECONDS_PER_MINUTE,  // 10 minutes
 };
 
 /**
@@ -43,18 +45,20 @@ export async function processAbandonedMatches(): Promise<void> {
     let totalCancelled = 0;
 
     // Process each status type with its own timeout
-    for (const [status, timeoutMs] of Object.entries(TIMEOUT_THRESHOLDS)) {
-      const cancelled = await cancelAbandonedMatchesWithStatus(status, timeoutMs);
+    const statuses = Object.keys(TIMEOUT_THRESHOLDS) as Array<keyof typeof TIMEOUT_THRESHOLDS>;
+    for (const status of statuses) {
+      const cancelled = await cancelAbandonedMatchesWithStatus(status, TIMEOUT_THRESHOLDS[status]);
       totalCancelled += cancelled;
     }
 
     if (totalCancelled > 0) {
       console.log(`[MatchTimeout] Cancelled ${totalCancelled} abandoned matches`);
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     // Silently handle column not found errors (migration not run yet)
-    if (error.code !== '42703' && error.code !== '42P01') {
-      console.error('[MatchTimeout] Error processing abandoned matches:', error.message);
+    const err = error as { code?: string; message?: string };
+    if (err.code !== '42703' && err.code !== '42P01') {
+      console.error('[MatchTimeout] Error processing abandoned matches:', err.message || 'Unknown error');
     }
   }
 }
@@ -63,7 +67,8 @@ export async function processAbandonedMatches(): Promise<void> {
  * Cancel matches with a specific status that have exceeded their timeout
  */
 async function cancelAbandonedMatchesWithStatus(status: string, timeoutMs: number): Promise<number> {
-  const timeoutInterval = `${Math.floor(timeoutMs / 60000)} minutes`;
+  const timeoutMinutes = Math.floor(timeoutMs / MILLISECONDS_PER_MINUTE);
+  const timeoutInterval = `${timeoutMinutes} minutes`;
   
   // Find matches that have been in this status for too long
   // SECURITY: Using parameterized query to prevent SQL injection
