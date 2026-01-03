@@ -10,22 +10,32 @@ const DISCONNECT_TIMEOUT_MS = 30000; // 30 seconds
 
 let columnsVerified = false;
 let columnsExist = false;
+let verificationPromise: Promise<boolean> | null = null;
 
 async function verifyColumns(): Promise<boolean> {
   if (columnsVerified) return columnsExist;
   
-  try {
-    const result = await pool.query(`
-      SELECT COUNT(*) as count FROM information_schema.columns 
-      WHERE table_name = 'matches' 
-      AND column_name IN ('player1_last_ping', 'player2_last_ping')
-    `);
-    columnsExist = parseInt(result.rows[0].count) >= 2;
-    columnsVerified = true;
-    return columnsExist;
-  } catch {
-    return false;
-  }
+  // Prevent concurrent verification - reuse existing promise
+  if (verificationPromise) return verificationPromise;
+  
+  verificationPromise = (async () => {
+    try {
+      const result = await pool.query(`
+        SELECT COUNT(*) as count FROM information_schema.columns 
+        WHERE table_name = 'matches' 
+        AND column_name IN ('player1_last_ping', 'player2_last_ping')
+      `);
+      columnsExist = parseInt(result.rows[0].count) >= 2;
+      columnsVerified = true;
+      return columnsExist;
+    } catch {
+      return false;
+    } finally {
+      verificationPromise = null;
+    }
+  })();
+  
+  return verificationPromise;
 }
 
 /**

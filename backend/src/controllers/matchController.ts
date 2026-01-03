@@ -4,6 +4,7 @@ import { UserModel } from '../models/User';
 import { TransactionModel } from '../models/Transaction';
 import { EscrowService } from '../services/escrow';
 import { EscrowStatus } from '../models/types';
+import pool from '../config/database';
 
 export class MatchController {
   /**
@@ -13,9 +14,6 @@ export class MatchController {
     try {
       const userId = (req as any).userId;
       const limit = parseInt(req.query.limit as string) || 20;
-
-      // Get matches with payment and refund status
-      const { default: pool } = await import('../config/database');
 
       // Check if refund columns exist before using them
       const refundColumnsExist = await pool.query(`
