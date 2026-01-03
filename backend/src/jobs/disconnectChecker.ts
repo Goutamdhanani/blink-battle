@@ -15,20 +15,21 @@ const DISCONNECT_TIMEOUT_SECONDS = DISCONNECT_TIMEOUT_MS / 1000;
 export async function checkPlayerDisconnects(): Promise<void> {
   try {
     // Find active matches where one player stopped pinging (30 second timeout)
+    // Using parameterized query to prevent SQL injection
     const matches = await pool.query(`
       SELECT m.*
       FROM matches m
       WHERE m.status IN ('waiting', 'ready', 'countdown', 'signal')
         AND (
-          (m.player1_last_ping IS NOT NULL AND m.player1_last_ping < NOW() - INTERVAL '${DISCONNECT_TIMEOUT_SECONDS} seconds')
+          (m.player1_last_ping IS NOT NULL AND m.player1_last_ping < NOW() - INTERVAL '1 second' * $1)
           OR
-          (m.player2_last_ping IS NOT NULL AND m.player2_last_ping < NOW() - INTERVAL '${DISCONNECT_TIMEOUT_SECONDS} seconds')
+          (m.player2_last_ping IS NOT NULL AND m.player2_last_ping < NOW() - INTERVAL '1 second' * $1)
           OR
-          (m.player1_last_ping IS NULL AND m.created_at < NOW() - INTERVAL '${DISCONNECT_TIMEOUT_SECONDS} seconds')
+          (m.player1_last_ping IS NULL AND m.created_at < NOW() - INTERVAL '1 second' * $1)
           OR
-          (m.player2_last_ping IS NULL AND m.created_at < NOW() - INTERVAL '${DISCONNECT_TIMEOUT_SECONDS} seconds')
+          (m.player2_last_ping IS NULL AND m.created_at < NOW() - INTERVAL '1 second' * $1)
         )
-    `);
+    `, [DISCONNECT_TIMEOUT_SECONDS]);
 
     if (matches.rows.length === 0) {
       return;
@@ -89,11 +90,30 @@ export async function checkPlayerDisconnects(): Promise<void> {
 /**
  * Start the disconnect checker background job
  */
+let disconnectCheckerInterval: NodeJS.Timeout | null = null;
+
 export function startDisconnectChecker(): void {
+  // Prevent multiple intervals
+  if (disconnectCheckerInterval) {
+    console.log('[DisconnectChecker] Already running');
+    return;
+  }
+
   // Run every 10 seconds
-  setInterval(() => {
+  disconnectCheckerInterval = setInterval(() => {
     checkPlayerDisconnects().catch(console.error);
   }, 10 * 1000);
 
   console.log('[DisconnectChecker] Started (runs every 10 seconds)');
+}
+
+/**
+ * Stop the disconnect checker background job
+ */
+export function stopDisconnectChecker(): void {
+  if (disconnectCheckerInterval) {
+    clearInterval(disconnectCheckerInterval);
+    disconnectCheckerInterval = null;
+    console.log('[DisconnectChecker] Stopped');
+  }
 }

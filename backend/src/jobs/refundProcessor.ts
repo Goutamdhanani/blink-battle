@@ -81,9 +81,17 @@ export async function processTimeoutRefunds(): Promise<void> {
 /**
  * Start the refund processor background job
  */
+let refundProcessorInterval: NodeJS.Timeout | null = null;
+
 export function startRefundProcessor(): void {
+  // Prevent multiple intervals
+  if (refundProcessorInterval) {
+    console.log('[RefundProcessor] Already running');
+    return;
+  }
+
   // Run every minute
-  setInterval(() => {
+  refundProcessorInterval = setInterval(() => {
     processTimeoutRefunds().catch(console.error);
   }, 60 * 1000);
 
@@ -91,4 +99,15 @@ export function startRefundProcessor(): void {
   processTimeoutRefunds().catch(console.error);
 
   console.log('[RefundProcessor] Started (runs every 60 seconds)');
+}
+
+/**
+ * Stop the refund processor background job
+ */
+export function stopRefundProcessor(): void {
+  if (refundProcessorInterval) {
+    clearInterval(refundProcessorInterval);
+    refundProcessorInterval = null;
+    console.log('[RefundProcessor] Stopped');
+  }
 }

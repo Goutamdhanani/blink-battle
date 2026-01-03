@@ -14,7 +14,7 @@ import { useGameContext } from '../context/GameContext';
  * 
  * Server load is manageable because:
  * - Very short duration (1-2 seconds per match)
- * - Rate limiting applied via matchRateLimiter (100 req/min)
+ * - Rate limiting applied via matchRateLimiter (500 req/min)
  * - Matches are sequential, not all players polling simultaneously
  */
 const POLLING_RATES = {
@@ -26,6 +26,12 @@ const POLLING_RATES = {
   WAITING_RESULT: 200,  // 200ms - waiting for opponent
   RESULT: 2000          // 2s - showing results
 };
+
+/**
+ * Heartbeat configuration
+ * Must be coordinated with backend disconnect timeout (30s)
+ */
+const HEARTBEAT_INTERVAL_MS = 5000; // 5 seconds - send heartbeat every 5s
 
 /**
  * Custom hook for HTTP polling-based gameplay
@@ -122,12 +128,12 @@ export const usePollingGame = () => {
     setIsPolling(true);
     setError(null);
 
-    // Start heartbeat interval (every 5 seconds)
+    // Start heartbeat interval
     heartbeatIntervalRef.current = setInterval(() => {
       pollingService.sendHeartbeat(matchId).catch(err => {
         console.error('[Polling] Heartbeat error:', err);
       });
-    }, 5000);
+    }, HEARTBEAT_INTERVAL_MS);
 
     const poll = async () => {
       try {
