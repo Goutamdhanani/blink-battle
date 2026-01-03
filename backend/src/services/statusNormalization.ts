@@ -65,6 +65,6 @@ export function extractTransactionHash(transaction: any): string | null {
  * Prefers transactionStatus over status for consistency
  */
 export function extractRawStatus(transaction: any): string | undefined {
-  const status = transaction?.transactionStatus || transaction?.status;
-  return status || undefined;
+  const status = transaction?.transactionStatus ?? transaction?.status;
+  return status ?? undefined;
 }

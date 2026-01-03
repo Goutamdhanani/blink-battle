@@ -2,7 +2,7 @@ import { Request, Response } from 'express';
 import { PaymentController } from '../paymentController';
 import { PaymentModel, PaymentStatus } from '../../models/Payment';
 import { PaymentIntentModel, NormalizedPaymentStatus } from '../../models/PaymentIntent';
-import { normalizeMiniKitStatus, extractTransactionHash } from '../../services/statusNormalization';
+import { normalizeMiniKitStatus, extractTransactionHash, extractRawStatus } from '../../services/statusNormalization';
 import axios from 'axios';
 
 // Mock PaymentModel
@@ -39,7 +39,7 @@ jest.mock('../../models/PaymentIntent', () => ({
 jest.mock('../../services/statusNormalization', () => ({
   normalizeMiniKitStatus: jest.fn(),
   extractTransactionHash: jest.fn(),
-  extractRawStatus: jest.fn((tx) => tx?.transactionStatus || tx?.status),
+  extractRawStatus: jest.fn(),
 }));
 
 // Mock axios
@@ -211,6 +211,7 @@ describe('PaymentController', () => {
       });
       (normalizeMiniKitStatus as jest.Mock).mockReturnValue(NormalizedPaymentStatus.CONFIRMED);
       (extractTransactionHash as jest.Mock).mockReturnValue('0xabc123');
+      (extractRawStatus as jest.Mock).mockReturnValue('mined');
       mockedAxios.get.mockResolvedValue({ data: mockTransaction });
 
       await PaymentController.confirmPayment(
@@ -382,6 +383,7 @@ describe('PaymentController', () => {
       });
       (normalizeMiniKitStatus as jest.Mock).mockReturnValue(NormalizedPaymentStatus.PENDING);
       (extractTransactionHash as jest.Mock).mockReturnValue(null);
+      (extractRawStatus as jest.Mock).mockReturnValue('pending');
       mockedAxios.get.mockResolvedValue({ data: mockTransaction });
 
       await PaymentController.confirmPayment(
@@ -455,6 +457,7 @@ describe('PaymentController', () => {
       });
       (normalizeMiniKitStatus as jest.Mock).mockReturnValue(NormalizedPaymentStatus.FAILED);
       (extractTransactionHash as jest.Mock).mockReturnValue('0xfailed123');
+      (extractRawStatus as jest.Mock).mockReturnValue('failed');
       mockedAxios.get.mockResolvedValue({ data: mockTransaction });
 
       await PaymentController.confirmPayment(
@@ -517,6 +520,7 @@ describe('PaymentController', () => {
       (PaymentIntentModel.updateStatus as jest.Mock).mockResolvedValue({});
       (normalizeMiniKitStatus as jest.Mock).mockReturnValue(NormalizedPaymentStatus.PENDING);
       (extractTransactionHash as jest.Mock).mockReturnValue(null);
+      (extractRawStatus as jest.Mock).mockReturnValue('pending');
       mockedAxios.get.mockResolvedValue({ data: mockTransaction });
 
       await PaymentController.confirmPayment(
@@ -587,6 +591,7 @@ describe('PaymentController', () => {
       (PaymentIntentModel.updateStatus as jest.Mock).mockResolvedValue({});
       (normalizeMiniKitStatus as jest.Mock).mockReturnValue(NormalizedPaymentStatus.CONFIRMED);
       (extractTransactionHash as jest.Mock).mockReturnValue('0xconfirmed123');
+      (extractRawStatus as jest.Mock).mockReturnValue('mined');
       mockedAxios.get.mockResolvedValue({ data: mockTransaction });
 
       await PaymentController.confirmPayment(
@@ -652,6 +657,7 @@ describe('PaymentController', () => {
       (PaymentIntentModel.updateStatus as jest.Mock).mockResolvedValue({});
       (normalizeMiniKitStatus as jest.Mock).mockReturnValue(NormalizedPaymentStatus.PENDING);
       (extractTransactionHash as jest.Mock).mockReturnValue(null);
+      (extractRawStatus as jest.Mock).mockReturnValue('unknown_status');
       mockedAxios.get.mockResolvedValue({ data: mockTransaction });
 
       await PaymentController.confirmPayment(
@@ -713,6 +719,7 @@ describe('PaymentController', () => {
       (PaymentIntentModel.updateStatus as jest.Mock).mockResolvedValue({});
       (normalizeMiniKitStatus as jest.Mock).mockReturnValue(NormalizedPaymentStatus.PENDING);
       (extractTransactionHash as jest.Mock).mockReturnValue(null);
+      (extractRawStatus as jest.Mock).mockReturnValue('pending');
       mockedAxios.get.mockResolvedValue({ data: mockTransaction });
 
       await PaymentController.confirmPayment(
@@ -772,6 +779,7 @@ describe('PaymentController', () => {
       (PaymentIntentModel.updateStatus as jest.Mock).mockResolvedValue({});
       (normalizeMiniKitStatus as jest.Mock).mockReturnValue(NormalizedPaymentStatus.CONFIRMED);
       (extractTransactionHash as jest.Mock).mockReturnValue('0xabc123');
+      (extractRawStatus as jest.Mock).mockReturnValue('mined');
       mockedAxios.get.mockResolvedValue({ data: mockTransaction });
 
       await PaymentController.confirmPayment(
@@ -824,6 +832,7 @@ describe('PaymentController', () => {
       (PaymentIntentModel.updateStatus as jest.Mock).mockResolvedValue({});
       (normalizeMiniKitStatus as jest.Mock).mockReturnValue(NormalizedPaymentStatus.PENDING);
       (extractTransactionHash as jest.Mock).mockReturnValue(null);
+      (extractRawStatus as jest.Mock).mockReturnValue(undefined);
       mockedAxios.get.mockResolvedValue({ data: mockTransaction });
 
       await PaymentController.confirmPayment(
