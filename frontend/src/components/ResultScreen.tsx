@@ -43,17 +43,27 @@ const ResultScreen: React.FC = () => {
   const loadClaimStatus = async () => {
     if (!state.matchId || !state.token) return;
 
-    const status = await getClaimStatus(state.matchId, state.token);
-    if (status) {
-      setClaimStatus(status);
-      
-      // Calculate initial time remaining
-      if (status.deadline) {
-        const deadlineTime = new Date(status.deadline).getTime();
-        const now = Date.now();
-        const secondsLeft = Math.floor((deadlineTime - now) / 1000);
-        setClaimTimeLeft(Math.max(0, secondsLeft));
+    try {
+      const status = await getClaimStatus(state.matchId, state.token);
+      if (status) {
+        setClaimStatus(status);
+        
+        // Calculate initial time remaining
+        if (status.deadline) {
+          try {
+            const deadlineTime = new Date(status.deadline).getTime();
+            const now = Date.now();
+            const secondsLeft = Math.floor((deadlineTime - now) / 1000);
+            setClaimTimeLeft(Math.max(0, secondsLeft));
+          } catch (err) {
+            console.error('[ResultScreen] Error parsing claim deadline:', err);
+            setClaimTimeLeft(null);
+          }
+        }
       }
+    } catch (err) {
+      console.error('[ResultScreen] Error loading claim status:', err);
+      // Don't show error to user - they can still play again
     }
   };
 
@@ -64,14 +74,19 @@ const ResultScreen: React.FC = () => {
     }
 
     const interval = setInterval(() => {
-      const deadlineTime = new Date(claimStatus.deadline!).getTime();
-      const now = Date.now();
-      const secondsLeft = Math.floor((deadlineTime - now) / 1000);
-      setClaimTimeLeft(Math.max(0, secondsLeft));
+      try {
+        const deadlineTime = new Date(claimStatus.deadline!).getTime();
+        const now = Date.now();
+        const secondsLeft = Math.floor((deadlineTime - now) / 1000);
+        setClaimTimeLeft(Math.max(0, secondsLeft));
 
-      // If expired, reload claim status
-      if (secondsLeft <= 0) {
-        loadClaimStatus();
+        // If expired, reload claim status
+        if (secondsLeft <= 0) {
+          loadClaimStatus();
+        }
+      } catch (err) {
+        console.error('[ResultScreen] Error updating countdown:', err);
+        clearInterval(interval);
       }
     }, 1000);
 
@@ -254,7 +269,7 @@ const ResultScreen: React.FC = () => {
                   >
                     {claiming ? '⏳ Claiming...' : '💰 Claim Winnings'}
                   </NeonButton>
-                  {claimTimeLeft !== null && claimTimeLeft > 0 && (
+                  {claimTimeLeft !== null && claimTimeLeft >= 0 && (
                     <div className="claim-deadline" style={{ marginTop: '0.5rem', fontSize: '0.9rem', opacity: 0.8 }}>
                       ⏱️ Claim within: {formatTimeRemaining(claimTimeLeft)}
                     </div>
