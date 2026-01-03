@@ -73,88 +73,6 @@ export const usePaymentPolling = (
     setIsLoading(false);
   }, []);
 
-  const pollPaymentStatus = useCallback(async () => {
-    if (isCancelledRef.current) {
-      return;
-    }
-
-    try {
-      setIsLoading(true);
-      setError(null);
-
-      const response = await apiClient.get(`/api/payment-status/${reference}`);
-      const paymentData = response.data.payment;
-
-      setPayment(paymentData);
-
-      // Check if payment is in a terminal state
-      if (paymentData.normalizedStatus === 'confirmed') {
-        setIsLoading(false);
-        onSuccess?.(paymentData);
-        return;
-      }
-
-      if (
-        paymentData.normalizedStatus === 'failed' ||
-        paymentData.normalizedStatus === 'cancelled'
-      ) {
-        setIsLoading(false);
-        const err = new Error(
-          paymentData.lastError || `Payment ${paymentData.normalizedStatus}`
-        );
-        setError(err);
-        onError?.(err);
-        return;
-      }
-
-      // Payment is still pending, schedule next poll
-      attemptRef.current += 1;
-
-      if (attemptRef.current >= maxAttempts) {
-        setIsLoading(false);
-        const timeoutError = new Error('Payment confirmation timeout');
-        setError(timeoutError);
-        onTimeout?.();
-        onError?.(timeoutError);
-        return;
-      }
-
-      // Calculate next delay with exponential backoff
-      let nextDelay = initialDelay;
-      if (useExponentialBackoff) {
-        // Exponential backoff: initialDelay * 2^attempt
-        nextDelay = Math.min(
-          initialDelay * Math.pow(2, attemptRef.current - 1),
-          maxDelay
-        );
-      }
-
-      console.log(
-        `[PaymentPolling] Attempt ${attemptRef.current}/${maxAttempts}, next poll in ${nextDelay}ms`
-      );
-
-      // Schedule next poll
-      timeoutRef.current = setTimeout(() => {
-        pollPaymentStatus();
-      }, nextDelay);
-    } catch (err) {
-      const error = err as Error;
-      console.error('[PaymentPolling] Error polling payment status:', error);
-      setIsLoading(false);
-      setError(error);
-      onError?.(error);
-    }
-  }, [
-    reference,
-    onSuccess,
-    onError,
-    onTimeout,
-    maxAttempts,
-    initialDelay,
-    maxDelay,
-    useExponentialBackoff,
-  ]);
-
   useEffect(() => {
     if (!enabled || !reference) {
       return;
@@ -162,15 +80,88 @@ export const usePaymentPolling = (
 
     isCancelledRef.current = false;
     attemptRef.current = 0;
+    setIsLoading(true);
+    setError(null);
+
+    // Iterative polling approach to avoid stack overflow and memory leaks
+    const poll = async () => {
+      if (isCancelledRef.current) {
+        return;
+      }
+
+      try {
+        const response = await apiClient.get(`/api/payment-status/${reference}`);
+        const paymentData = response.data.payment;
+
+        setPayment(paymentData);
+
+        // Check if payment is in a terminal state
+        if (paymentData.normalizedStatus === 'confirmed') {
+          setIsLoading(false);
+          onSuccess?.(paymentData);
+          return;
+        }
+
+        if (
+          paymentData.normalizedStatus === 'failed' ||
+          paymentData.normalizedStatus === 'cancelled'
+        ) {
+          setIsLoading(false);
+          const err = new Error(
+            paymentData.lastError || `Payment ${paymentData.normalizedStatus}`
+          );
+          setError(err);
+          onError?.(err);
+          return;
+        }
+
+        // Payment is still pending, schedule next poll
+        attemptRef.current += 1;
+
+        if (attemptRef.current >= maxAttempts) {
+          setIsLoading(false);
+          const timeoutError = new Error('Payment confirmation timeout');
+          setError(timeoutError);
+          onTimeout?.();
+          onError?.(timeoutError);
+          return;
+        }
+
+        // Calculate next delay with exponential backoff
+        let nextDelay = initialDelay;
+        if (useExponentialBackoff) {
+          // Exponential backoff: initialDelay * 2^attempt
+          nextDelay = Math.min(
+            initialDelay * Math.pow(2, attemptRef.current - 1),
+            maxDelay
+          );
+        }
+
+        console.log(
+          `[PaymentPolling] Attempt ${attemptRef.current}/${maxAttempts}, next poll in ${nextDelay}ms`
+        );
+
+        // Schedule next poll
+        timeoutRef.current = setTimeout(() => {
+          poll(); // Recursively call but via setTimeout to avoid deep call stack
+        }, nextDelay);
+      } catch (err) {
+        const error = err as Error;
+        console.error('[PaymentPolling] Error polling payment status:', error);
+        setIsLoading(false);
+        setError(error);
+        onError?.(error);
+      }
+    };
 
     // Start polling immediately
-    pollPaymentStatus();
+    poll();
 
     // Cleanup on unmount
     return () => {
       cancel();
     };
-  }, [enabled, reference]); // Only restart polling if enabled or reference changes
+  }, [enabled, reference, maxAttempts, initialDelay, maxDelay, useExponentialBackoff, onSuccess, onError, onTimeout, cancel]); // Added all dependencies
 
   const isConfirmed = payment?.normalizedStatus === 'confirmed';
   const isFailed =

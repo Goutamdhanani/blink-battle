@@ -28,7 +28,7 @@ describe('PaymentIntent - Expiration Logic', () => {
       expect(count).toBe(2);
       expect(pool.query).toHaveBeenCalledWith(
         expect.stringContaining('UPDATE payment_intents'),
-        [NormalizedPaymentStatus.FAILED, NormalizedPaymentStatus.PENDING]
+        [NormalizedPaymentStatus.FAILED, NormalizedPaymentStatus.PENDING, '5']
       );
     });
 
@@ -38,8 +38,8 @@ describe('PaymentIntent - Expiration Logic', () => {
       await PaymentIntentModel.expireStalePayments();
 
       expect(pool.query).toHaveBeenCalledWith(
-        expect.stringContaining('5 minutes'),
-        expect.any(Array)
+        expect.stringContaining('($3 || \' minutes\')::INTERVAL'),
+        expect.arrayContaining(['5'])
       );
     });
 
@@ -49,8 +49,8 @@ describe('PaymentIntent - Expiration Logic', () => {
       await PaymentIntentModel.expireStalePayments(10);
 
       expect(pool.query).toHaveBeenCalledWith(
-        expect.stringContaining('10 minutes'),
-        expect.any(Array)
+        expect.stringContaining('($3 || \' minutes\')::INTERVAL'),
+        expect.arrayContaining(['10'])
       );
     });
 

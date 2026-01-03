@@ -270,9 +270,9 @@ export class PaymentIntentModel {
            updated_at = CURRENT_TIMESTAMP
        WHERE normalized_status = $2
          AND minikit_transaction_id IS NULL
-         AND created_at < CURRENT_TIMESTAMP - INTERVAL '${timeoutMinutes} minutes'
+         AND created_at < CURRENT_TIMESTAMP - ($3 || ' minutes')::INTERVAL
        RETURNING payment_reference`,
-      [NormalizedPaymentStatus.FAILED, NormalizedPaymentStatus.PENDING]
+      [NormalizedPaymentStatus.FAILED, NormalizedPaymentStatus.PENDING, timeoutMinutes.toString()]
     );
     return result.rowCount || 0;
   }
