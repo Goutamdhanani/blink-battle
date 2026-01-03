@@ -260,6 +260,14 @@ app.post('/api/match/confirm-stake', authenticate, matchRateLimiter, requestTrac
 app.post('/api/match/tap', authenticate, matchRateLimiter, requestTrackingMiddleware, PollingMatchController.tap);
 app.get('/api/match/result/:matchId', authenticate, matchRateLimiter, requestTrackingMiddleware, PollingMatchController.getResult);
 
+// Time synchronization endpoint for accurate game timing
+app.get('/api/time', (_req, res) => {
+  res.json({
+    server_time: Date.now(),
+    timezone: 'UTC'
+  });
+});
+
 // Ping/Latency endpoints
 app.post('/api/ping', authenticate, PingController.recordLatency);
 app.get('/api/ping/stats', authenticate, PingController.getStats);
