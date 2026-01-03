@@ -24,6 +24,8 @@ export class PaymentWorker {
   private workerId: string;
   private isRunning: boolean = false;
   private intervalId: NodeJS.Timeout | null = null;
+  private pollCount: number = 0;
+  private readonly LOG_EVERY_N_POLLS = 6; // Log every 6th poll (every minute instead of every 10s)
 
   constructor(workerId?: string) {
     this.workerId = workerId || `worker-${process.pid}-${Date.now()}`;
@@ -80,9 +82,13 @@ export class PaymentWorker {
     let paymentIntents: any[] = [];
 
     try {
+      // Increment poll count for logging throttling
+      this.pollCount++;
+      const shouldLog = this.pollCount % this.LOG_EVERY_N_POLLS === 0;
+
       // Step 0: Expire stale payments without transaction IDs (older than 5 minutes)
       const expiredCount = await PaymentIntentModel.expireStalePayments(5);
-      if (expiredCount > 0) {
+      if (expiredCount > 0 && shouldLog) {
         console.log(`[PaymentWorker:${this.workerId}] Expired ${expiredCount} stale payments without transaction IDs`);
       }
 
@@ -112,10 +118,13 @@ export class PaymentWorker {
       await client.query('COMMIT');
 
       if (paymentIntents.length === 0) {
-        return; // No payments to process
+        return; // No payments to process - skip logging
       }
 
-      console.log(`[PaymentWorker:${this.workerId}] Processing ${paymentIntents.length} payments`);
+      // Only log when there are payments AND it's time to log
+      if (shouldLog) {
+        console.log(`[PaymentWorker:${this.workerId}] Processing ${paymentIntents.length} payments`);
+      }
 
       // Step 2: Process each payment (OUTSIDE of transaction)
       for (const intent of paymentIntents) {

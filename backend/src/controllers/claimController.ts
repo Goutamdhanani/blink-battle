@@ -138,7 +138,11 @@ export class ClaimController {
       // Convert stake to wei first
       const stakeWei = BigInt(Math.floor(match.stake * 1e18));
       const totalPool = stakeWei * 2n; // Both players' stakes
-      const platformFeeBps = 300n; // 3% = 300 basis points
+      
+      // Use PLATFORM_FEE_PERCENT from environment (default 3%)
+      const PLATFORM_FEE_PERCENT = parseFloat(process.env.PLATFORM_FEE_PERCENT || '3');
+      const platformFeeBps = BigInt(Math.round(PLATFORM_FEE_PERCENT * 100)); // Convert % to basis points
+      
       const platformFee = (totalPool * platformFeeBps) / 10000n;
       const netPayout = totalPool - platformFee;
 
@@ -265,7 +269,12 @@ export class ClaimController {
       // Calculate payout
       const stakeWei = BigInt(Math.floor(match.stake * 1e18));
       const totalPool = stakeWei * 2n;
-      const platformFee = (totalPool * 300n) / 10000n;
+      
+      // Use PLATFORM_FEE_PERCENT from environment (default 3%)
+      const PLATFORM_FEE_PERCENT = parseFloat(process.env.PLATFORM_FEE_PERCENT || '3');
+      const platformFeeBps = BigInt(Math.round(PLATFORM_FEE_PERCENT * 100)); // Convert % to basis points
+      
+      const platformFee = (totalPool * platformFeeBps) / 10000n;
       const netPayout = totalPool - platformFee;
 
       // Check deadline

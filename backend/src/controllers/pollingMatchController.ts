@@ -208,6 +208,20 @@ export class PollingMatchController {
         }
       }
 
+      // Add claim deadline info for completed matches
+      let claimInfo: any = {};
+      if (matchState.status === MatchStatus.COMPLETED && matchState.claim_deadline) {
+        const claimDeadline = new Date(matchState.claim_deadline);
+        const msRemaining = claimDeadline.getTime() - now;
+        
+        claimInfo = {
+          claimable: matchState.claim_status === 'unclaimed' && msRemaining > 0,
+          claimDeadline: claimDeadline.toISOString(),
+          claimTimeRemaining: Math.max(0, Math.floor(msRemaining / 1000)), // seconds
+          claimStatus: matchState.claim_status
+        };
+      }
+
       res.json({
         matchId: matchState.match_id,
         state,
@@ -228,7 +242,8 @@ export class PollingMatchController {
         opponent: {
           userId: opponentId,
           wallet: isPlayer1 ? matchState.player2_wallet : matchState.player1_wallet
-        }
+        },
+        ...claimInfo
       });
     } catch (error: any) {
       console.error('[Polling Match] Error in getState:', error);
@@ -599,8 +614,8 @@ export class PollingMatchController {
     // STEP 2: Set winner_wallet, loser_wallet, and claim_deadline in database
     // TREASURY ARCHITECTURE: No on-chain payment during match completion
     try {
-      // Set claim deadline to 24 hours from now
-      const claimDeadline = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+      // Set claim deadline to 1 hour from now
+      const claimDeadline = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
 
       // Update match with winner wallets and claim deadline
       if (winnerWallet && loserWallet) {

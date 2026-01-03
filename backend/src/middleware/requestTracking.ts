@@ -13,6 +13,7 @@ interface RequestStats {
 
 const stats: Map<string, RequestStats> = new Map();
 const STATS_WINDOW_MS = 60000; // 1 minute
+const STATS_LOG_INTERVAL = 5 * 60 * 1000; // 5 minutes
 let statsInterval: NodeJS.Timeout | null = null;
 
 export const requestTrackingMiddleware = (req: Request, res: Response, next: NextFunction) => {
@@ -45,7 +46,7 @@ export const requestTrackingMiddleware = (req: Request, res: Response, next: Nex
   next();
 };
 
-// Start logging aggregated stats every minute
+// Start logging aggregated stats every 5 minutes
 function startStatsLogging() {
   if (statsInterval) return;
   
@@ -70,7 +71,7 @@ function startStatsLogging() {
     }
     
     if (totalRequests > 0) {
-      console.log(`[Request Stats] Last minute: ${totalRequests} requests from ${stats.size} users`);
+      console.log(`[Request Stats] Last 5 minutes: ${totalRequests} requests from ${stats.size} users`);
       
       // Log top endpoints
       const sorted = Array.from(endpointTotals.entries())
@@ -81,7 +82,7 @@ function startStatsLogging() {
         console.log(`  ${endpoint}: ${count} requests`);
       }
     }
-  }, 60000);
+  }, STATS_LOG_INTERVAL);
 }
 
 /**

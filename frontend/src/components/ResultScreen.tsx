@@ -17,6 +17,7 @@ const ResultScreen: React.FC = () => {
   const [claiming, setClaiming] = useState(false);
   const [claimError, setClaimError] = useState<string | null>(null);
   const [claimSuccess, setClaimSuccess] = useState(false);
+  const [claimTimeLeft, setClaimTimeLeft] = useState<number | null>(null);
 
   useEffect(() => {
     if (!state.user || !state.result) {
@@ -45,8 +46,37 @@ const ResultScreen: React.FC = () => {
     const status = await getClaimStatus(state.matchId, state.token);
     if (status) {
       setClaimStatus(status);
+      
+      // Calculate initial time remaining
+      if (status.deadline) {
+        const deadlineTime = new Date(status.deadline).getTime();
+        const now = Date.now();
+        const secondsLeft = Math.floor((deadlineTime - now) / 1000);
+        setClaimTimeLeft(Math.max(0, secondsLeft));
+      }
     }
   };
+
+  // Update claim time countdown every second
+  useEffect(() => {
+    if (!claimStatus?.deadline || claimStatus.status === 'completed' || claimStatus.status === 'expired') {
+      return;
+    }
+
+    const interval = setInterval(() => {
+      const deadlineTime = new Date(claimStatus.deadline!).getTime();
+      const now = Date.now();
+      const secondsLeft = Math.floor((deadlineTime - now) / 1000);
+      setClaimTimeLeft(Math.max(0, secondsLeft));
+
+      // If expired, reload claim status
+      if (secondsLeft <= 0) {
+        loadClaimStatus();
+      }
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [claimStatus]);
 
   const fireConfetti = () => {
     const duration = 3000;
@@ -160,6 +190,22 @@ const ResultScreen: React.FC = () => {
     return 0;
   };
 
+  const formatTimeRemaining = (seconds: number): string => {
+    if (seconds <= 0) return 'Expired';
+    
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    const secs = seconds % 60;
+    
+    if (hours > 0) {
+      return `${hours}h ${minutes}m`;
+    } else if (minutes > 0) {
+      return `${minutes}m ${secs}s`;
+    } else {
+      return `${secs}s`;
+    }
+  };
+
   const winnings = calculateWinnings();
 
   return (
@@ -197,7 +243,7 @@ const ResultScreen: React.FC = () => {
               </div>
               
               {/* Claim button for winners */}
-              {isWinner && claimStatus && claimStatus.claimable && (
+              {isWinner && claimStatus && claimStatus.claimable && !claimSuccess && (
                 <div className="claim-section" style={{ marginTop: '1rem' }}>
                   <NeonButton 
                     variant="primary" 
@@ -208,9 +254,9 @@ const ResultScreen: React.FC = () => {
                   >
                     {claiming ? '⏳ Claiming...' : '💰 Claim Winnings'}
                   </NeonButton>
-                  {claimStatus.deadline && (
+                  {claimTimeLeft !== null && claimTimeLeft > 0 && (
                     <div className="claim-deadline" style={{ marginTop: '0.5rem', fontSize: '0.9rem', opacity: 0.8 }}>
-                      Claim by: {new Date(claimStatus.deadline).toLocaleString()}
+                      ⏱️ Claim within: {formatTimeRemaining(claimTimeLeft)}
                     </div>
                   )}
                 </div>
