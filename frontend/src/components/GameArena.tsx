@@ -9,21 +9,28 @@ import './GameArena.css';
 const GameArena: React.FC = () => {
   const navigate = useNavigate();
   const { state } = useGameContext();
-  const { recordTap } = usePollingGame();
+  const { recordTap, error: pollingError } = usePollingGame();
   const [tapped, setTapped] = useState(false);
   const [tapTime, setTapTime] = useState<number | null>(null);
 
   useEffect(() => {
     if (!state.user || !state.matchId) {
+      console.error('[GameArena] Missing user or matchId, redirecting to dashboard');
       navigate('/dashboard');
       return;
     }
 
     // Navigate to result screen when match completes
     if (state.gamePhase === 'result') {
+      console.log('[GameArena] Match complete, navigating to result screen');
       navigate('/result');
     }
   }, [state.user, state.matchId, state.gamePhase, navigate]);
+
+  // Log game phase changes for debugging
+  useEffect(() => {
+    console.log(`[GameArena] Game phase changed to: ${state.gamePhase}, countdown: ${state.countdown}`);
+  }, [state.gamePhase, state.countdown]);
 
   // Send haptic feedback for countdown
   useEffect(() => {
@@ -99,6 +106,21 @@ const GameArena: React.FC = () => {
             </span>
           </div>
         </div>
+
+        {pollingError && (
+          <div style={{
+            background: 'rgba(239, 68, 68, 0.2)',
+            border: '1px solid rgba(239, 68, 68, 0.5)',
+            borderRadius: '8px',
+            padding: '12px',
+            margin: '16px',
+            color: '#fecaca',
+            fontSize: '14px',
+            textAlign: 'center'
+          }}>
+            ⚠️ Connection issue: {pollingError}
+          </div>
+        )}
 
         <div className="game-content">
           <ReactionTestUI

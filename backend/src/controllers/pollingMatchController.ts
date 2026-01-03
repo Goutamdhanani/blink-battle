@@ -127,14 +127,13 @@ export class PollingMatchController {
       } else if (matchState.green_light_time) {
         const timeUntilGo = matchState.green_light_time - now;
         
-        if (timeUntilGo > 3000) {
-          // Still in countdown phase
-          state = 'countdown';
-          countdown = Math.ceil(timeUntilGo / 1000);
-        } else if (timeUntilGo > 0) {
-          // In the random delay phase before green light
-          state = 'waiting_for_go';
-        } else {
+        // The greenLightTime includes both countdown (3s) and random delay (2-5s)
+        // Total time: 5-8 seconds
+        // We want to show:
+        // - Countdown "3, 2, 1" during the LAST 3 seconds before green light
+        // - "Wait for it..." during any time before the last 3 seconds
+        
+        if (timeUntilGo <= 0) {
           // Green light is active!
           state = 'go';
           greenLightActive = true;
@@ -144,6 +143,14 @@ export class PollingMatchController {
             await MatchModel.updateStatus(matchId, MatchStatus.IN_PROGRESS);
             console.log(`[Polling Match] 🟢 Green light active! Match ${matchId} transitioning to IN_PROGRESS (go signal). Green light time: ${new Date(matchState.green_light_time).toISOString()}`);
           }
+        } else if (timeUntilGo <= 3000) {
+          // Last 3 seconds - show countdown: 3, 2, 1
+          state = 'countdown';
+          countdown = Math.ceil(timeUntilGo / 1000); // Will be 3, 2, or 1
+        } else {
+          // More than 3 seconds remaining - in the random delay phase
+          state = 'waiting_for_go';
+          countdown = 0;
         }
       } else if (matchState.player1_ready && matchState.player2_ready) {
         // Both ready but green light not set yet (edge case)

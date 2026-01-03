@@ -30,14 +30,17 @@ const Matchmaking: React.FC = () => {
       return;
     }
 
-    // If match found and need to show payment screen
+    // If match found and staked game, show payment screen
     if (state.matchId && !isFree && !matchFound) {
+      console.log('[Matchmaking] Match found, showing payment screen');
       setMatchFound(true);
       setSearching(false);
     }
 
     // If game phase is countdown or waiting, navigate to game
+    // But only if payment is complete (for staked games) or it's a free game
     if ((state.gamePhase === 'countdown' || state.gamePhase === 'waiting') && state.matchId) {
+      console.log('[Matchmaking] Ready to start game, navigating to arena');
       navigate('/game');
     }
   }, [state.user, state.token, state.gamePhase, state.matchId, navigate, matchFound, isFree]);
@@ -67,8 +70,7 @@ const Matchmaking: React.FC = () => {
     }
   };
 
-  // TODO: Wire up payment UI - this will be called when "Pay Now" button is clicked after match found
-  // @ts-expect-error - Unused until UI is implemented
+  // Wire up payment UI - this will be called when "Pay Now" button is clicked after match found
   const handlePayNow = async () => {
     if (!state.user || !state.matchId) return;
 
@@ -163,6 +165,97 @@ const Matchmaking: React.FC = () => {
   };
 
   if (!state.user) return null;
+
+  // Show payment screen when match found (for staked games only)
+  if (matchFound && !isFree && state.matchId) {
+    return (
+      <div className="matchmaking">
+        <div className="matchmaking-container fade-in">
+          <h1 className="page-title">💰 Payment Required</h1>
+
+          <GlassCard className="payment-info">
+            <h2 className="section-title">Match Found!</h2>
+            <p className="info-text">
+              Your opponent is ready. Please deposit your stake to begin the match.
+            </p>
+            <div className="payment-details">
+              <div className="payment-row">
+                <span>Stake Amount:</span>
+                <span className="payment-value">{selectedStake} WLD</span>
+              </div>
+              <div className="payment-row">
+                <span>Potential Winnings:</span>
+                <span className="payment-value positive">
+                  {(selectedStake * 2 * 0.97).toFixed(2)} WLD
+                </span>
+              </div>
+              <div className="payment-row">
+                <span>Platform Fee (3%):</span>
+                <span className="payment-value">{(selectedStake * 2 * 0.03).toFixed(2)} WLD</span>
+              </div>
+            </div>
+          </GlassCard>
+
+          {paymentError && (
+            <GlassCard className="error-message">
+              <div>{paymentError}</div>
+              {needsAuth && (
+                <div style={{ marginTop: '12px' }}>
+                  <NeonButton
+                    variant="secondary"
+                    size="small"
+                    fullWidth
+                    onClick={handleBack}
+                  >
+                    Sign In Again
+                  </NeonButton>
+                </div>
+              )}
+              {!needsAuth && (
+                <div style={{ marginTop: '12px' }}>
+                  <NeonButton
+                    variant="secondary"
+                    size="small"
+                    fullWidth
+                    onClick={handleRetry}
+                  >
+                    Try Again
+                  </NeonButton>
+                </div>
+              )}
+            </GlassCard>
+          )}
+
+          <NeonButton
+            variant="primary"
+            size="large"
+            fullWidth
+            onClick={handlePayNow}
+            disabled={processingPayment || needsAuth}
+          >
+            {processingPayment ? 'Processing...' : needsAuth ? 'Sign In Required' : `Pay ${selectedStake} WLD`}
+          </NeonButton>
+
+          <NeonButton
+            variant="secondary"
+            size="medium"
+            fullWidth
+            onClick={handleCancel}
+            disabled={processingPayment}
+          >
+            Cancel Match
+          </NeonButton>
+
+          <GlassCard className="info-card">
+            <p style={{ fontSize: '14px', opacity: 0.8 }}>
+              ⚠️ Both players must deposit their stakes before the match can begin.
+              Your opponent is waiting!
+            </p>
+          </GlassCard>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="matchmaking">

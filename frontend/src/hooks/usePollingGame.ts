@@ -93,6 +93,9 @@ export const usePollingGame = () => {
         const matchState: MatchState = await pollingService.getMatchState(matchId);
         matchStateRef.current = matchState;
 
+        // Log state for debugging
+        console.log(`[Polling] Match state: ${matchState.state}, status: ${matchState.status}, countdown: ${matchState.countdown}`);
+
         // Update game phase based on state
         if (matchState.state === 'ready_wait') {
           setGamePhase('waiting');
@@ -103,7 +106,7 @@ export const usePollingGame = () => {
           }
         } else if (matchState.state === 'waiting_for_go') {
           // In the random delay before green light
-          setGamePhase('countdown');
+          setGamePhase('waiting');
           setCountdown(null);
         } else if (matchState.state === 'go' && matchState.greenLightActive) {
           // Green light is active!
@@ -140,6 +143,12 @@ export const usePollingGame = () => {
         }
       } catch (err: any) {
         console.error('[Polling] Error polling match state:', err);
+        console.error('[Polling] Error details:', {
+          message: err.message,
+          status: err.response?.status,
+          data: err.response?.data,
+          matchId
+        });
         setError(err.message || 'Failed to poll match state');
         // Don't crash on error, just log it and keep trying
         // If it's a critical auth error, the user will be redirected by the API layer
