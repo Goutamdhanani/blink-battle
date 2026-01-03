@@ -47,7 +47,7 @@ describe('PaymentWorker - Expiration Logic', () => {
       await new Promise(resolve => setTimeout(resolve, 150));
       worker.stop();
 
-      expect(PaymentIntentModel.expireStalePayments).toHaveBeenCalledWith(5);
+      expect(PaymentIntentModel.expireStalePayments).toHaveBeenCalledWith(10);
     });
 
     it('should log when payments are expired', async () => {
@@ -57,11 +57,12 @@ describe('PaymentWorker - Expiration Logic', () => {
       (PaymentIntentModel.expireStalePayments as jest.Mock).mockResolvedValue(3);
 
       worker.start(100);
-      await new Promise(resolve => setTimeout(resolve, 150));
+      // Wait for at least 6 polls (6 * 100ms = 600ms) to trigger logging
+      await new Promise(resolve => setTimeout(resolve, 700));
       worker.stop();
 
       expect(consoleSpy).toHaveBeenCalledWith(
-        expect.stringContaining('Expired 3 stale payments')
+        expect.stringContaining('Expired 3 stale payments without transaction IDs (>10 min old)')
       );
 
       consoleSpy.mockRestore();
