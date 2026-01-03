@@ -59,6 +59,7 @@ export const createTables = async () => {
         from_wallet VARCHAR(255),
         to_wallet VARCHAR(255),
         status VARCHAR(50) NOT NULL,
+        tx_hash TEXT,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
     `);

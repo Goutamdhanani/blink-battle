@@ -161,7 +161,7 @@ export class PollingMatchController {
       let greenLightTimeMs = matchState.green_light_time ?? null;
       let greenLightTimeISO: string | null = null;
       
-      if (typeof greenLightTimeMs === 'number' && !isNaN(greenLightTimeMs)) {
+      if (typeof greenLightTimeMs === 'number' && !isNaN(greenLightTimeMs) && Number.isFinite(greenLightTimeMs)) {
         try {
           greenLightTimeISO = new Date(greenLightTimeMs).toISOString();
         } catch (err) {
@@ -169,6 +169,9 @@ export class PollingMatchController {
           greenLightTimeMs = null;
           greenLightTimeISO = null;
         }
+      } else if (greenLightTimeMs !== null) {
+        console.error(`[Polling Match] green_light_time is not a valid number for match ${matchId}: ${greenLightTimeMs}`);
+        greenLightTimeMs = null;
       }
 
       res.json({
@@ -193,9 +196,17 @@ export class PollingMatchController {
           wallet: isPlayer1 ? matchState.player2_wallet : matchState.player1_wallet
         }
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error('[Polling Match] Error in getState:', error);
-      res.status(500).json({ error: 'Failed to get match state' });
+      // Return more detailed error information for debugging
+      const errorMessage = error.message || 'Failed to get match state';
+      const errorDetails = {
+        error: errorMessage,
+        matchId: req.params.matchId,
+        timestamp: new Date().toISOString()
+      };
+      console.error('[Polling Match] Error details:', JSON.stringify(errorDetails));
+      res.status(500).json(errorDetails);
     }
   }
 
@@ -474,7 +485,16 @@ export class PollingMatchController {
             break;
             
           case 'distribute':
-            if (winnerWallet && winnerId) {
+            // Validate winner wallet and ID before attempting distribution
+            if (!winnerWallet || typeof winnerWallet !== 'string' || winnerWallet.trim() === '') {
+              console.error(`[Polling Match] Cannot distribute - winner wallet is invalid: wallet="${winnerWallet}", winnerId="${winnerId}"`);
+              paymentError = 'Invalid winner wallet address';
+              paymentSuccess = false;
+            } else if (!winnerId || typeof winnerId !== 'string') {
+              console.error(`[Polling Match] Cannot distribute - winner ID is invalid: winnerId="${winnerId}"`);
+              paymentError = 'Invalid winner ID';
+              paymentSuccess = false;
+            } else {
               const distributeResult = await EscrowService.distributeWinnings(
                 match.match_id,
                 winnerWallet,
@@ -485,9 +505,6 @@ export class PollingMatchController {
               if (!paymentSuccess) {
                 console.error(`[Polling Match] Distribution failed for match ${match.match_id}: ${paymentError}`);
               }
-            } else {
-              console.error(`[Polling Match] Cannot distribute - winner wallet or ID invalid: wallet=${winnerWallet}, winnerId=${winnerId}`);
-              paymentError = 'Invalid winner wallet or ID';
             }
             break;
             
