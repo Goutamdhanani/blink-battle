@@ -7,6 +7,9 @@ import { useMiniKit } from '../hooks/useMiniKit';
 import { GlassCard, NeonButton } from './ui';
 import './Matchmaking.css';
 
+// NOTE: Payment UI is handled by MiniKit drawer (native World App payment interface)
+// We no longer use custom payment screens - MiniKit drawer is opened before joining queue
+
 const STAKE_OPTIONS = [0.1, 0.25, 0.5, 1.0];
 const MAX_STAKE = 0.1; // Maximum stake until platform wallet is funded
 

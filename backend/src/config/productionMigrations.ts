@@ -1,4 +1,4 @@
-import pool from '../database';
+import pool from './database';
 import * as migration001 from './migrations/001_payment_intents';
 import * as migration002 from './migrations/002_matches_idempotency';
 import * as migration003 from './migrations/003_tap_events_unique';

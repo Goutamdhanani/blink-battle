@@ -1,4 +1,5 @@
 import crypto from 'crypto';
+import { NormalizedPaymentStatus } from '../models/PaymentIntent';
 
 /**
  * MiniKit Status Normalization Utilities
@@ -25,25 +26,22 @@ export enum MiniKitStatus {
   ERROR = 'error',
 }
 
-export enum NormalizedStatus {
-  PENDING = 'pending',
-  CONFIRMED = 'confirmed',
-  FAILED = 'failed',
-  CANCELLED = 'cancelled',
-}
+// Re-export NormalizedPaymentStatus as NormalizedStatus for backwards compatibility
+// @deprecated Use NormalizedPaymentStatus directly. This alias will be removed in v2.0.0
+export { NormalizedPaymentStatus as NormalizedStatus };
 
 /**
  * Normalize MiniKit status to internal status
  * This is the SINGLE SOURCE OF TRUTH for status mapping
  */
-export function normalizeMiniKitStatus(rawStatus: string): NormalizedStatus {
+export function normalizeMiniKitStatus(rawStatus: string): NormalizedPaymentStatus {
   const normalized = rawStatus.toLowerCase();
   
   switch (normalized) {
     // Confirmed states
     case MiniKitStatus.CONFIRMED:
     case MiniKitStatus.SUCCESS:
-      return NormalizedStatus.CONFIRMED;
+      return NormalizedPaymentStatus.CONFIRMED;
     
     // Pending states - transaction in progress
     case MiniKitStatus.INITIATED:
@@ -51,31 +49,31 @@ export function normalizeMiniKitStatus(rawStatus: string): NormalizedStatus {
     case MiniKitStatus.BROADCAST:
     case MiniKitStatus.PENDING_CONFIRMATION:
     case MiniKitStatus.PENDING:
-      return NormalizedStatus.PENDING;
+      return NormalizedPaymentStatus.PENDING;
     
     // Failed states
     case MiniKitStatus.FAILED:
     case MiniKitStatus.ERROR:
     case MiniKitStatus.EXPIRED:
-      return NormalizedStatus.FAILED;
+      return NormalizedPaymentStatus.FAILED;
     
     // Cancelled states
     case MiniKitStatus.CANCELLED:
-      return NormalizedStatus.CANCELLED;
+      return NormalizedPaymentStatus.CANCELLED;
     
     default:
       console.warn(`[MiniKit] Unknown status: ${rawStatus}, treating as pending`);
-      return NormalizedStatus.PENDING;
+      return NormalizedPaymentStatus.PENDING;
   }
 }
 
 /**
  * Check if status is terminal (no more retries needed)
  */
-export function isTerminalStatus(status: NormalizedStatus): boolean {
-  return status === NormalizedStatus.CONFIRMED || 
-         status === NormalizedStatus.FAILED || 
-         status === NormalizedStatus.CANCELLED;
+export function isTerminalStatus(status: NormalizedPaymentStatus): boolean {
+  return status === NormalizedPaymentStatus.CONFIRMED || 
+         status === NormalizedPaymentStatus.FAILED || 
+         status === NormalizedPaymentStatus.CANCELLED;
 }
 
 /**

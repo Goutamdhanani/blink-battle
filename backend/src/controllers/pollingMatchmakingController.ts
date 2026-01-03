@@ -5,6 +5,7 @@ import { UserModel } from '../models/User';
 import { MatchStatus } from '../models/types';
 import { generateRandomDelay } from '../services/randomness';
 import { EscrowService } from '../services/escrow';
+import { PaymentIntentModel, NormalizedPaymentStatus } from '../models/PaymentIntent';
 
 /**
  * HTTP Polling Matchmaking Controller
@@ -53,7 +54,6 @@ export class PollingMatchmakingController {
         }
 
         // Verify payment exists and is confirmed
-        const { PaymentIntentModel, NormalizedPaymentStatus } = await import('../models/PaymentIntent');
         const paymentIntent = await PaymentIntentModel.findByReference(paymentReference);
 
         if (!paymentIntent) {

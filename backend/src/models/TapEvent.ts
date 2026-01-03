@@ -44,9 +44,9 @@ export class TapEventModel {
     const disqualified = rawReactionMs < 0;
     const disqualificationReason = disqualified ? 'early_tap' : undefined;
     
-    // Log if clamping occurred (for monitoring)
+    // Log if clamping occurred (indicates potentially problematic input)
     if (rawReactionMs !== reactionMs) {
-      console.log(`[TapEvent] Clamped reaction time from ${rawReactionMs}ms to ${reactionMs}ms for match ${matchId}, user ${userId}`);
+      console.warn(`[TapEvent] ⚠️  Clamped reaction time from ${rawReactionMs}ms to ${reactionMs}ms for match ${matchId}, user ${userId}`);
     }
     
     // First-write-wins: If a tap already exists for this (match_id, user_id), 
