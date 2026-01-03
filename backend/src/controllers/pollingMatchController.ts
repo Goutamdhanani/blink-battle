@@ -4,8 +4,8 @@ import { TapEventModel } from '../models/TapEvent';
 import { MatchStatus } from '../models/types';
 import { generateRandomDelay } from '../services/randomness';
 import { AntiCheatService } from '../services/antiCheat';
-import { EscrowService } from '../services/escrow';
 import { UserModel } from '../models/User';
+import pool from '../config/database';
 
 /**
  * HTTP Polling Match Controller
@@ -500,6 +500,7 @@ export class PollingMatchController {
   /**
    * Determine winner based on tap events
    * CRITICAL: Compute winner BEFORE calling escrow/payment to avoid undefined winner
+   * TREASURY ARCHITECTURE: Sets winner_wallet and claim_deadline, no on-chain payment
    */
   private static async determineWinner(match: any, taps: any[]): Promise<void> {
     const player1Tap = taps.find(t => t.user_id === match.player1_id);
@@ -511,165 +512,111 @@ export class PollingMatchController {
     }
 
     let winnerId: string | undefined;
+    let loserId: string | undefined;
     let result: string;
-    let paymentAction: 'refund' | 'distribute' | 'split' | 'none' = 'none';
     let winnerWallet: string | undefined;
+    let loserWallet: string | undefined;
 
     // STEP 1: Determine winner and result FIRST (before any payment calls)
     // Check disqualifications (early taps)
     if (player1Tap.disqualified && player2Tap.disqualified) {
-      // Both disqualified - refund with fee
+      // Both disqualified - no winner
       winnerId = undefined;
+      loserId = undefined;
       result = 'both_disqualified';
-      paymentAction = 'refund';
     } else if (player1Tap.disqualified) {
       // Player 1 disqualified, player 2 wins
       winnerId = match.player2_id;
+      loserId = match.player1_id;
       winnerWallet = match.player2_wallet;
+      loserWallet = match.player1_wallet;
       result = 'player1_disqualified';
-      paymentAction = 'distribute';
     } else if (player2Tap.disqualified) {
       // Player 2 disqualified, player 1 wins
       winnerId = match.player1_id;
+      loserId = match.player2_id;
       winnerWallet = match.player1_wallet;
+      loserWallet = match.player2_wallet;
       result = 'player2_disqualified';
-      paymentAction = 'distribute';
     } else if (!player1Tap.is_valid && !player2Tap.is_valid) {
-      // Both invalid (too slow) - refund
+      // Both invalid (too slow) - no winner
       winnerId = undefined;
+      loserId = undefined;
       result = 'both_timeout';
-      paymentAction = 'refund';
     } else if (!player1Tap.is_valid) {
       // Player 1 too slow, player 2 wins
       winnerId = match.player2_id;
+      loserId = match.player1_id;
       winnerWallet = match.player2_wallet;
+      loserWallet = match.player1_wallet;
       result = 'player1_timeout';
-      paymentAction = 'distribute';
     } else if (!player2Tap.is_valid) {
       // Player 2 too slow, player 1 wins
       winnerId = match.player1_id;
+      loserId = match.player2_id;
       winnerWallet = match.player1_wallet;
+      loserWallet = match.player2_wallet;
       result = 'player2_timeout';
-      paymentAction = 'distribute';
     } else {
       // Both valid, compare reaction times
       const diff = Math.abs(player1Tap.reaction_ms - player2Tap.reaction_ms);
       
       if (diff <= 1) {
-        // Tie (within 1ms) - split pot
+        // Tie (within 1ms) - no winner
         winnerId = undefined;
+        loserId = undefined;
         result = 'tie';
-        paymentAction = 'split';
       } else {
         // Normal win
         winnerId = player1Tap.reaction_ms < player2Tap.reaction_ms 
           ? match.player1_id 
           : match.player2_id;
+        loserId = winnerId === match.player1_id ? match.player2_id : match.player1_id;
         winnerWallet = winnerId === match.player1_id 
           ? match.player1_wallet 
           : match.player2_wallet;
+        loserWallet = loserId === match.player1_id
+          ? match.player1_wallet
+          : match.player2_wallet;
         result = 'normal_win';
-        paymentAction = 'distribute';
       }
     }
 
-    console.log(`[Polling Match] Winner determined: ${winnerId || 'none'}, Result: ${result}, Payment: ${paymentAction}`);
+    console.log(`[Polling Match] Winner determined: ${winnerId || 'none'}, Result: ${result}`);
 
-    // STEP 2: Execute payment action with proper guards
-    let paymentSuccess = false;
-    let paymentError: string | null = null;
-
+    // STEP 2: Set winner_wallet, loser_wallet, and claim_deadline in database
+    // TREASURY ARCHITECTURE: No on-chain payment during match completion
     try {
-      if (match.stake > 0) {
-        // Only attempt payment if stake > 0
-        switch (paymentAction) {
-          case 'refund':
-            if (match.player1_wallet && match.player2_wallet) {
-              const refundResult = await EscrowService.refundWithFee(
-                match.match_id,
-                match.player1_wallet,
-                match.player2_wallet,
-                match.stake,
-                3
-              );
-              paymentSuccess = refundResult.success;
-              paymentError = refundResult.error || null;
-              if (!paymentSuccess) {
-                console.error(`[Polling Match] Refund failed for match ${match.match_id}: ${paymentError}`);
-              }
-            } else {
-              console.error(`[Polling Match] Cannot refund - missing wallet addresses`);
-              paymentError = 'Missing wallet addresses for refund';
-            }
-            break;
-            
-          case 'distribute':
-            // Validate winner wallet and ID before attempting distribution
-            if (!winnerWallet || typeof winnerWallet !== 'string' || winnerWallet.trim() === '') {
-              console.error(`[Polling Match] Cannot distribute - winner wallet is invalid: wallet="${winnerWallet}", winnerId="${winnerId}"`);
-              paymentError = 'Invalid winner wallet address';
-              paymentSuccess = false;
-            } else if (!winnerId || typeof winnerId !== 'string') {
-              console.error(`[Polling Match] Cannot distribute - winner ID is invalid: winnerId="${winnerId}"`);
-              paymentError = 'Invalid winner ID';
-              paymentSuccess = false;
-            } else {
-              const distributeResult = await EscrowService.distributeWinnings(
-                match.match_id,
-                winnerWallet,
-                match.stake
-              );
-              paymentSuccess = distributeResult.success;
-              paymentError = distributeResult.error || null;
-              if (!paymentSuccess) {
-                console.error(`[Polling Match] Distribution failed for match ${match.match_id}: ${paymentError}`);
-              }
-            }
-            break;
-            
-          case 'split':
-            if (match.player1_wallet && match.player2_wallet) {
-              const splitResult = await EscrowService.splitPot(
-                match.match_id,
-                match.player1_wallet,
-                match.player2_wallet,
-                match.stake
-              );
-              paymentSuccess = splitResult.success;
-              paymentError = splitResult.error || null;
-              if (!paymentSuccess) {
-                console.error(`[Polling Match] Split pot failed for match ${match.match_id}: ${paymentError}`);
-              }
-            } else {
-              console.error(`[Polling Match] Cannot split pot - missing wallet addresses`);
-              paymentError = 'Missing wallet addresses for split';
-            }
-            break;
-            
-          default:
-            // No payment needed (free match or other reason)
-            paymentSuccess = true;
-            console.log(`[Polling Match] No payment action required for match ${match.match_id}`);
-        }
+      // Set claim deadline to 24 hours from now
+      const claimDeadline = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+
+      // Update match with winner wallets and claim deadline
+      if (winnerWallet && loserWallet) {
+        await pool.query(
+          `UPDATE matches 
+           SET winner_wallet = $1, loser_wallet = $2, claim_deadline = $3, 
+               claim_status = 'unclaimed', result_finalized_at = NOW()
+           WHERE match_id = $4`,
+          [winnerWallet, loserWallet, claimDeadline, match.match_id]
+        );
+        console.log(`[Polling Match] Set winner wallet: ${winnerWallet}, claim deadline: ${claimDeadline.toISOString()}`);
       } else {
-        // Free match, no payment needed
-        paymentSuccess = true;
-        console.log(`[Polling Match] Free match ${match.match_id}, no payment required`);
+        // No winner (tie or both disqualified)
+        await pool.query(
+          `UPDATE matches 
+           SET claim_status = 'expired', result_finalized_at = NOW()
+           WHERE match_id = $1`,
+          [match.match_id]
+        );
+        console.log(`[Polling Match] No winner for match ${match.match_id} - ${result}`);
       }
-    } catch (error: any) {
-      console.error(`[Polling Match] Payment error for match ${match.match_id}:`, error);
-      paymentError = error.message || 'Payment processing failed';
-      paymentSuccess = false;
-    }
 
-    // STEP 3: Complete match in DB regardless of payment success (avoid black screen)
-    try {
-      // Update status if refund scenario
-      if (paymentAction === 'refund') {
+      // Update status if refund scenario (tie or both disqualified)
+      if (!winnerId) {
         await MatchModel.updateStatus(match.match_id, MatchStatus.CANCELLED);
       }
 
-      // Complete match with winner information
+      // Complete match in DB with winner information
       await MatchModel.completeMatch({
         matchId: match.match_id,
         winnerId,
@@ -679,23 +626,22 @@ export class PollingMatchController {
       });
 
       // Update user stats
-      if (winnerId) {
+      if (winnerId && loserId) {
         const winnerReaction = winnerId === match.player1_id 
           ? player1Tap.reaction_ms 
           : player2Tap.reaction_ms;
-        const loserId = winnerId === match.player1_id ? match.player2_id : match.player1_id;
-        const loserReaction = winnerId === match.player1_id 
-          ? player2Tap.reaction_ms 
-          : player1Tap.reaction_ms;
+        const loserReaction = loserId === match.player1_id 
+          ? player1Tap.reaction_ms 
+          : player2Tap.reaction_ms;
 
         await UserModel.updateStats(winnerId, true, winnerReaction);
         await UserModel.updateStats(loserId, false, loserReaction);
       }
 
-      console.log(`[Polling Match] Match completed in DB: ${match.match_id}, Winner: ${winnerId || 'none'}, Payment: ${paymentSuccess ? 'success' : 'failed'}`);
+      console.log(`[Polling Match] ✅ Match completed in DB: ${match.match_id}, Winner: ${winnerId || 'none'}`);
       
-      if (!paymentSuccess && paymentError) {
-        console.error(`[Polling Match] ⚠️ Match completed but payment failed: ${match.match_id}. Error: ${paymentError}. Manual review may be required.`);
+      if (match.stake > 0 && winnerId) {
+        console.log(`[Polling Match] 💰 Winnings available for claim. Winner can claim via /api/claim endpoint`);
       }
     } catch (dbError: any) {
       console.error(`[Polling Match] Failed to complete match in DB: ${match.match_id}`, dbError);

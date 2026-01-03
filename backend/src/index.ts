@@ -11,6 +11,7 @@ import { PaymentController } from './controllers/paymentController';
 import { VerificationController } from './controllers/verificationController';
 import { PollingMatchmakingController } from './controllers/pollingMatchmakingController';
 import { PollingMatchController } from './controllers/pollingMatchController';
+import { ClaimController } from './controllers/claimController';
 import { PingController } from './controllers/pingController';
 import { authenticate } from './middleware/auth';
 import { requestIdMiddleware } from './middleware/requestId';
@@ -263,6 +264,10 @@ app.get('/api/match/result/:matchId', authenticate, matchRateLimiter, requestTra
 app.post('/api/ping', authenticate, PingController.recordLatency);
 app.get('/api/ping/stats', authenticate, PingController.getStats);
 
+// Claim endpoints (treasury-based payment architecture)
+app.post('/api/claim', authenticate, matchRateLimiter, ClaimController.claimWinnings);
+app.get('/api/claim/status/:matchId', authenticate, matchRateLimiter, ClaimController.getClaimStatus);
+
 // WebSockets - DEPRECATED for gameplay, kept for other features if needed
 // TODO: Remove entirely if not used for other features
 // new GameSocketHandler(io);
@@ -317,6 +322,9 @@ const startServer = async () => {
       console.log(`  GET  /api/match/result/:matchId`);
       console.log(`  POST /api/ping`);
       console.log(`  GET  /api/ping/stats`);
+      console.log(`Treasury-based claim endpoints enabled:`);
+      console.log(`  POST /api/claim`);
+      console.log(`  GET  /api/claim/status/:matchId`);
     });
   } catch (error) {
     console.error('Failed to start server:', error);
