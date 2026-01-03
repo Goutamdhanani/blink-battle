@@ -5,6 +5,8 @@ import * as migration003 from './migrations/003_tap_events_unique';
 import * as migration004 from './migrations/004_schema_validation';
 import * as migration005 from './migrations/005_payment_intent_transaction_id_index';
 import * as migration006 from './migrations/006_treasury_tables';
+import * as migration007 from './migrations/007_fix_claims_numeric_overflow';
+import * as migration008 from './migrations/008_add_game_randomness_columns';
 
 interface Migration {
   name: string;
@@ -19,6 +21,8 @@ const migrations: Migration[] = [
   { name: '004_schema_validation', ...migration004 },
   { name: '005_payment_intent_transaction_id_index', ...migration005 },
   { name: '006_treasury_tables', ...migration006 },
+  { name: '007_fix_claims_numeric_overflow', ...migration007 },
+  { name: '008_add_game_randomness_columns', ...migration008 },
 ];
 
 /**
