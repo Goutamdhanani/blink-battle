@@ -16,8 +16,8 @@ export async function up(client: PoolClient): Promise<void> {
     { name: 'refund_status', type: 'VARCHAR(50) DEFAULT \'none\'' },
     { name: 'refund_amount', type: 'NUMERIC(18, 8)' },
     { name: 'refund_reason', type: 'VARCHAR(255)' },
-    { name: 'refund_claimed_at', type: 'TIMESTAMP' },
-    { name: 'refund_deadline', type: 'TIMESTAMP' },
+    { name: 'refund_claimed_at', type: 'TIMESTAMPTZ' },
+    { name: 'refund_deadline', type: 'TIMESTAMPTZ' },
     { name: 'refund_tx_hash', type: 'VARCHAR(66)' },
   ];
 
@@ -42,8 +42,8 @@ export async function up(client: PoolClient): Promise<void> {
     { name: 'cancelled', type: 'BOOLEAN DEFAULT false' },
     { name: 'cancellation_reason', type: 'VARCHAR(255)' },
     { name: 'refund_processed', type: 'BOOLEAN DEFAULT false' },
-    { name: 'player1_last_ping', type: 'TIMESTAMP' },
-    { name: 'player2_last_ping', type: 'TIMESTAMP' },
+    { name: 'player1_last_ping', type: 'TIMESTAMPTZ' },
+    { name: 'player2_last_ping', type: 'TIMESTAMPTZ' },
   ];
 
   for (const col of matchColumns) {
@@ -79,6 +79,18 @@ export async function up(client: PoolClient): Promise<void> {
     console.log('✅ Added refund_status constraint to payment_intents table');
   }
 
+  // Create indexes for efficient queries
+  await client.query(`
+    CREATE INDEX IF NOT EXISTS idx_matches_ping ON matches(player1_last_ping, player2_last_ping) 
+    WHERE status IN ('waiting', 'ready', 'countdown', 'signal');
+  `);
+
+  await client.query(`
+    CREATE INDEX IF NOT EXISTS idx_payment_refund_status ON payment_intents(refund_status) 
+    WHERE refund_status != 'none';
+  `);
+
+  console.log('✅ Created performance indexes');
   console.log('✅ Migration 009_refund_and_disconnect_system completed');
 }
 

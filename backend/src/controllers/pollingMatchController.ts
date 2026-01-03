@@ -39,36 +39,39 @@ export class PollingMatchController {
    * Both players MUST have deposited stake before game can start
    */
   static async ready(req: Request, res: Response): Promise<void> {
+    const client = await pool.connect();
+    
     try {
       const userId = (req as any).userId;
       const { matchId } = req.body;
 
-      // Get current match status with lock to prevent race conditions
-      const match = await pool.query(
+      await client.query('BEGIN');
+
+      // Lock the match row to prevent race conditions
+      const match = await client.query(
         'SELECT * FROM matches WHERE match_id = $1 FOR UPDATE',
         [matchId]
       );
 
       if (!match.rows[0]) {
+        await client.query('ROLLBACK');
         res.status(404).json({ error: 'Match not found' });
         return;
       }
 
       const matchData = match.rows[0];
 
-      // PREVENT STATE REGRESSION - Lock state once countdown starts
-      if (matchData.status !== 'waiting' && matchData.status !== 'ready') {
-        console.log(`[Match] Match ${matchId} already in ${matchData.status}, ignoring ready call`);
-        res.json({ 
-          status: matchData.status, 
-          message: 'Match already started',
-          stateLocked: true
-        });
+      // Prevent ready if match already started
+      if (!['waiting', 'ready', 'matched'].includes(matchData.status)) {
+        await client.query('ROLLBACK');
+        console.log(`[Match] Match ${matchId} already in ${matchData.status}, ignoring ready`);
+        res.json({ status: matchData.status, alreadyStarted: true });
         return;
       }
 
       // Verify user is in this match
       if (matchData.player1_id !== userId && matchData.player2_id !== userId) {
+        await client.query('ROLLBACK');
         res.status(403).json({ error: 'Not a participant in this match' });
         return;
       }
@@ -94,50 +97,71 @@ export class PollingMatchController {
         }
       }
 
-      // Mark player as ready (sets ready flag and ready_at timestamp)
-      await MatchModel.setPlayerReady(matchId, userId);
+      // Determine which player is marking ready
+      const isPlayer1 = matchData.player1_id === userId;
+      const readyColumn = isPlayer1 ? 'player1_ready' : 'player2_ready';
+      const readyAtColumn = isPlayer1 ? 'player1_ready_at' : 'player2_ready_at';
+
+      // Mark this player as ready
+      await client.query(
+        `UPDATE matches SET ${readyColumn} = true, ${readyAtColumn} = NOW() WHERE match_id = $1`,
+        [matchId]
+      );
 
       console.log(`[Polling Match] Player ${userId} marked ready in match ${matchId}`);
 
-      // Check if both players are ready
-      const bothReady = await MatchModel.areBothPlayersReady(matchId);
+      // Get updated match state
+      const updated = await client.query(
+        'SELECT player1_ready, player2_ready, status FROM matches WHERE match_id = $1',
+        [matchId]
+      );
+
+      const bothReady = updated.rows[0].player1_ready && updated.rows[0].player2_ready;
 
       if (bothReady) {
-        // Both ready! Schedule green light time with RANDOM delay
+        // 🎲 Generate RANDOM green light delay (2-5 seconds)
         const minDelay = parseInt(process.env.SIGNAL_DELAY_MIN_MS || '2000', 10);
         const maxDelay = parseInt(process.env.SIGNAL_DELAY_MAX_MS || '5000', 10);
         const randomDelay = generateRandomDelay(minDelay, maxDelay);
         
-        const greenLightTime = Date.now() + randomDelay + COUNTDOWN_DURATION_MS;
-        
-        await MatchModel.setGreenLightTime(matchId, greenLightTime);
-        // Transition to COUNTDOWN status (not IN_PROGRESS)
-        await MatchModel.updateStatus(matchId, MatchStatus.COUNTDOWN);
+        const countdownDuration = COUNTDOWN_DURATION_MS; // 3 second countdown
+        const now = Date.now();
+        const greenLightTime = now + countdownDuration + randomDelay;
 
-        // FIXED: Store random delay in database for audit/debugging
-        await pool.query(
-          'UPDATE matches SET random_delay_ms = $1 WHERE match_id = $2',
-          [randomDelay, matchId]
-        );
+        await client.query(`
+          UPDATE matches 
+          SET status = 'countdown',
+              green_light_time = $1,
+              random_delay_ms = $2
+          WHERE match_id = $3
+        `, [greenLightTime, randomDelay, matchId]);
 
-        console.log(`[Polling Match] 🚦 Both players ready! Match ${matchId} transitioning to COUNTDOWN. Green light scheduled for ${new Date(greenLightTime).toISOString()} (${randomDelay}ms random delay + ${COUNTDOWN_DURATION_MS}ms countdown = ${randomDelay + COUNTDOWN_DURATION_MS}ms total)`);
+        console.log(`[Match] 🎲 Both ready! Match ${matchId} → countdown. Green light in ${countdownDuration + randomDelay}ms (random: ${randomDelay}ms)`);
+
+        await client.query('COMMIT');
 
         res.json({
           success: true,
           bothReady: true,
           greenLightTime,
-          status: MatchStatus.COUNTDOWN
+          randomDelay,
+          status: 'countdown'
         });
-        return;
-      }
+      } else {
+        await client.query('COMMIT');
 
-      res.json({
-        success: true,
-        bothReady: false
-      });
-    } catch (error) {
-      console.error('[Polling Match] Error in ready:', error);
+        res.json({
+          success: true,
+          bothReady: false,
+          yourReady: true
+        });
+      }
+    } catch (error: any) {
+      await client.query('ROLLBACK');
+      console.error('[Ready] Error:', error);
       res.status(500).json({ error: 'Failed to mark ready' });
+    } finally {
+      client.release();
     }
   }
 
@@ -611,6 +635,18 @@ export class PollingMatchController {
         return;
       }
 
+      // Check if ping columns exist
+      const columnExists = await pool.query(`
+        SELECT column_name FROM information_schema.columns 
+        WHERE table_name = 'matches' AND column_name = 'player1_last_ping'
+      `);
+
+      if (columnExists.rows.length === 0) {
+        // Columns don't exist - just return success (migration pending)
+        res.json({ success: true, ping: Date.now() });
+        return;
+      }
+
       const match = await pool.query(
         'SELECT player1_id, player2_id FROM matches WHERE match_id = $1',
         [matchId]
@@ -636,10 +672,10 @@ export class PollingMatchController {
         );
       }
 
-      res.json({ success: true });
-    } catch (error) {
-      console.error('[Polling Match] Error in heartbeat:', error);
-      res.status(500).json({ error: 'Failed to record heartbeat' });
+      res.json({ success: true, ping: Date.now() });
+    } catch (error: any) {
+      console.error('[Heartbeat] Error:', error.message);
+      res.status(500).json({ error: 'Heartbeat failed' });
     }
   }
 
