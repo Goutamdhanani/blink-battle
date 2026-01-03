@@ -9,6 +9,9 @@
   padding: var(--space-lg);
   background: radial-gradient(circle at center, rgba(0, 255, 255, 0.05) 0%, transparent 70%);
   position: relative;
+  /* GPU acceleration */
+  transform: translateZ(0);
+  backface-visibility: hidden;
 }
 
 .reaction-test-ui::before {
@@ -28,6 +31,8 @@
     );
   pointer-events: none;
   z-index: 0;
+  /* GPU acceleration */
+  transform: translateZ(0);
 }
 
 .reaction-test-content {
@@ -40,12 +45,15 @@
   max-width: 600px;
   position: relative;
   z-index: 1;
+  /* Optimize rendering */
+  contain: layout style paint;
 }
 
 .reaction-clickable {
   cursor: pointer;
   user-select: none;
   -webkit-user-select: none;
+  touch-action: manipulation; /* Removes 300ms delay */
 }
 
 /* Status Display */
@@ -89,6 +97,29 @@
   line-height: 1;
   color: var(--neon-pink);
   text-shadow: 0 0 40px var(--neon-pink), 0 0 80px var(--neon-pink);
+  /* GPU-accelerated animation */
+  transform: translateZ(0);
+  will-change: transform, opacity;
+  animation: countdown-pulse 1s ease-in-out;
+}
+
+@keyframes countdown-pulse {
+  0% { 
+    transform: scale(1.2) translateZ(0); 
+    opacity: 0; 
+  }
+  20% { 
+    transform: scale(1) translateZ(0); 
+    opacity: 1; 
+  }
+  80% { 
+    transform: scale(1) translateZ(0); 
+    opacity: 1; 
+  }
+  100% { 
+    transform: scale(0.8) translateZ(0); 
+    opacity: 0; 
+  }
 }
 
 /* Warning Text */
@@ -117,11 +148,17 @@
   background: linear-gradient(135deg, var(--neon-green) 0%, #00cc66 100%);
   box-shadow: 0 8px 32px rgba(0, 255, 136, 0.4), 0 0 80px rgba(0, 255, 136, 0.3);
   cursor: pointer;
-  transition: transform 0.1s ease, box-shadow 0.1s ease;
   user-select: none;
   -webkit-user-select: none;
   position: relative;
   overflow: hidden;
+  /* GPU-accelerated transforms */
+  transform: translateZ(0);
+  will-change: transform, opacity;
+  backface-visibility: hidden;
+  transition: transform 0.1s ease-out, opacity 0.1s ease-out;
+  /* Remove 300ms delay on mobile */
+  touch-action: manipulation;
 }
 
 .reaction-tap-button::before {
@@ -129,7 +166,7 @@
   position: absolute;
   top: 50%;
   left: 50%;
-  transform: translate(-50%, -50%);
+  transform: translate(-50%, -50%) translateZ(0);
   width: 90%;
   height: 90%;
   border-radius: 50%;
@@ -137,13 +174,15 @@
 }
 
 .reaction-tap-button:active:not(.reaction-tap-button-disabled) {
-  transform: scale(0.95);
+  transform: scale(0.95) translateZ(0);
 }
 
 .reaction-tap-button-tapped {
   background: linear-gradient(135deg, #666666 0%, #444444 100%);
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
   cursor: default;
+  transform: scale(0.9) translateZ(0);
+  opacity: 0.8;
 }
 
 .reaction-tap-button-disabled {
