@@ -15,6 +15,10 @@ export class MatchController {
       const userId = (req as any).userId;
       const limit = parseInt(req.query.limit as string) || 20;
 
+      // Calculate 7 days ago timestamp for filtering recent matches
+      const sevenDaysAgo = new Date();
+      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+
       // Check if refund columns exist before using them
       const refundColumnsExist = await pool.query(`
         SELECT column_name FROM information_schema.columns 
@@ -35,15 +39,21 @@ export class MatchController {
             pi.refund_amount,
             pi.refund_reason,
             u1.wallet_address as player1_wallet_addr,
-            u2.wallet_address as player2_wallet_addr
+            u1.avg_reaction_ms as player1_avg_reaction,
+            u2.wallet_address as player2_wallet_addr,
+            u2.avg_reaction_ms as player2_avg_reaction
           FROM matches m
           LEFT JOIN payment_intents pi ON pi.match_id = m.match_id AND pi.user_id = $1
           LEFT JOIN users u1 ON u1.user_id = m.player1_id
           LEFT JOIN users u2 ON u2.user_id = m.player2_id
-          WHERE m.player1_id = $1 OR m.player2_id = $1
-          ORDER BY m.created_at DESC
+          WHERE (m.player1_id = $1 OR m.player2_id = $1)
+            AND m.status = 'completed'
+            AND m.completed_at IS NOT NULL
+            AND m.completed_at >= $3
+          ORDER BY m.completed_at DESC
           LIMIT $2
         `;
+        params = [userId, limit, sevenDaysAgo];
       } else {
         // Fallback query without refund columns (migration not run yet)
         query = `
@@ -51,18 +61,23 @@ export class MatchController {
             m.*,
             pi.payment_reference,
             u1.wallet_address as player1_wallet_addr,
-            u2.wallet_address as player2_wallet_addr
+            u1.avg_reaction_ms as player1_avg_reaction,
+            u2.wallet_address as player2_wallet_addr,
+            u2.avg_reaction_ms as player2_avg_reaction
           FROM matches m
           LEFT JOIN payment_intents pi ON pi.match_id = m.match_id AND pi.user_id = $1
           LEFT JOIN users u1 ON u1.user_id = m.player1_id
           LEFT JOIN users u2 ON u2.user_id = m.player2_id
-          WHERE m.player1_id = $1 OR m.player2_id = $1
-          ORDER BY m.created_at DESC
+          WHERE (m.player1_id = $1 OR m.player2_id = $1)
+            AND m.status = 'completed'
+            AND m.completed_at IS NOT NULL
+            AND m.completed_at >= $3
+          ORDER BY m.completed_at DESC
           LIMIT $2
         `;
+        params = [userId, limit, sevenDaysAgo];
       }
 
-      params = [userId, limit];
       const matches = await pool.query(query, params);
 
       // Also get orphaned payments (paid but never matched) - only if refund columns exist
@@ -85,17 +100,49 @@ export class MatchController {
         `, [userId]);
       }
 
-      res.json({
-        matches: matches.rows.map((m: any) => ({
+      // Map matches to frontend format
+      const mappedMatches = matches.rows.map((m: any) => {
+        const isPlayer1 = m.player1_id === userId;
+        const opponentWallet = isPlayer1 ? m.player2_wallet_addr : m.player1_wallet_addr;
+        const opponentAvgReaction = isPlayer1 ? m.player2_avg_reaction : m.player1_avg_reaction;
+        const won = m.winner_id === userId;
+        const yourReaction = isPlayer1 ? m.player1_reaction_ms : m.player2_reaction_ms;
+        const opponentReaction = isPlayer1 ? m.player2_reaction_ms : m.player1_reaction_ms;
+
+        // Calculate claim deadline time remaining
+        let claimTimeRemaining: number | undefined;
+        if (m.claim_deadline) {
+          const deadline = new Date(m.claim_deadline).getTime();
+          const now = Date.now();
+          claimTimeRemaining = Math.max(0, Math.floor((deadline - now) / 1000));
+        }
+
+        return {
           matchId: m.match_id,
           stake: m.stake,
+          yourReaction,
+          opponentReaction,
+          won,
+          opponent: opponentWallet ? {
+            wallet: opponentWallet,
+            avgReaction: opponentAvgReaction || 0
+          } : null,
+          completedAt: m.completed_at,
+          // Claim fields for frontend
+          claimDeadline: m.claim_deadline || undefined,
+          claimStatus: m.claim_status || undefined,
+          claimTimeRemaining,
+          claimable: won && 
+                     m.claim_status === 'unclaimed' && 
+                     m.claim_deadline &&
+                     new Date() < new Date(m.claim_deadline),
+          // Keep legacy fields for backward compatibility
           status: m.status,
-          isWinner: m.winner_id === userId,
-          canClaim: m.winner_id === userId && 
+          isWinner: won,
+          canClaim: won && 
                     m.claim_status === 'unclaimed' && 
                     m.claim_deadline &&
                     new Date() < new Date(m.claim_deadline),
-          // Only include refund fields if they exist
           canRefund: m.refund_status === 'eligible' && 
                      m.refund_deadline && 
                      new Date() < new Date(m.refund_deadline),
@@ -105,13 +152,15 @@ export class MatchController {
           refundStatus: m.refund_status,
           refundReason: m.refund_reason,
           paymentReference: m.payment_reference,
-          yourReaction: m.player1_id === userId ? m.player1_reaction_ms : m.player2_reaction_ms,
-          opponentReaction: m.player1_id === userId ? m.player2_reaction_ms : m.player1_reaction_ms,
-          completedAt: m.completed_at,
           createdAt: m.created_at,
           cancelled: m.cancelled,
           cancellationReason: m.cancellation_reason
-        })),
+        };
+      });
+
+      res.json({
+        success: true, // Add success flag for frontend
+        matches: mappedMatches,
         cancelledPayments: orphanedPayments.rows.map((p: any) => ({
           paymentReference: p.payment_reference,
           amount: p.amount,
@@ -126,7 +175,7 @@ export class MatchController {
       });
     } catch (error: any) {
       console.error('[History] Error:', error.message);
-      res.status(500).json({ error: 'Failed to get history', details: error.message });
+      res.status(500).json({ success: false, error: 'Failed to get history', details: error.message });
     }
   }
 

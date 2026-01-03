@@ -1,6 +1,7 @@
 import axios from 'axios';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+// Normalize API base URL to ensure no trailing slash
+const API_BASE_URL = (import.meta.env.VITE_API_URL || 'http://localhost:3001').replace(/\/$/, '');
 
 export interface ClaimResult {
   success: boolean;
@@ -38,7 +39,7 @@ export interface ClaimStatus {
 export async function claimWinnings(matchId: string, token: string): Promise<ClaimResult> {
   try {
     const response = await axios.post<ClaimResult>(
-      `${API_BASE_URL}/api/claim`,
+      `${API_BASE_URL}/api/claim`, // Fixed: removed potential double-slash
       { matchId },
       {
         headers: {
@@ -72,7 +73,7 @@ export async function claimWinnings(matchId: string, token: string): Promise<Cla
 export async function getClaimStatus(matchId: string, token: string): Promise<ClaimStatus | null> {
   try {
     const response = await axios.get<ClaimStatus>(
-      `${API_BASE_URL}/api/claim/status/${matchId}`,
+      `${API_BASE_URL}/api/claim/status/${matchId}`, // Fixed: removed potential double-slash
       {
         headers: {
           'Authorization': `Bearer ${token}`

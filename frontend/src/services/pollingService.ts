@@ -1,6 +1,7 @@
 import axios, { AxiosInstance } from 'axios';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+// Normalize API URL to ensure no trailing slash
+const API_URL = (import.meta.env.VITE_API_URL || 'http://localhost:3001').replace(/\/$/, '');
 
 export interface MatchmakingStatus {
   status: 'not_in_queue' | 'searching' | 'matched';
@@ -73,7 +74,7 @@ export interface TapResponse {
 export class PollingService {
   private api: AxiosInstance;
   private token: string | null = null;
-  private pollInterval: number = 250; // Start at 250ms
+  private pollInterval: number = 1000; // Start at 1000ms (was 250ms)
   private consecutiveErrors: number = 0;
   private readonly MAX_INTERVAL: number = 5000; // Max 5 seconds
 
@@ -98,15 +99,18 @@ export class PollingService {
       (response) => {
         // Success - reset backoff
         this.consecutiveErrors = 0;
-        this.pollInterval = 250;
+        this.pollInterval = 1000; // Reset to 1000ms (was 250ms)
         return response;
       },
       async (error) => {
         if (error.response?.status === 429) {
-          // Rate limited - slow down exponentially
+          // Rate limited - use Retry-After header if provided
+          const retryAfter = error.response.headers['retry-after'];
+          const retryAfterMs = retryAfter ? parseInt(retryAfter) * 1000 : this.pollInterval * 2;
+          
           this.consecutiveErrors++;
-          this.pollInterval = Math.min(this.pollInterval * 2, this.MAX_INTERVAL);
-          console.warn(`[PollingService] Rate limited. Backing off to ${this.pollInterval}ms`);
+          this.pollInterval = Math.min(retryAfterMs, this.MAX_INTERVAL);
+          console.warn(`[PollingService] Rate limited (429). Backing off to ${this.pollInterval}ms`);
           
           // Wait before retrying
           await new Promise(resolve => setTimeout(resolve, this.pollInterval));
@@ -135,7 +139,7 @@ export class PollingService {
    * Reset backoff state
    */
   resetBackoff(): void {
-    this.pollInterval = 250;
+    this.pollInterval = 1000; // Reset to 1000ms (was 250ms)
     this.consecutiveErrors = 0;
   }
 
