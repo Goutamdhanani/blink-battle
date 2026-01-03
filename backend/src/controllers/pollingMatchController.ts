@@ -43,6 +43,13 @@ export class PollingMatchController {
       // TREASURY ARCHITECTURE: Game starts regardless of staking status
       // For staked games, we track stakes in database and settle via claim system
       // This prevents the "Get Ready" freeze when escrow fails
+      //
+      // SAFEGUARDS:
+      // - Payment intents are verified and recorded in deposits table
+      // - Winner can claim via /api/claim endpoint with 24-hour window
+      // - Unclaimed winnings return to treasury after deadline
+      // - All transactions are tracked in database for dispute resolution
+      // - PaymentWorker continuously monitors and updates payment statuses
       if (match.stake > 0) {
         const bothStaked = await MatchModel.areBothPlayersStaked(matchId);
         if (!bothStaked) {

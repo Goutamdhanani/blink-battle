@@ -2,7 +2,8 @@ import { useEffect, useRef, useCallback } from 'react';
 
 /**
  * Sound configuration
- * Note: These are placeholder paths - actual sound files need to be added to public/sounds/
+ * Note: Sound files are optional - if not present, the game will work without audio
+ * To add sounds, place files in public/sounds/ directory
  */
 const SOUNDS = {
   countdown: '/sounds/tick.mp3',

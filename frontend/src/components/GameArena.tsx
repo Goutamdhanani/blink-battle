@@ -92,7 +92,7 @@ const GameArena: React.FC = () => {
    */
   useEffect(() => {
     const button = tapButtonRef.current;
-    if (!button) return;
+    if (!button || tapped || !state.matchId || state.gamePhase !== 'signal') return;
     
     const handleTouchStart = (e: TouchEvent) => {
       e.preventDefault(); // Prevent double-firing with click event
@@ -105,7 +105,7 @@ const GameArena: React.FC = () => {
     return () => {
       button.removeEventListener('touchstart', handleTouchStart);
     };
-  }, [tapped, state.matchId, state.gamePhase, state.signalTimestamp]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [tapped, state.matchId, state.gamePhase, handleTap]);
 
   // Map game phase to ReactionTestUI phase
   const getReactionPhase = (): ReactionPhase => {

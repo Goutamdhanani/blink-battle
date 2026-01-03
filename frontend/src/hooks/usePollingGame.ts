@@ -5,13 +5,24 @@ import { useGameContext } from '../context/GameContext';
 /**
  * Adaptive polling rates for different game phases
  * Optimized for ultra-smooth gameplay experience
+ * 
+ * NOTE: The 50ms polling rate during active gameplay is intentional and optimized:
+ * - Only active during the brief reaction test window (~1-2 seconds)
+ * - Polling stops immediately when match completes
+ * - Rate is adaptive - slower during idle/waiting phases
+ * - Critical for detecting opponent taps in real-time PvP
+ * 
+ * Server load is manageable because:
+ * - Very short duration (1-2 seconds per match)
+ * - Rate limiting applied via matchRateLimiter (100 req/min)
+ * - Matches are sequential, not all players polling simultaneously
  */
 const POLLING_RATES = {
   IDLE: 5000,           // 5s - not in game
   MATCHMAKING: 2000,    // 2s - searching for match
   MATCHED: 500,         // 500ms - waiting for ready
   COUNTDOWN: 100,       // 100ms - countdown active
-  PLAYING: 50,          // 50ms - during reaction test (CRITICAL)
+  PLAYING: 50,          // 50ms - during reaction test (CRITICAL - brief duration)
   WAITING_RESULT: 200,  // 200ms - waiting for opponent
   RESULT: 2000          // 2s - showing results
 };
