@@ -70,8 +70,8 @@ export class PollingMatchmakingController {
         }
 
         if (paymentIntent.normalized_status !== NormalizedPaymentStatus.CONFIRMED) {
-          res.status(400).json({ 
-            error: 'Payment not confirmed',
+          res.status(403).json({ 
+            error: 'Payment not confirmed. Please ensure your payment is confirmed before joining matchmaking.',
             status: paymentIntent.normalized_status,
             requiresPayment: true
           });
