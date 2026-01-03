@@ -230,6 +230,24 @@ export const addMissingColumns = async () => {
     
     console.log('✅ Staking columns verified/added');
     
+    // Check and add tx_hash column to transactions table if missing
+    const txHashExists = await client.query(`
+      SELECT column_name 
+      FROM information_schema.columns 
+      WHERE table_name='transactions' AND column_name='tx_hash'
+    `);
+    
+    if (txHashExists.rows.length === 0) {
+      console.log('Adding tx_hash column to transactions table...');
+      await client.query(`
+        ALTER TABLE transactions 
+        ADD COLUMN tx_hash TEXT
+      `);
+      console.log('✅ Added tx_hash column to transactions table');
+    } else {
+      console.log('✅ tx_hash column already exists in transactions table');
+    }
+    
     await client.query('COMMIT');
     console.log('✅ Migration completed successfully');
   } catch (error) {

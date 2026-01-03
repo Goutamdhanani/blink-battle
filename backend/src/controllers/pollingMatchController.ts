@@ -11,6 +11,10 @@ import { UserModel } from '../models/User';
  * HTTP Polling Match Controller
  * Handles match flow via REST polling instead of WebSockets
  */
+
+// Constants
+const COUNTDOWN_DURATION_MS = 3000; // 3 seconds for countdown display
+
 export class PollingMatchController {
   /**
    * POST /api/match/ready
@@ -65,7 +69,7 @@ export class PollingMatchController {
         const maxDelay = parseInt(process.env.SIGNAL_DELAY_MAX_MS || '5000', 10);
         const randomDelay = generateRandomDelay(minDelay, maxDelay);
         
-        const greenLightTime = Date.now() + randomDelay + 3000; // 3s countdown + random delay
+        const greenLightTime = Date.now() + randomDelay + COUNTDOWN_DURATION_MS;
         
         await MatchModel.setGreenLightTime(matchId, greenLightTime);
         // Transition to COUNTDOWN status (not IN_PROGRESS)
@@ -127,14 +131,13 @@ export class PollingMatchController {
       } else if (matchState.green_light_time) {
         const timeUntilGo = matchState.green_light_time - now;
         
-        if (timeUntilGo > 3000) {
-          // Still in countdown phase
-          state = 'countdown';
-          countdown = Math.ceil(timeUntilGo / 1000);
-        } else if (timeUntilGo > 0) {
-          // In the random delay phase before green light
-          state = 'waiting_for_go';
-        } else {
+        // The greenLightTime includes both countdown (3s) and random delay (2-5s)
+        // Total time: 5-8 seconds
+        // We want to show:
+        // - Countdown "3, 2, 1" during the LAST 3 seconds before green light
+        // - "Wait for it..." during any time before the last 3 seconds
+        
+        if (timeUntilGo <= 0) {
           // Green light is active!
           state = 'go';
           greenLightActive = true;
@@ -144,6 +147,14 @@ export class PollingMatchController {
             await MatchModel.updateStatus(matchId, MatchStatus.IN_PROGRESS);
             console.log(`[Polling Match] 🟢 Green light active! Match ${matchId} transitioning to IN_PROGRESS (go signal). Green light time: ${new Date(matchState.green_light_time).toISOString()}`);
           }
+        } else if (timeUntilGo <= COUNTDOWN_DURATION_MS) {
+          // Last 3 seconds - show countdown: 3, 2, 1
+          state = 'countdown';
+          countdown = Math.ceil(timeUntilGo / 1000); // Will be 3, 2, or 1
+        } else {
+          // More than 3 seconds remaining - in the random delay phase
+          state = 'waiting_for_go';
+          countdown = 0;
         }
       } else if (matchState.player1_ready && matchState.player2_ready) {
         // Both ready but green light not set yet (edge case)
@@ -161,7 +172,7 @@ export class PollingMatchController {
       let greenLightTimeMs = matchState.green_light_time ?? null;
       let greenLightTimeISO: string | null = null;
       
-      if (typeof greenLightTimeMs === 'number' && !isNaN(greenLightTimeMs)) {
+      if (typeof greenLightTimeMs === 'number' && !isNaN(greenLightTimeMs) && Number.isFinite(greenLightTimeMs)) {
         try {
           greenLightTimeISO = new Date(greenLightTimeMs).toISOString();
         } catch (err) {
@@ -169,6 +180,9 @@ export class PollingMatchController {
           greenLightTimeMs = null;
           greenLightTimeISO = null;
         }
+      } else if (greenLightTimeMs !== null) {
+        console.error(`[Polling Match] green_light_time is not a valid number for match ${matchId}: ${greenLightTimeMs}`);
+        greenLightTimeMs = null;
       }
 
       res.json({
@@ -193,9 +207,17 @@ export class PollingMatchController {
           wallet: isPlayer1 ? matchState.player2_wallet : matchState.player1_wallet
         }
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error('[Polling Match] Error in getState:', error);
-      res.status(500).json({ error: 'Failed to get match state' });
+      // Return more detailed error information for debugging
+      const errorMessage = error.message || 'Failed to get match state';
+      const errorDetails = {
+        error: errorMessage,
+        matchId: req.params.matchId,
+        timestamp: new Date().toISOString()
+      };
+      console.error('[Polling Match] Error details:', JSON.stringify(errorDetails));
+      res.status(500).json(errorDetails);
     }
   }
 
@@ -474,7 +496,16 @@ export class PollingMatchController {
             break;
             
           case 'distribute':
-            if (winnerWallet && winnerId) {
+            // Validate winner wallet and ID before attempting distribution
+            if (!winnerWallet || typeof winnerWallet !== 'string' || winnerWallet.trim() === '') {
+              console.error(`[Polling Match] Cannot distribute - winner wallet is invalid: wallet="${winnerWallet}", winnerId="${winnerId}"`);
+              paymentError = 'Invalid winner wallet address';
+              paymentSuccess = false;
+            } else if (!winnerId || typeof winnerId !== 'string') {
+              console.error(`[Polling Match] Cannot distribute - winner ID is invalid: winnerId="${winnerId}"`);
+              paymentError = 'Invalid winner ID';
+              paymentSuccess = false;
+            } else {
               const distributeResult = await EscrowService.distributeWinnings(
                 match.match_id,
                 winnerWallet,
@@ -485,9 +516,6 @@ export class PollingMatchController {
               if (!paymentSuccess) {
                 console.error(`[Polling Match] Distribution failed for match ${match.match_id}: ${paymentError}`);
               }
-            } else {
-              console.error(`[Polling Match] Cannot distribute - winner wallet or ID invalid: wallet=${winnerWallet}, winnerId=${winnerId}`);
-              paymentError = 'Invalid winner wallet or ID';
             }
             break;
             
