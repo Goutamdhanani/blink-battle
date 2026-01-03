@@ -40,6 +40,12 @@ export interface Match {
   player2_wallet?: string;
   // Idempotency
   idempotency_key?: string;
+  // Treasury-based claim fields
+  winner_wallet?: string;
+  loser_wallet?: string;
+  claim_deadline?: Date;
+  claim_status?: 'unclaimed' | 'claimed' | 'expired';
+  result_finalized_at?: Date;
 }
 
 export enum MatchStatus {

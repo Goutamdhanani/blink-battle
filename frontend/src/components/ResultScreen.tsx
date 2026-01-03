@@ -1,10 +1,11 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useGameContext } from '../context/GameContext';
 import { useLatency } from '../hooks/useLatency';
 import { minikit } from '../lib/minikit';
 import { GlassCard, NeonButton } from './ui';
 import { clampReactionTime } from '../lib/statusUtils';
+import { claimWinnings, getClaimStatus, ClaimStatus } from '../services/claimService';
 import confetti from 'canvas-confetti';
 import './ResultScreen.css';
 
@@ -12,6 +13,10 @@ const ResultScreen: React.FC = () => {
   const navigate = useNavigate();
   const { state, resetGame } = useGameContext();
   const { latencyStats, getLatencyRange, getEstimatedOneWayLatency } = useLatency();
+  const [claimStatus, setClaimStatus] = useState<ClaimStatus | null>(null);
+  const [claiming, setClaiming] = useState(false);
+  const [claimError, setClaimError] = useState<string | null>(null);
+  const [claimSuccess, setClaimSuccess] = useState(false);
 
   useEffect(() => {
     if (!state.user || !state.result) {
@@ -27,7 +32,21 @@ const ResultScreen: React.FC = () => {
       // Send haptic notification for loss
       minikit.sendHaptic('warning');
     }
-  }, [state.user, state.result, state.winnerId, navigate]);
+
+    // Load claim status for staked matches
+    if (state.stake && state.stake > 0 && state.matchId) {
+      loadClaimStatus();
+    }
+  }, [state.user, state.result, state.winnerId, state.matchId, state.stake, navigate]);
+
+  const loadClaimStatus = async () => {
+    if (!state.matchId || !state.token) return;
+
+    const status = await getClaimStatus(state.matchId, state.token);
+    if (status) {
+      setClaimStatus(status);
+    }
+  };
 
   const fireConfetti = () => {
     const duration = 3000;
@@ -70,6 +89,35 @@ const ResultScreen: React.FC = () => {
 
   const handleViewStats = () => {
     navigate('/history');
+  };
+
+  const handleClaimWinnings = async () => {
+    if (!state.matchId || !state.token || claiming) return;
+
+    setClaiming(true);
+    setClaimError(null);
+
+    try {
+      const result = await claimWinnings(state.matchId, state.token);
+      
+      if (result.success) {
+        setClaimSuccess(true);
+        minikit.sendHaptic('success');
+        // Reload claim status to show updated state
+        await loadClaimStatus();
+        
+        // Fire confetti for successful claim
+        fireConfetti();
+      } else {
+        setClaimError(result.error || 'Failed to claim winnings');
+        minikit.sendHaptic('error');
+      }
+    } catch (error: any) {
+      setClaimError('Network error - please try again');
+      minikit.sendHaptic('error');
+    } finally {
+      setClaiming(false);
+    }
   };
 
   if (!state.user || !state.result) return null;
@@ -145,8 +193,64 @@ const ResultScreen: React.FC = () => {
                 {isTie ? 'Refunded' : isWinner ? 'You Won' : 'You Lost'}
               </div>
               <div className={`winnings-amount ${isWinner || isTie ? 'positive' : 'negative'}`}>
-                {isWinner || isTie ? '+' : '-'}{winnings.toFixed(2)} WLD
+                {claimStatus?.amountFormatted || `${winnings.toFixed(2)} WLD`}
               </div>
+              
+              {/* Claim button for winners */}
+              {isWinner && claimStatus && claimStatus.claimable && (
+                <div className="claim-section" style={{ marginTop: '1rem' }}>
+                  <NeonButton 
+                    variant="primary" 
+                    size="medium" 
+                    fullWidth 
+                    onClick={handleClaimWinnings}
+                    disabled={claiming}
+                  >
+                    {claiming ? '⏳ Claiming...' : '💰 Claim Winnings'}
+                  </NeonButton>
+                  {claimStatus.deadline && (
+                    <div className="claim-deadline" style={{ marginTop: '0.5rem', fontSize: '0.9rem', opacity: 0.8 }}>
+                      Claim by: {new Date(claimStatus.deadline).toLocaleString()}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Show claim status */}
+              {claimStatus && claimStatus.status === 'completed' && (
+                <div className="claim-status" style={{ marginTop: '1rem', color: '#00ff88' }}>
+                  ✅ Claimed! 
+                  {claimStatus.txHash && (
+                    <div style={{ fontSize: '0.8rem', marginTop: '0.25rem' }}>
+                      Tx: {claimStatus.txHash.substring(0, 10)}...
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {claimStatus && claimStatus.status === 'processing' && (
+                <div className="claim-status" style={{ marginTop: '1rem', color: '#ffaa00' }}>
+                  ⏳ Processing claim...
+                </div>
+              )}
+
+              {claimSuccess && (
+                <div className="claim-status" style={{ marginTop: '1rem', color: '#00ff88' }}>
+                  ✅ Winnings claimed successfully!
+                </div>
+              )}
+
+              {claimError && (
+                <div className="claim-error" style={{ marginTop: '1rem', color: '#ff0088' }}>
+                  ❌ {claimError}
+                </div>
+              )}
+
+              {isWinner && claimStatus && claimStatus.deadlineExpired && (
+                <div className="claim-status" style={{ marginTop: '1rem', color: '#ff0088' }}>
+                  ⚠️ Claim deadline expired
+                </div>
+              )}
             </GlassCard>
           )}
 
