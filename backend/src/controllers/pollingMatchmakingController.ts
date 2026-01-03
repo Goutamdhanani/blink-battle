@@ -30,13 +30,13 @@ export class PollingMatchmakingController {
         return;
       }
 
-      // CRITICAL: Stake cap enforcement (0.1 WLD max until platform wallet funded)
+      // CRITICAL: Stake cap enforcement (0.1 WLD max for platform safety)
       const MAX_STAKE = parseFloat(process.env.MAX_STAKE_WLD || '0.1');
       if (stake > MAX_STAKE) {
         res.status(400).json({ 
           error: 'Stake amount exceeds maximum',
           maxStake: MAX_STAKE,
-          details: `Maximum stake is ${MAX_STAKE} WLD until platform wallet is sufficiently funded for gas fees`
+          details: `Maximum stake is ${MAX_STAKE} WLD`
         });
         return;
       }
