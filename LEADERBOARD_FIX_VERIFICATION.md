@@ -5,32 +5,42 @@ Fixed `TypeError: t.user.avgReactionTime.toFixed is not a function` and similar 
 
 ## Changes Made
 
-### 1. Leaderboard.tsx
-- **Added `formatWinRate` helper function** (lines 84-94)
-  - Safely converts any type to number
-  - Returns '0.0' for invalid/negative values
-  - Applies `.toFixed(1)` only after validation
-- **Applied to**: `entry.winRate` display (line 160)
+### 1. Created Shared Utility Module (formatters.ts)
+- **Location**: `frontend/src/lib/formatters.ts`
+- **Purpose**: Centralized, type-safe number formatting utilities
+- **Functions**:
+  - `formatReactionTime(value: number | string | null | undefined): string`
+  - `formatWinRate(value: number | string | null | undefined): string`
+- **Type Safety**: Uses strict union types instead of `any` to prevent invalid inputs at compile time
 
-### 2. Dashboard.tsx
-- **Added `formatReactionTime` helper function** (lines 43-48)
-  - Safely converts any type to number
-  - Returns '-' for invalid/non-positive values
-  - Applies `.toFixed(0)` only after validation
+### 2. Leaderboard.tsx
+- **Imported shared formatters** from `../lib/formatters`
+- **Removed duplicate helper functions** (formatReactionTime, formatWinRate)
+- **Applied to**: `entry.avgReactionTime` and `entry.winRate` displays
+- **Net change**: -23 lines (eliminated duplication)
+
+### 3. Dashboard.tsx
+- **Imported `formatReactionTime`** from `../lib/formatters`
+- **Removed duplicate helper function**
 - **Applied to**: `state.user.avgReactionTime` display (line 82)
+- **Net change**: -6 lines (eliminated duplication)
 
-### 3. MatchHistory.tsx
-- **Added `formatReactionTime` helper function** (lines 57-62)
-  - Same safe conversion logic as Dashboard
-  - Returns '-' for invalid values
-  - Applies `.toFixed(0)` only after validation
+### 4. MatchHistory.tsx
+- **Imported `formatReactionTime`** from `../lib/formatters`
+- **Removed duplicate helper function**
 - **Applied to**: `match.opponent.avgReaction` display (line 114)
+- **Net change**: -6 lines (eliminated duplication)
+
+### 5. Added Comprehensive Test Suite
+- **Location**: `frontend/src/lib/__tests__/formatters.test.ts`
+- **Coverage**: 13 test cases covering all edge cases
+- **Tests pass**: 25/25 (12 API tests + 13 formatter tests)
 
 ## Safety Pattern
 
 All helper functions follow this safe pattern:
 ```typescript
-const formatValue = (value: any): string => {
+export const formatValue = (value: number | string | null | undefined): string => {
   const num = typeof value === 'number' ? value : Number(value ?? NaN);
   if (!Number.isFinite(num) || num <= 0) return 'FALLBACK';
   return `${num.toFixed(N)}UNIT`;
@@ -43,13 +53,16 @@ This ensures:
 3. ✅ null/undefined become NaN and show fallback
 4. ✅ Invalid values show fallback instead of crashing
 5. ✅ `.toFixed()` is only called on valid numbers
+6. ✅ TypeScript prevents passing invalid types at compile time
 
 ## How to Verify
 
 ### Automatic Verification (Completed)
 - ✅ TypeScript compilation passes (`npm run build`)
-- ✅ All existing tests pass (12/12 tests)
+- ✅ All 25 tests pass (12 API + 13 formatter tests)
 - ✅ No TypeScript errors in changed components
+- ✅ CodeQL security scan: 0 alerts
+- ✅ Code review completed and all feedback addressed
 
 ### Manual Verification Steps
 
@@ -103,15 +116,28 @@ Postgres NUMERIC values can arrive as:
 
 ## Testing Notes
 
-- No additional tests were added as the fix is defensive programming
-- Existing API tests continue to pass
+- Comprehensive test suite added with 13 test cases
+- All edge cases covered: valid numbers, strings, null, undefined, NaN, Infinity, negatives
+- TypeScript now catches invalid types at compile time
+- The fix is defensive programming with type safety
+- Existing API tests continue to pass (12/12)
 - The fix is backward compatible with all data types
-- TypeScript types allow for flexibility while runtime handles all cases
+- No performance impact (simple validation logic)
+
+## Code Quality Improvements
+
+1. **Eliminated Code Duplication**: Consolidated 3 duplicate implementations into shared utility
+2. **Type Safety**: Changed from `any` to strict union types
+3. **Test Coverage**: Added 13 comprehensive tests for edge cases
+4. **Documentation**: Added JSDoc comments for all utility functions
+5. **Security**: CodeQL scan passed with 0 alerts
 
 ## Related Files
-- `frontend/src/components/Leaderboard.tsx`
-- `frontend/src/components/Dashboard.tsx`
-- `frontend/src/components/MatchHistory.tsx`
+- `frontend/src/lib/formatters.ts` (new)
+- `frontend/src/lib/__tests__/formatters.test.ts` (new)
+- `frontend/src/components/Leaderboard.tsx` (modified)
+- `frontend/src/components/Dashboard.tsx` (modified)
+- `frontend/src/components/MatchHistory.tsx` (modified)
 
 ## Rollout
 Safe to deploy immediately:
@@ -119,3 +145,5 @@ Safe to deploy immediately:
 - Backward compatible
 - Fixes critical user-facing crashes
 - All tests pass
+- CodeQL security scan clean
+- Type safety improvements prevent future issues
