@@ -2,6 +2,7 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useGameContext } from '../context/GameContext';
 import { GlassCard, NeonButton, StatTile, BottomTabBar } from './ui';
+import { formatReactionTime } from '../lib/formatters';
 import './Dashboard.css';
 
 const Dashboard: React.FC = () => {
@@ -73,7 +74,7 @@ const Dashboard: React.FC = () => {
           <StatTile value={state.user.losses} label="Losses" color="pink" />
           <StatTile value={`${winRate}%`} label="Win Rate" color="cyan" highlight />
           <StatTile 
-            value={state.user.avgReactionTime ? `${state.user.avgReactionTime.toFixed(0)}ms` : '-'} 
+            value={formatReactionTime(state.user.avgReactionTime)} 
             label="Avg Reaction" 
             color="purple" 
           />

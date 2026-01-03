@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useGameContext } from '../context/GameContext';
 import { GlassCard, BottomTabBar } from './ui';
 import { apiClient } from '../lib/api';
+import { formatReactionTime } from '../lib/formatters';
 import './MatchHistory.css';
 
 interface Match {
@@ -105,7 +106,7 @@ const MatchHistory: React.FC = () => {
                     <div className="opponent-info">
                       <span>vs {match.opponent.wallet.substring(0, 8)}...</span>
                       <span className="opponent-avg">
-                        Avg: {match.opponent.avgReaction?.toFixed(0)}ms
+                        Avg: {formatReactionTime(match.opponent.avgReaction)}
                       </span>
                     </div>
                   )}
