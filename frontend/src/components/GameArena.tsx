@@ -1,8 +1,9 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useGameContext } from '../context/GameContext';
 import { usePollingGame } from '../hooks/usePollingGame';
-import { minikit } from '../lib/minikit';
+import { useHaptics } from '../hooks/useHaptics';
+import { useGameSounds } from '../hooks/useGameSounds';
 import ReactionTestUI, { ReactionPhase } from './ReactionTestUI';
 import './GameArena.css';
 
@@ -10,8 +11,12 @@ const GameArena: React.FC = () => {
   const navigate = useNavigate();
   const { state } = useGameContext();
   const { recordTap, error: pollingError } = usePollingGame();
+  const { triggerHaptic } = useHaptics();
+  const { playSound } = useGameSounds();
   const [tapped, setTapped] = useState(false);
   const [tapTime, setTapTime] = useState<number | null>(null);
+  const [localReactionTime, setLocalReactionTime] = useState<number | null>(null);
+  const tapButtonRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!state.user || !state.matchId) {
@@ -35,40 +40,74 @@ const GameArena: React.FC = () => {
   // Send haptic feedback for countdown
   useEffect(() => {
     if (state.gamePhase === 'countdown' && state.countdown !== null) {
-      minikit.sendHaptic('warning');
+      triggerHaptic('light');
+      playSound('countdown');
     }
-  }, [state.countdown]);
+  }, [state.countdown, state.gamePhase, triggerHaptic, playSound]);
 
   // Send haptic feedback for signal
   useEffect(() => {
     if (state.gamePhase === 'signal') {
-      minikit.sendHaptic('success');
+      triggerHaptic('heavy');
+      playSound('spawn');
     }
-  }, [state.gamePhase]);
+  }, [state.gamePhase, triggerHaptic, playSound]);
 
+  /**
+   * Handle tap with optimistic UI
+   * Provides instant feedback before server confirmation
+   */
   const handleTap = async () => {
     if (tapped || !state.matchId || state.gamePhase !== 'signal') return;
 
-    const clientTimestamp = Date.now();
-    setTapped(true);
-    setTapTime(clientTimestamp);
+    const clientTimestamp = performance.now();
     
+    // 1. INSTANT visual feedback (before any network call)
+    setTapped(true);
+    setTapTime(Date.now());
+    
+    // 2. Calculate and display local reaction time immediately
+    if (state.signalTimestamp) {
+      const reactionTime = Date.now() - state.signalTimestamp;
+      setLocalReactionTime(reactionTime);
+      console.log(`[GameArena] Local reaction time: ${reactionTime}ms`);
+    }
+    
+    // 3. Instant haptic and audio feedback
+    triggerHaptic('heavy');
+    playSound('tap');
+    
+    // 4. Send to server IN BACKGROUND (don't await for UI updates)
     try {
       await recordTap(state.matchId);
-      
-      // Send haptic feedback
-      minikit.sendHaptic('success');
-      
-      // Fallback vibration for browsers
-      if (navigator.vibrate) {
-        navigator.vibrate(50);
-      }
+      console.log('[GameArena] Tap recorded on server');
     } catch (error) {
       console.error('[GameArena] Error recording tap:', error);
-      // Still provide feedback even if recording failed
-      minikit.sendHaptic('error');
+      // Keep UI feedback even if server recording failed
+      // User already sees their tap response
     }
   };
+
+  /**
+   * Add touch event listener for faster mobile response
+   * touchstart fires faster than click on mobile devices
+   */
+  useEffect(() => {
+    const button = tapButtonRef.current;
+    if (!button) return;
+    
+    const handleTouchStart = (e: TouchEvent) => {
+      e.preventDefault(); // Prevent double-firing with click event
+      handleTap();
+    };
+    
+    // Passive: false allows preventDefault
+    button.addEventListener('touchstart', handleTouchStart, { passive: false });
+    
+    return () => {
+      button.removeEventListener('touchstart', handleTouchStart);
+    };
+  }, [tapped, state.matchId, state.gamePhase, state.signalTimestamp]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Map game phase to ReactionTestUI phase
   const getReactionPhase = (): ReactionPhase => {
@@ -87,6 +126,11 @@ const GameArena: React.FC = () => {
   };
 
   const getReactionTime = (): number | null => {
+    // Show local reaction time immediately (optimistic UI)
+    if (localReactionTime !== null) {
+      return localReactionTime;
+    }
+    // Fallback to calculated time
     if (tapped && tapTime && state.signalTimestamp) {
       return tapTime - state.signalTimestamp;
     }
@@ -123,14 +167,16 @@ const GameArena: React.FC = () => {
         )}
 
         <div className="game-content">
-          <ReactionTestUI
-            phase={getReactionPhase()}
-            countdown={state.countdown}
-            onTap={handleTap}
-            disabled={tapped}
-            reactionTime={getReactionTime()}
-            opponentInfo={getOpponentInfo()}
-          />
+          <div ref={tapButtonRef}>
+            <ReactionTestUI
+              phase={getReactionPhase()}
+              countdown={state.countdown}
+              onTap={handleTap}
+              disabled={tapped}
+              reactionTime={getReactionTime()}
+              opponentInfo={getOpponentInfo()}
+            />
+          </div>
         </div>
       </div>
     </div>
