@@ -39,9 +39,9 @@ export class MatchController {
             pi.refund_amount,
             pi.refund_reason,
             u1.wallet_address as player1_wallet_addr,
-            u1.avg_reaction_ms as player1_avg_reaction,
+            u1.avg_reaction_time as player1_avg_reaction,
             u2.wallet_address as player2_wallet_addr,
-            u2.avg_reaction_ms as player2_avg_reaction
+            u2.avg_reaction_time as player2_avg_reaction
           FROM matches m
           LEFT JOIN payment_intents pi ON pi.match_id = m.match_id AND pi.user_id = $1
           LEFT JOIN users u1 ON u1.user_id = m.player1_id
@@ -61,9 +61,9 @@ export class MatchController {
             m.*,
             pi.payment_reference,
             u1.wallet_address as player1_wallet_addr,
-            u1.avg_reaction_ms as player1_avg_reaction,
+            u1.avg_reaction_time as player1_avg_reaction,
             u2.wallet_address as player2_wallet_addr,
-            u2.avg_reaction_ms as player2_avg_reaction
+            u2.avg_reaction_time as player2_avg_reaction
           FROM matches m
           LEFT JOIN payment_intents pi ON pi.match_id = m.match_id AND pi.user_id = $1
           LEFT JOIN users u1 ON u1.user_id = m.player1_id
