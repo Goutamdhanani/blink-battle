@@ -81,6 +81,17 @@ const Leaderboard: React.FC = () => {
     return `${num.toFixed(0)}ms`;
   };
 
+  const formatWinRate = (value: any) => {
+    const num =
+      typeof value === 'number'
+        ? value
+        : Number(value ?? NaN);
+
+    if (!Number.isFinite(num) || num < 0) return '0.0';
+
+    return (num * 100).toFixed(1);
+  };
+
   return (
     <div className="leaderboard">
       <div className="leaderboard-container fade-in">
@@ -146,7 +157,7 @@ const Leaderboard: React.FC = () => {
 
                   <div className="col-winrate">
                     <span className={`winrate ${entry.winRate >= 0.6 ? 'high' : ''}`}>
-                      {(entry.winRate * 100).toFixed(1)}%
+                      {formatWinRate(entry.winRate)}%
                     </span>
                   </div>
 

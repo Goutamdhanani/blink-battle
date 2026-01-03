@@ -40,6 +40,12 @@ const Dashboard: React.FC = () => {
     return `${address.substring(0, 6)}...${address.substring(address.length - 4)}`;
   };
 
+  const formatReactionTime = (value: any): string => {
+    const num = typeof value === 'number' ? value : Number(value ?? NaN);
+    if (!Number.isFinite(num) || num <= 0) return '-';
+    return `${num.toFixed(0)}ms`;
+  };
+
   return (
     <div className="dashboard">
       <div className="dashboard-container fade-in">
@@ -73,7 +79,7 @@ const Dashboard: React.FC = () => {
           <StatTile value={state.user.losses} label="Losses" color="pink" />
           <StatTile value={`${winRate}%`} label="Win Rate" color="cyan" highlight />
           <StatTile 
-            value={state.user.avgReactionTime ? `${state.user.avgReactionTime.toFixed(0)}ms` : '-'} 
+            value={formatReactionTime(state.user.avgReactionTime)} 
             label="Avg Reaction" 
             color="purple" 
           />

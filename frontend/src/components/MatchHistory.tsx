@@ -54,6 +54,12 @@ const MatchHistory: React.FC = () => {
     return date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
   };
 
+  const formatReactionTime = (value: any): string => {
+    const num = typeof value === 'number' ? value : Number(value ?? NaN);
+    if (!Number.isFinite(num) || num <= 0) return '-';
+    return `${num.toFixed(0)}ms`;
+  };
+
   return (
     <div className="match-history">
       <div className="history-container fade-in">
@@ -105,7 +111,7 @@ const MatchHistory: React.FC = () => {
                     <div className="opponent-info">
                       <span>vs {match.opponent.wallet.substring(0, 8)}...</span>
                       <span className="opponent-avg">
-                        Avg: {match.opponent.avgReaction?.toFixed(0)}ms
+                        Avg: {formatReactionTime(match.opponent.avgReaction)}
                       </span>
                     </div>
                   )}
