@@ -169,11 +169,18 @@ export class PollingMatchController {
   /**
    * GET /api/match/state/:matchId
    * Poll match state (state machine: searching → matched → ready_wait → countdown → go → resolved)
+   * 
+   * IMPORTANT: No caching on this endpoint - state changes frequently
    */
   static async getState(req: Request, res: Response): Promise<void> {
     try {
       const { matchId } = req.params;
       const userId = (req as any).userId;
+
+      // Set cache control headers to prevent stale data
+      res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+      res.set('Pragma', 'no-cache');
+      res.set('Expires', '0');
 
       const matchState = await MatchModel.getMatchState(matchId);
       if (!matchState) {
@@ -353,6 +360,42 @@ export class PollingMatchController {
       // Validate green_light_time is reasonable (not too far in past or future)
       const now = Date.now();
       const timeSinceGreenLight = now - greenLightTime;
+      
+      // Validate client timestamp if provided (prevent manipulation)
+      // Check for explicit presence (not just truthy) to catch 0 and negative values
+      if (clientTimestamp !== undefined && clientTimestamp !== null) {
+        // Reject negative or zero timestamps
+        if (clientTimestamp <= 0) {
+          console.warn(`[Polling Match] Invalid client timestamp: ${clientTimestamp}`);
+          res.status(400).json({ 
+            error: 'Invalid timestamp',
+            details: 'Client timestamp must be positive'
+          });
+          return;
+        }
+        
+        // Reject timestamps from the future (with 5 second tolerance for clock skew)
+        if (clientTimestamp > now + 5000) {
+          console.warn(`[Polling Match] Future timestamp detected: ${clientTimestamp} vs server: ${now}`);
+          res.status(400).json({ 
+            error: 'Invalid timestamp',
+            details: 'Client timestamp is in the future'
+          });
+          return;
+        }
+        
+        // Reject timestamps before green light time (additional client-side validation)
+        if (clientTimestamp < greenLightTime) {
+          const earlyMs = greenLightTime - clientTimestamp;
+          console.warn(`[Polling Match] Client timestamp before green light: ${earlyMs}ms early`);
+          res.status(400).json({ 
+            error: 'Invalid timestamp',
+            details: 'Tap timestamp is before green light',
+            earlyByMs: earlyMs
+          });
+          return;
+        }
+      }
       
       // FIXED: Check for early tap (tap BEFORE green light)
       // This is critical anti-cheat - prevents players from tapping before signal

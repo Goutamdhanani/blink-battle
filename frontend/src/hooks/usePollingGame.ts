@@ -4,26 +4,21 @@ import { useGameContext } from '../context/GameContext';
 
 /**
  * Adaptive polling rates for different game phases
- * Optimized for ultra-smooth gameplay experience
+ * Optimized for smooth gameplay with reduced server load
  * 
- * NOTE: The 50ms polling rate during active gameplay is intentional and optimized:
- * - Only active during the brief reaction test window (~1-2 seconds)
+ * NOTE: Polling rates have been adjusted to reduce excessive polling:
+ * - Most phases use 750ms-2000ms to reduce server load
+ * - Critical phases (countdown, playing) use faster rates only when necessary
  * - Polling stops immediately when match completes
- * - Rate is adaptive - slower during idle/waiting phases
- * - Critical for detecting opponent taps in real-time PvP
- * 
- * Server load is manageable because:
- * - Very short duration (1-2 seconds per match)
  * - Rate limiting applied via matchRateLimiter (500 req/min)
- * - Matches are sequential, not all players polling simultaneously
  */
 const POLLING_RATES = {
   IDLE: 5000,           // 5s - not in game
   MATCHMAKING: 2000,    // 2s - searching for match
-  MATCHED: 500,         // 500ms - waiting for ready
-  COUNTDOWN: 100,       // 100ms - countdown active
-  PLAYING: 50,          // 50ms - during reaction test (CRITICAL - brief duration)
-  WAITING_RESULT: 200,  // 200ms - waiting for opponent
+  MATCHED: 1000,        // 1s - waiting for ready (was 500ms)
+  COUNTDOWN: 500,       // 500ms - countdown active (was 100ms)
+  PLAYING: 250,         // 250ms - during reaction test (was 50ms) 
+  WAITING_RESULT: 750,  // 750ms - waiting for opponent (was 200ms)
   RESULT: 2000          // 2s - showing results
 };
 
@@ -155,18 +150,18 @@ export const usePollingGame = () => {
           if (matchState.countdown !== undefined) {
             setCountdown(matchState.countdown);
           }
-          newRate = POLLING_RATES.COUNTDOWN; // 100ms during countdown
+          newRate = POLLING_RATES.COUNTDOWN; // 500ms during countdown (was 100ms)
         } else if (matchState.state === 'waiting_for_go') {
           // In the random delay before green light
           setGamePhase('waiting');
           setCountdown(null);
-          newRate = POLLING_RATES.COUNTDOWN; // 100ms during waiting for go
+          newRate = POLLING_RATES.COUNTDOWN; // 500ms during waiting for go (was 100ms)
         } else if (matchState.state === 'go' && matchState.greenLightActive) {
           // Green light is active!
           setGamePhase('signal');
           setSignalTimestamp(matchState.greenLightTime || Date.now());
           setCountdown(null);
-          newRate = POLLING_RATES.PLAYING; // 50ms during active gameplay
+          newRate = POLLING_RATES.PLAYING; // 250ms during active gameplay (was 50ms)
         } else if (matchState.state === 'resolved' || matchState.status === 'completed') {
           // CRITICAL: Match is complete - stop polling IMMEDIATELY
           if (heartbeatIntervalRef.current) {
