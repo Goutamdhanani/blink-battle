@@ -244,7 +244,7 @@ const Matchmaking: React.FC = () => {
                       >
                         <div className="stake-amount">{stake} WLD</div>
                         <div className="stake-payout">
-                          {isDisabled ? '⚠️ Temporarily unavailable' : `Win: ${(stake * 2 * 0.97).toFixed(2)} WLD`}
+                          {isDisabled ? '⚠️ Exceeds platform limit' : `Win: ${(stake * 2 * 0.97).toFixed(2)} WLD`}
                         </div>
                       </GlassCard>
                     );
