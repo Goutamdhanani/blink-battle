@@ -185,8 +185,8 @@ export function calculatePlatformFee(stake: number): {
   platformFee: bigint;
   netPayout: bigint;
 } {
-  // Convert stake to wei
-  const stakeWei = BigInt(Math.floor(stake * 1e18));
+  // Convert stake to wei using Math.round for better precision
+  const stakeWei = BigInt(Math.round(stake * 1e18));
   const totalPool = stakeWei * 2n; // Both players' stakes
   
   // Use PLATFORM_FEE_PERCENT from environment (default 3%)

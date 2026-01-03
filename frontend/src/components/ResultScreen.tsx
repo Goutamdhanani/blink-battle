@@ -18,6 +18,7 @@ const ResultScreen: React.FC = () => {
   const [claimError, setClaimError] = useState<string | null>(null);
   const [claimSuccess, setClaimSuccess] = useState(false);
   const [claimTimeLeft, setClaimTimeLeft] = useState<number | null>(null);
+  const [reloadingClaimStatus, setReloadingClaimStatus] = useState(false);
 
   useEffect(() => {
     if (!state.user || !state.result) {
@@ -80,14 +81,17 @@ const ResultScreen: React.FC = () => {
         const secondsLeft = Math.floor((deadlineTime - now) / 1000);
         setClaimTimeLeft(Math.max(0, secondsLeft));
 
-        // If expired, reload claim status
-        if (secondsLeft <= 0 && state.matchId && state.token) {
+        // If expired, reload claim status (only once)
+        if (secondsLeft <= 0 && state.matchId && state.token && !reloadingClaimStatus) {
+          setReloadingClaimStatus(true);
           getClaimStatus(state.matchId, state.token).then(status => {
             if (status) {
               setClaimStatus(status);
             }
+            setReloadingClaimStatus(false);
           }).catch(err => {
             console.error('[ResultScreen] Error reloading claim status:', err);
+            setReloadingClaimStatus(false);
           });
         }
       } catch (err) {
@@ -97,7 +101,7 @@ const ResultScreen: React.FC = () => {
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [claimStatus, state.matchId, state.token]);
+  }, [claimStatus, state.matchId, state.token, reloadingClaimStatus]);
 
   const fireConfetti = () => {
     const duration = 3000;
