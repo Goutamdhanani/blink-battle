@@ -5,6 +5,10 @@ import pool from '../config/database';
  * Runs every 10 seconds to check for missing heartbeats
  */
 
+// Constants
+const DISCONNECT_TIMEOUT_MS = 30000; // 30 seconds
+const DISCONNECT_TIMEOUT_SECONDS = DISCONNECT_TIMEOUT_MS / 1000;
+
 /**
  * Check for player disconnects and resolve matches
  */
@@ -15,11 +19,14 @@ export async function checkPlayerDisconnects(): Promise<void> {
       SELECT m.*
       FROM matches m
       WHERE m.status IN ('waiting', 'ready', 'countdown', 'signal')
-        AND m.created_at < NOW() - INTERVAL '30 seconds'
         AND (
-          (m.player1_last_ping IS NULL OR m.player1_last_ping < NOW() - INTERVAL '30 seconds')
+          (m.player1_last_ping IS NOT NULL AND m.player1_last_ping < NOW() - INTERVAL '${DISCONNECT_TIMEOUT_SECONDS} seconds')
           OR
-          (m.player2_last_ping IS NULL OR m.player2_last_ping < NOW() - INTERVAL '30 seconds')
+          (m.player2_last_ping IS NOT NULL AND m.player2_last_ping < NOW() - INTERVAL '${DISCONNECT_TIMEOUT_SECONDS} seconds')
+          OR
+          (m.player1_last_ping IS NULL AND m.created_at < NOW() - INTERVAL '${DISCONNECT_TIMEOUT_SECONDS} seconds')
+          OR
+          (m.player2_last_ping IS NULL AND m.created_at < NOW() - INTERVAL '${DISCONNECT_TIMEOUT_SECONDS} seconds')
         )
     `);
 
@@ -31,9 +38,9 @@ export async function checkPlayerDisconnects(): Promise<void> {
 
     for (const match of matches.rows) {
       const p1Timeout = !match.player1_last_ping || 
-        (Date.now() - new Date(match.player1_last_ping).getTime() > 30000);
+        (Date.now() - new Date(match.player1_last_ping).getTime() > DISCONNECT_TIMEOUT_MS);
       const p2Timeout = !match.player2_last_ping || 
-        (Date.now() - new Date(match.player2_last_ping).getTime() > 30000);
+        (Date.now() - new Date(match.player2_last_ping).getTime() > DISCONNECT_TIMEOUT_MS);
 
       if (p1Timeout && p2Timeout) {
         // Both disconnected - cancel match

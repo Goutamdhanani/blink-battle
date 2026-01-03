@@ -29,6 +29,22 @@ export async function processTimeoutRefunds(): Promise<void> {
 
     for (const match of timeoutMatches.rows) {
       try {
+        // SECURITY: Set refund_processed first to prevent race condition
+        // Use UPDATE with WHERE condition to only process if not already processed
+        const lockResult = await pool.query(
+          `UPDATE matches 
+           SET refund_processed = true 
+           WHERE match_id = $1 AND refund_processed = false
+           RETURNING match_id`,
+          [match.match_id]
+        );
+
+        // If no rows were updated, another process already handled this match
+        if (lockResult.rows.length === 0) {
+          console.log(`[RefundProcessor] Match ${match.match_id} already processed by another worker`);
+          continue;
+        }
+
         // Mark as cancelled
         await pool.query(
           `UPDATE matches 
@@ -50,12 +66,6 @@ export async function processTimeoutRefunds(): Promise<void> {
                refund_reason = 'matchmaking_timeout'
            WHERE match_id = $2 AND refund_status = 'none'`,
           [refundDeadline, match.match_id]
-        );
-
-        // Mark refund as processed
-        await pool.query(
-          `UPDATE matches SET refund_processed = true WHERE match_id = $1`,
-          [match.match_id]
         );
 
         console.log(`[RefundProcessor] Processed timeout for match ${match.match_id}`);

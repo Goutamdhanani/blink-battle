@@ -37,6 +37,7 @@ export const usePollingGame = () => {
   const [isPolling, setIsPolling] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const heartbeatIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const matchStateRef = useRef<MatchState | null>(null);
   const pollCountRef = useRef<number>(0);
   const currentPollingRateRef = useRef<number>(POLLING_RATES.IDLE);
@@ -46,12 +47,16 @@ export const usePollingGame = () => {
     pollingService.setToken(state.token);
   }, [state.token]);
 
-  // Clear polling on unmount
+  // Clear polling and heartbeat on unmount
   useEffect(() => {
     return () => {
       if (pollIntervalRef.current) {
         clearInterval(pollIntervalRef.current);
         pollIntervalRef.current = null;
+      }
+      if (heartbeatIntervalRef.current) {
+        clearInterval(heartbeatIntervalRef.current);
+        heartbeatIntervalRef.current = null;
       }
     };
   }, []);
@@ -110,12 +115,15 @@ export const usePollingGame = () => {
     if (pollIntervalRef.current) {
       clearInterval(pollIntervalRef.current);
     }
+    if (heartbeatIntervalRef.current) {
+      clearInterval(heartbeatIntervalRef.current);
+    }
 
     setIsPolling(true);
     setError(null);
 
     // Start heartbeat interval (every 5 seconds)
-    const heartbeatInterval = setInterval(() => {
+    heartbeatIntervalRef.current = setInterval(() => {
       pollingService.sendHeartbeat(matchId).catch(err => {
         console.error('[Polling] Heartbeat error:', err);
       });
@@ -155,7 +163,10 @@ export const usePollingGame = () => {
           newRate = POLLING_RATES.PLAYING; // 50ms during active gameplay
         } else if (matchState.state === 'resolved' || matchState.status === 'completed') {
           // CRITICAL: Match is complete - stop polling IMMEDIATELY
-          clearInterval(heartbeatInterval); // Stop heartbeat
+          if (heartbeatIntervalRef.current) {
+            clearInterval(heartbeatIntervalRef.current);
+            heartbeatIntervalRef.current = null;
+          }
           if (pollIntervalRef.current) {
             clearInterval(pollIntervalRef.current);
             pollIntervalRef.current = null;
