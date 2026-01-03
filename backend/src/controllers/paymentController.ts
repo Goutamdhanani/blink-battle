@@ -155,10 +155,12 @@ export class PaymentController {
         });
       }
 
-      console.log(`[Payment] Transaction status from Developer Portal: ${transaction.status}`);
+      // Extract status from transactionStatus field with fallback to status field
+      // Developer Portal can return transactionStatus or status depending on API version
+      const rawStatus = transaction.transactionStatus || transaction.status;
+      console.log(`[Payment] Transaction status from Developer Portal: ${rawStatus} (transactionStatus: ${transaction.transactionStatus}, status: ${transaction.status})`);
 
       // Normalize the MiniKit transaction status
-      const rawStatus = transaction.status;
       const transactionHash = extractTransactionHash(transaction);
       const normalizedStatus = normalizeMiniKitStatus(rawStatus);
       
