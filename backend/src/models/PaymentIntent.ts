@@ -245,4 +245,53 @@ export class PaymentIntentModel {
     );
     return result.rows;
   }
+
+  /**
+   * Find payment intent by transaction ID
+   */
+  static async findByTransactionId(transactionId: string): Promise<PaymentIntent | null> {
+    const result = await pool.query(
+      'SELECT * FROM payment_intents WHERE minikit_transaction_id = $1',
+      [transactionId]
+    );
+    return result.rows[0] || null;
+  }
+
+  /**
+   * Expire stale payments without transaction IDs
+   * Returns the number of payments expired
+   */
+  static async expireStalePayments(timeoutMinutes: number = 5): Promise<number> {
+    const result = await pool.query(
+      `UPDATE payment_intents 
+       SET normalized_status = $1,
+           raw_status = 'expired',
+           last_error = 'Payment expired - no transaction ID received within timeout',
+           updated_at = CURRENT_TIMESTAMP
+       WHERE normalized_status = $2
+         AND minikit_transaction_id IS NULL
+         AND created_at < CURRENT_TIMESTAMP - INTERVAL '${timeoutMinutes} minutes'
+       RETURNING payment_reference`,
+      [NormalizedPaymentStatus.FAILED, NormalizedPaymentStatus.PENDING]
+    );
+    return result.rowCount || 0;
+  }
+
+  /**
+   * Mark a specific payment as expired
+   */
+  static async expire(reference: string, reason?: string): Promise<PaymentIntent | null> {
+    const errorMessage = reason || 'Payment expired';
+    const result = await pool.query(
+      `UPDATE payment_intents 
+       SET normalized_status = $2,
+           raw_status = 'expired',
+           last_error = $3,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE payment_reference = $1
+       RETURNING *`,
+      [reference, NormalizedPaymentStatus.FAILED, errorMessage]
+    );
+    return result.rows[0] || null;
+  }
 }

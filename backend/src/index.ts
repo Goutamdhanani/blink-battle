@@ -230,6 +230,7 @@ app.get('/api/auth/me', authenticate, matchRateLimiter, AuthController.getUser);
 app.post('/api/initiate-payment', authenticate, PaymentController.initiatePayment);
 app.post('/api/confirm-payment', authenticate, PaymentController.confirmPayment);
 app.get('/api/payment/:reference', authenticate, PaymentController.getPaymentStatus);
+app.get('/api/payment-status/:reference', authenticate, PaymentController.getPaymentStatusPolling);
 
 // World ID
 app.post('/api/verify-world-id', authenticate, VerificationController.verifyWorldID);

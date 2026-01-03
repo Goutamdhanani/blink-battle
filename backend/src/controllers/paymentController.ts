@@ -202,7 +202,8 @@ export class PaymentController {
 
       if (normalizedStatus === NormalizedPaymentStatus.PENDING) {
         // Transaction is still pending on-chain, keep payment as pending
-        console.log(`[Payment] Transaction still pending reference=${reference}`);
+        // BUT save the transaction_id so PaymentWorker can track it
+        console.log(`[Payment] Transaction still pending reference=${reference}, transaction_id saved for worker tracking`);
         return res.json({
           success: true,
           pending: true,
@@ -276,6 +277,50 @@ export class PaymentController {
           transactionId: payment.transaction_id,
           createdAt: payment.created_at,
           confirmedAt: payment.confirmed_at,
+        },
+      });
+    } catch (error) {
+      console.error('[Payment] Error getting payment status:', error);
+      return res.status(500).json({ error: 'Failed to get payment status' });
+    }
+  }
+
+  /**
+   * Get payment status with normalized status from payment_intents table
+   * This endpoint is used for polling to check if payment is confirmed
+   */
+  static async getPaymentStatusPolling(req: Request, res: Response) {
+    try {
+      const { reference } = req.params;
+      const userId = (req as any).userId; // From auth middleware
+
+      // Get payment intent (has normalized status)
+      const paymentIntent = await PaymentIntentModel.findByReference(reference);
+      if (!paymentIntent) {
+        return res.status(404).json({ error: 'Payment not found' });
+      }
+
+      // Verify the payment belongs to the authenticated user
+      if (paymentIntent.user_id !== userId) {
+        return res.status(403).json({ error: 'Payment does not belong to this user' });
+      }
+
+      // Also get the payment for backwards compatibility
+      const payment = await PaymentModel.findByReference(reference);
+
+      return res.json({
+        success: true,
+        payment: {
+          id: paymentIntent.payment_reference,
+          amount: paymentIntent.amount,
+          status: payment?.status || 'pending',
+          normalizedStatus: paymentIntent.normalized_status,
+          transactionId: paymentIntent.minikit_transaction_id,
+          transactionHash: paymentIntent.transaction_hash,
+          rawStatus: paymentIntent.raw_status,
+          createdAt: paymentIntent.created_at,
+          confirmedAt: paymentIntent.confirmed_at,
+          lastError: paymentIntent.last_error,
         },
       });
     } catch (error) {
