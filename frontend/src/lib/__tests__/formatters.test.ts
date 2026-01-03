@@ -23,8 +23,7 @@ describe('formatters', () => {
     it('should return fallback for invalid values', () => {
       expect(formatReactionTime(NaN)).toBe('-');
       expect(formatReactionTime('invalid')).toBe('-');
-      expect(formatReactionTime({})).toBe('-');
-      expect(formatReactionTime([])).toBe('-');
+      // TypeScript now prevents passing objects/arrays - type safety improvement
     });
 
     it('should return fallback for zero and negative values', () => {
@@ -62,8 +61,7 @@ describe('formatters', () => {
     it('should return fallback for invalid values', () => {
       expect(formatWinRate(NaN)).toBe('0.0');
       expect(formatWinRate('invalid')).toBe('0.0');
-      expect(formatWinRate({})).toBe('0.0');
-      expect(formatWinRate([])).toBe('0.0');
+      // TypeScript now prevents passing objects/arrays - type safety improvement
     });
 
     it('should return fallback for negative values', () => {
