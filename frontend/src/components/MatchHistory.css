@@ -247,3 +247,8 @@
     font-size: var(--text-base);
   }
 }
+
+/* Pending refunds styling */
+.pending-refund-card {
+  margin-bottom: 1rem;
+}

@@ -32,6 +32,7 @@ export interface MatchState {
   player1ReactionMs?: number;
   player2ReactionMs?: number;
   completedAt?: string;
+  serverTime?: number; // Server timestamp for time sync
   opponent: {
     userId: string;
     wallet: string;

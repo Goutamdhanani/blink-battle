@@ -206,4 +206,125 @@ export class RefundController {
       res.status(500).json({ error: 'Failed to get eligible refunds' });
     }
   }
+
+  /**
+   * POST /api/refund/claim-deposit
+   * Claim refund for orphaned payment (no match_id, confirmed status)
+   * Applies 3% protocol fee
+   */
+  static async claimDeposit(req: Request, res: Response): Promise<void> {
+    const client = await pool.connect();
+    
+    try {
+      const userId = (req as any).userId;
+      const { paymentReference } = req.body;
+
+      if (!paymentReference) {
+        res.status(400).json({ error: 'Missing paymentReference' });
+        return;
+      }
+
+      await client.query('BEGIN');
+
+      // Lock the payment row to prevent race conditions
+      const payment = await client.query(
+        `SELECT * FROM payment_intents WHERE payment_reference = $1 FOR UPDATE`,
+        [paymentReference]
+      );
+
+      if (!payment.rows[0]) {
+        await client.query('ROLLBACK');
+        res.status(404).json({ error: 'Payment not found' });
+        return;
+      }
+
+      const paymentData = payment.rows[0];
+
+      // EXPLOIT PREVENTION: Verify caller owns this payment
+      if (paymentData.user_id !== userId) {
+        await client.query('ROLLBACK');
+        res.status(403).json({ error: 'Not your payment' });
+        return;
+      }
+
+      // Verify payment is orphaned (no match_id and confirmed)
+      if (paymentData.match_id !== null) {
+        await client.query('ROLLBACK');
+        res.status(400).json({ error: 'Payment is linked to a match' });
+        return;
+      }
+
+      if (paymentData.normalized_status !== 'confirmed') {
+        await client.query('ROLLBACK');
+        res.status(400).json({ error: 'Payment is not confirmed' });
+        return;
+      }
+
+      // Check if already refunded
+      if (paymentData.refund_status === 'completed') {
+        await client.query('ROLLBACK');
+        res.status(400).json({ error: 'Already refunded' });
+        return;
+      }
+
+      // Calculate refund using shared utility (3% protocol fee)
+      const refund = calculateRefundAmount(paymentData.amount, GAS_FEE_PERCENT);
+
+      console.log(`[Refund] Processing orphaned deposit for user ${userId}, Payment: ${paymentReference}, Refund: ${refund.refundWLD} WLD`);
+
+      // Mark as processing
+      await client.query(
+        `UPDATE payment_intents 
+         SET refund_status = 'processing', 
+             refund_amount = $1,
+             refund_claimed_at = NOW(),
+             refund_reason = 'orphaned_payment'
+         WHERE payment_reference = $2`,
+        [refund.refundWLD, paymentReference]
+      );
+
+      // Get user wallet
+      const user = await client.query(
+        'SELECT wallet_address FROM users WHERE user_id = $1',
+        [userId]
+      );
+      const walletAddress = user.rows[0]?.wallet_address;
+
+      if (!walletAddress) {
+        await client.query('ROLLBACK');
+        res.status(400).json({ error: 'User wallet not found' });
+        return;
+      }
+
+      // Send refund
+      const txHash = await TreasuryService.sendPayout(walletAddress, refund.refundWei);
+
+      // Mark as completed
+      await client.query(
+        `UPDATE payment_intents 
+         SET refund_status = 'completed',
+             refund_tx_hash = $1
+         WHERE payment_reference = $2`,
+        [txHash, paymentReference]
+      );
+
+      await client.query('COMMIT');
+
+      console.log(`[Refund] Completed orphaned deposit refund for ${paymentReference}, TX: ${txHash}`);
+
+      res.json({
+        success: true,
+        refundAmount: refund.refundWLD,
+        gasFee: parseFloat(ethers.formatEther(refund.gasFeeWei)),
+        transactionHash: txHash
+      });
+
+    } catch (error: any) {
+      await client.query('ROLLBACK');
+      console.error('[Refund] Error claiming deposit:', error);
+      res.status(500).json({ error: 'Failed to process refund' });
+    } finally {
+      client.release();
+    }
+  }
 }
