@@ -9,6 +9,7 @@ export class PaymentController {
   /**
    * Initiate a payment - generates a reference ID and stores in database
    * Idempotent: Safe to retry with same parameters
+   * SECURITY: Implements payment spam prevention (1 payment per 2 minutes)
    */
   static async initiatePayment(req: Request, res: Response) {
     try {
@@ -17,6 +18,36 @@ export class PaymentController {
 
       if (!amount || amount <= 0) {
         return res.status(400).json({ error: 'Invalid amount' });
+      }
+
+      // SECURITY: Payment spam prevention - limit to 1 payment per 2 minutes
+      const recentPayments = await PaymentIntentModel.findRecentByUserId(userId, 2); // Last 2 minutes
+      if (recentPayments && recentPayments.length > 0) {
+        const lastPayment = recentPayments[0];
+        const timeSinceLastPayment = Date.now() - new Date(lastPayment.created_at).getTime();
+        const twoMinutesMs = 2 * 60 * 1000;
+        
+        if (timeSinceLastPayment < twoMinutesMs) {
+          const waitSeconds = Math.ceil((twoMinutesMs - timeSinceLastPayment) / 1000);
+          console.warn(`[Payment] Spam prevention triggered for user ${userId} - last payment ${Math.floor(timeSinceLastPayment / 1000)}s ago`);
+          
+          // Cancel the previous pending payment if it exists
+          if (lastPayment.normalized_status === 'pending') {
+            await PaymentIntentModel.updateStatus(
+              lastPayment.payment_reference,
+              NormalizedPaymentStatus.CANCELLED,
+              'cancelled_by_new_payment'
+            );
+            console.log(`[Payment] Cancelled previous pending payment ${lastPayment.payment_reference} for user ${userId}`);
+          } else {
+            // Don't allow new payment if last one is not pending
+            return res.status(429).json({ 
+              error: 'Too many payment requests',
+              details: `Please wait ${waitSeconds} seconds before creating another payment`,
+              waitSeconds
+            });
+          }
+        }
       }
 
       // Generate unique reference ID (no dashes as per MiniKit requirements)

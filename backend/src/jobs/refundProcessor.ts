@@ -123,8 +123,25 @@ export async function processOrphanedPayments(): Promise<void> {
       console.log(`[RefundProcessor] Marked ${orphanResult.rows.length} orphaned payments for refund`);
     }
 
-    // NEW: Check for expired payments (using expires_at column)
+    // SECURITY: Check for expired payments (>10 minutes timeout as per requirements)
     const expiredResult = await pool.query(`
+      UPDATE payment_intents 
+      SET refund_status = 'eligible',
+          refund_deadline = $1,
+          refund_reason = 'payment_expired',
+          normalized_status = 'cancelled'
+      WHERE normalized_status = 'pending'
+        AND created_at < NOW() - INTERVAL '10 minutes'
+        AND (refund_status IS NULL OR refund_status = 'none')
+      RETURNING payment_reference
+    `, [refundDeadline]);
+
+    if (expiredResult.rows.length > 0) {
+      console.log(`[RefundProcessor] Marked ${expiredResult.rows.length} expired pending payments (>10 min) as cancelled`);
+    }
+    
+    // Also check using expires_at column
+    const expiredByDateResult = await pool.query(`
       UPDATE payment_intents 
       SET refund_status = 'eligible',
           refund_deadline = $1,
@@ -137,8 +154,8 @@ export async function processOrphanedPayments(): Promise<void> {
       RETURNING payment_reference
     `, [refundDeadline]);
 
-    if (expiredResult.rows.length > 0) {
-      console.log(`[RefundProcessor] Marked ${expiredResult.rows.length} expired payments for refund`);
+    if (expiredByDateResult.rows.length > 0) {
+      console.log(`[RefundProcessor] Marked ${expiredByDateResult.rows.length} expired confirmed payments for refund`);
     }
   } catch (error: any) {
     if (error.code !== '42703') {

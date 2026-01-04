@@ -379,7 +379,7 @@ export class EscrowService {
 
   /**
    * Refund with processing fee deduction
-   * Note: For now, we do full refund via cancelMatch. This could be enhanced.
+   * SECURITY: Actually deducts 3% platform fee from refund amounts as required
    */
   static async refundWithFee(
     matchId: string,
@@ -388,11 +388,84 @@ export class EscrowService {
     stakeAmount: number,
     feePercent: number
   ): Promise<{ success: boolean; error?: string }> {
-    // For simplicity, just do a full refund via cancelMatch
-    // If you want to implement partial refunds with fees, you'd need to add
-    // a separate contract function or handle it differently
-    console.log(`[EscrowService] Refunding with fee not supported on-chain, doing full refund`);
-    return this.refundBothPlayers(matchId, player1Wallet, player2Wallet, stakeAmount);
+    const operationKey = `refundWithFee:${matchId}`;
+    
+    return this.withIdempotency(operationKey, async () => {
+      try {
+        // Calculate refund amount after deducting platform fee
+        const refundAmount = stakeAmount * (1 - feePercent / 100);
+        const platformFee = stakeAmount - refundAmount;
+        
+        console.log(`[EscrowService] Refunding with ${feePercent}% fee - Original: ${stakeAmount}, Fee: ${platformFee}, Refund: ${refundAmount}`);
+        
+        // Check if already refunded
+        const transactions = await TransactionModel.getByMatchId(matchId);
+        const existingRefunds = transactions.filter(
+          t => t.type === TransactionType.REFUND && t.status === TransactionStatus.COMPLETED
+        );
+        
+        if (existingRefunds.length >= 2) {
+          console.log(`[Escrow] Refund already completed for match ${matchId}`);
+          return { success: true };
+        }
+
+        // For now, we use the treasury service to send refunds directly
+        // since the smart contract doesn't have a partial refund function
+        const { TreasuryService } = await import('./treasuryService');
+        
+        // Send refunds with fee deducted
+        const refundAmountWei = BigInt(Math.floor(refundAmount * 1e18));
+        
+        try {
+          const tx1Hash = await TreasuryService.sendPayout(player1Wallet, refundAmountWei);
+          const tx2Hash = await TreasuryService.sendPayout(player2Wallet, refundAmountWei);
+          
+          // Record refund transactions in database
+          const refund1 = await TransactionModel.create(
+            matchId,
+            TransactionType.REFUND,
+            refundAmount,
+            'treasury',
+            player1Wallet,
+            tx1Hash
+          );
+
+          const refund2 = await TransactionModel.create(
+            matchId,
+            TransactionType.REFUND,
+            refundAmount,
+            'treasury',
+            player2Wallet,
+            tx2Hash
+          );
+
+          // Record fee transaction
+          // Fee is multiplied by 2 because we collect 3% from BOTH players' refunds
+          const feeTx = await TransactionModel.create(
+            matchId,
+            TransactionType.FEE,
+            platformFee * 2, // Total fee from both refunds
+            'treasury',
+            'platform',
+            tx1Hash
+          );
+
+          // Mark as completed
+          await TransactionModel.updateStatus(refund1.transaction_id, TransactionStatus.COMPLETED);
+          await TransactionModel.updateStatus(refund2.transaction_id, TransactionStatus.COMPLETED);
+          await TransactionModel.updateStatus(feeTx.transaction_id, TransactionStatus.COMPLETED);
+
+          console.log(`[Escrow] Players refunded with ${feePercent}% fee: ${matchId}, txs: ${tx1Hash}, ${tx2Hash}`);
+          return { success: true };
+        } catch (error: any) {
+          console.error('[Escrow] Error sending refunds with fee:', error);
+          return { success: false, error: error.message };
+        }
+      } catch (error: any) {
+        console.error('[Escrow] Error in refundWithFee:', error);
+        return { success: false, error: error.message || 'Failed to process refund with fee' };
+      }
+    });
   }
 
   /**
