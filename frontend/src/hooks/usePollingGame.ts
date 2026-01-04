@@ -101,8 +101,8 @@ export const usePollingGame = () => {
         setCountdown(countdown);
         console.log(`[LocalCountdown] Countdown: ${countdown}`);
         
-        // Schedule next update
-        countdownTimerRef.current = setTimeout(updateCountdown, 100); // Update every 100ms for smooth countdown
+        // Schedule next update - use 250ms for smoother countdown updates
+        countdownTimerRef.current = setTimeout(updateCountdown, 250);
       } else {
         // Waiting phase (before countdown)
         setGamePhase('waiting');
@@ -111,7 +111,7 @@ export const usePollingGame = () => {
         
         // Schedule next check when countdown should start
         const delayUntilCountdown = timeUntilGo - COUNTDOWN_DURATION_MS;
-        countdownTimerRef.current = setTimeout(updateCountdown, Math.max(100, delayUntilCountdown));
+        countdownTimerRef.current = setTimeout(updateCountdown, Math.max(250, delayUntilCountdown));
       }
     };
 

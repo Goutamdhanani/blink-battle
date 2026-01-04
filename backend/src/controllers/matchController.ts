@@ -6,6 +6,9 @@ import { EscrowService } from '../services/escrow';
 import { EscrowStatus } from '../models/types';
 import pool from '../config/database';
 
+// Constants
+const GAS_FEE_PERCENT = 3; // Gas fee deducted from refunds (3%)
+
 export class MatchController {
   /**
    * Get match history for a user
@@ -167,8 +170,8 @@ export class MatchController {
           createdAt: p.created_at,
           type: 'matchmaking_cancelled',
           canClaimDeposit: true, // Flag to show claim button
-          refundAmount: p.amount * 0.97, // 3% protocol fee
-          protocolFeePercent: 3
+          refundAmount: p.amount * (1 - GAS_FEE_PERCENT / 100), // 3% protocol fee
+          protocolFeePercent: GAS_FEE_PERCENT
         })),
         cancelledPayments: orphanedPayments.rows.map((p: any) => ({
           paymentReference: p.payment_reference,

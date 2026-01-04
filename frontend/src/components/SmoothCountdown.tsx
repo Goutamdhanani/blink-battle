@@ -19,11 +19,13 @@ const SmoothCountdown: React.FC<SmoothCountdownProps> = ({ countdown, onComplete
       setDisplayNumber(countdown);
       setAnimationKey(prev => prev + 1);
       
+      // Call onComplete if countdown reaches 0 (optional callback, not in dependency array to avoid unnecessary re-renders)
       if (countdown === 0 && onComplete) {
         onComplete();
       }
     }
-  }, [countdown, displayNumber, onComplete]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [countdown, displayNumber]); // Intentionally exclude onComplete from deps
 
   if (displayNumber === null || displayNumber <= 0) {
     return null;
