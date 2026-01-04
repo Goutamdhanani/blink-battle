@@ -388,19 +388,24 @@ export class PollingMatchController {
       const now = Date.now();
       const timeSinceGreenLight = now - greenLightTime;
       
-      // Validate client timestamp if provided (for audit only - reject malformed but don't use for game logic)
-      // Check for explicit presence (not just truthy) to catch 0 and negative values
+      // Validate and sanitize client timestamp if provided
+      // Malformed timestamps are nullified to prevent anti-cheat false positives
+      let validatedClientTimestamp: number | null = null;
+      
       if (clientTimestamp !== undefined && clientTimestamp !== null) {
         // Reject negative or zero timestamps (malformed)
         if (clientTimestamp <= 0) {
           console.warn(`[Polling Match] Invalid client timestamp: ${clientTimestamp} - ignoring and using server time`);
-          // Don't reject - just ignore client timestamp
+          validatedClientTimestamp = null; // Don't use malformed timestamp
         }
-        
         // Reject timestamps from the future (with 5 second tolerance for clock skew)
         else if (clientTimestamp > now + 5000) {
           console.warn(`[Polling Match] Future timestamp detected: ${clientTimestamp} vs server: ${now} - ignoring`);
-          // Don't reject - just ignore client timestamp
+          validatedClientTimestamp = null; // Don't use future timestamp
+        }
+        // Timestamp looks reasonable - use it for audit
+        else {
+          validatedClientTimestamp = clientTimestamp;
         }
       }
       
@@ -438,7 +443,7 @@ export class PollingMatchController {
         await TapEventModel.create(
           matchId,
           userId,
-          clientTimestamp && Number.isFinite(clientTimestamp) ? clientTimestamp : now,
+          validatedClientTimestamp || now,
           now,
           greenLightTime
         );
@@ -474,14 +479,11 @@ export class PollingMatchController {
       // Record tap with server timestamp (authoritative)
       // This will return existing tap if duplicate (ON CONFLICT DO NOTHING)
       const serverTimestamp = Date.now();
-      const validatedClientTimestamp = clientTimestamp && Number.isFinite(clientTimestamp) 
-        ? clientTimestamp 
-        : serverTimestamp;
 
       const tap = await TapEventModel.create(
         matchId,
         userId,
-        validatedClientTimestamp,
+        validatedClientTimestamp || serverTimestamp,
         serverTimestamp,
         greenLightTime
       );
@@ -489,10 +491,10 @@ export class PollingMatchController {
       console.log(`[Polling Match] Tap recorded - User: ${userId}, Match: ${matchId}, Reaction: ${tap.reaction_ms}ms, Valid: ${tap.is_valid}, Disqualified: ${tap.disqualified}`);
 
       // Check for timing discrepancy between client and server (anti-cheat)
-      // SECURITY: This now throws an error to reject suspicious taps
-      if (clientTimestamp && Number.isFinite(clientTimestamp)) {
+      // Only check if we have a valid client timestamp
+      if (validatedClientTimestamp && Number.isFinite(validatedClientTimestamp)) {
         try {
-          const clientReaction = clientTimestamp - greenLightTime;
+          const clientReaction = validatedClientTimestamp - greenLightTime;
           AntiCheatService.checkTimingDiscrepancy(clientReaction, tap.reaction_ms, userId);
         } catch (error: any) {
           console.error(`[AntiCheat] Rejecting tap due to timing discrepancy: ${error.message}`);
