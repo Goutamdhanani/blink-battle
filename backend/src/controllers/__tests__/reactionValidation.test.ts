@@ -197,11 +197,13 @@ describe('PollingMatchController.tap - Reaction Time Validation', () => {
       await PollingMatchController.tap(req as Request, res as Response);
 
       // Server detects early tap (beyond 150ms tolerance) and disqualifies with 200 response
+      // F1-STYLE: "jump_start" reason with Verstappen message
       expect(res.json).toHaveBeenCalledWith(
         expect.objectContaining({
           success: true,
           disqualified: true,
-          reason: 'early_tap',
+          reason: 'jump_start',
+          message: expect.stringContaining('Jump start'),
         })
       );
     });
