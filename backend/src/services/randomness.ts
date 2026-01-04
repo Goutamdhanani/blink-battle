@@ -14,6 +14,26 @@ export function generateRandomDelay(minMs: number, maxMs: number): number {
 }
 
 /**
+ * Generates F1-style light sequence with randomized intervals
+ * @returns Array of 5 light intervals in milliseconds (e.g., [520, 480, 530, 490, 510])
+ */
+export function generateF1LightSequence(): number[] {
+  const BASE_INTERVAL = 500; // 0.5 seconds base
+  const VARIANCE = 100; // ±100ms variance
+  const NUM_LIGHTS = 5;
+  
+  const intervals: number[] = [];
+  for (let i = 0; i < NUM_LIGHTS; i++) {
+    const randomBytes = crypto.randomBytes(4);
+    const randomValue = randomBytes.readUInt32BE(0) / 0xffffffff; // 0-1
+    const variance = Math.floor((randomValue - 0.5) * 2 * VARIANCE); // -100 to +100
+    intervals.push(BASE_INTERVAL + variance);
+  }
+  
+  return intervals;
+}
+
+/**
  * Generates a unique match ID using crypto
  */
 export function generateMatchId(): string {

@@ -34,13 +34,13 @@ describe('PollingMatchController.tap - Reaction Time Validation', () => {
   });
 
   describe('Client timestamp validation', () => {
-    it('should reject negative client timestamps', async () => {
+    it('should ignore negative client timestamps and use server time', async () => {
       const userId = 'user-123';
       const matchId = 'match-1';
       (req as any).userId = userId;
       req.body = { matchId, clientTimestamp: -100 };
 
-      const greenLightTime = Date.now() - 100;
+      const greenLightTime = Date.now() - 500; // 500ms ago
       (MatchModel.findById as jest.Mock).mockResolvedValue({
         match_id: matchId,
         player1_id: userId,
@@ -48,24 +48,43 @@ describe('PollingMatchController.tap - Reaction Time Validation', () => {
         green_light_time: greenLightTime,
       });
 
+      (TapEventModel.create as jest.Mock).mockResolvedValue({
+        tap_id: 'tap-1',
+        user_id: userId,
+        reaction_ms: 500,
+        is_valid: true,
+        disqualified: false,
+      });
+
+      (TapEventModel.findByMatchId as jest.Mock).mockResolvedValue([
+        {
+          tap_id: 'tap-1',
+          user_id: userId,
+          reaction_ms: 500,
+          is_valid: true,
+          disqualified: false,
+        },
+      ]);
+
+      (MatchModel.recordReaction as jest.Mock).mockResolvedValue(undefined);
+
       await PollingMatchController.tap(req as Request, res as Response);
 
-      expect(res.status).toHaveBeenCalledWith(400);
-      expect(jsonMock).toHaveBeenCalledWith(
+      // Should succeed using server timestamp (malformed client timestamp ignored)
+      expect(res.json).toHaveBeenCalledWith(
         expect.objectContaining({
-          error: 'Invalid timestamp',
-          details: 'Client timestamp must be positive',
+          success: true,
         })
       );
     });
 
-    it('should reject zero client timestamps', async () => {
+    it('should ignore zero client timestamps and use server time', async () => {
       const userId = 'user-123';
       const matchId = 'match-1';
       (req as any).userId = userId;
       req.body = { matchId, clientTimestamp: 0 };
 
-      const greenLightTime = Date.now() - 100;
+      const greenLightTime = Date.now() - 500;
       (MatchModel.findById as jest.Mock).mockResolvedValue({
         match_id: matchId,
         player1_id: userId,
@@ -73,24 +92,44 @@ describe('PollingMatchController.tap - Reaction Time Validation', () => {
         green_light_time: greenLightTime,
       });
 
+      (TapEventModel.create as jest.Mock).mockResolvedValue({
+        tap_id: 'tap-1',
+        user_id: userId,
+        reaction_ms: 500,
+        is_valid: true,
+        disqualified: false,
+      });
+
+      (TapEventModel.findByMatchId as jest.Mock).mockResolvedValue([
+        {
+          tap_id: 'tap-1',
+          user_id: userId,
+          reaction_ms: 500,
+          is_valid: true,
+          disqualified: false,
+        },
+      ]);
+
+      (MatchModel.recordReaction as jest.Mock).mockResolvedValue(undefined);
+
       await PollingMatchController.tap(req as Request, res as Response);
 
-      expect(res.status).toHaveBeenCalledWith(400);
-      expect(jsonMock).toHaveBeenCalledWith(
+      // Should succeed using server timestamp
+      expect(res.json).toHaveBeenCalledWith(
         expect.objectContaining({
-          error: 'Invalid timestamp',
+          success: true,
         })
       );
     });
 
-    it('should reject future client timestamps', async () => {
+    it('should ignore future client timestamps and use server time', async () => {
       const userId = 'user-123';
       const matchId = 'match-1';
       const futureTimestamp = Date.now() + 10000; // 10 seconds in the future
       (req as any).userId = userId;
       req.body = { matchId, clientTimestamp: futureTimestamp };
 
-      const greenLightTime = Date.now() - 100;
+      const greenLightTime = Date.now() - 500;
       (MatchModel.findById as jest.Mock).mockResolvedValue({
         match_id: matchId,
         player1_id: userId,
@@ -98,25 +137,44 @@ describe('PollingMatchController.tap - Reaction Time Validation', () => {
         green_light_time: greenLightTime,
       });
 
+      (TapEventModel.create as jest.Mock).mockResolvedValue({
+        tap_id: 'tap-1',
+        user_id: userId,
+        reaction_ms: 500,
+        is_valid: true,
+        disqualified: false,
+      });
+
+      (TapEventModel.findByMatchId as jest.Mock).mockResolvedValue([
+        {
+          tap_id: 'tap-1',
+          user_id: userId,
+          reaction_ms: 500,
+          is_valid: true,
+          disqualified: false,
+        },
+      ]);
+
+      (MatchModel.recordReaction as jest.Mock).mockResolvedValue(undefined);
+
       await PollingMatchController.tap(req as Request, res as Response);
 
-      expect(res.status).toHaveBeenCalledWith(400);
-      expect(jsonMock).toHaveBeenCalledWith(
+      // Should succeed using server timestamp (future timestamp ignored)
+      expect(res.json).toHaveBeenCalledWith(
         expect.objectContaining({
-          error: 'Invalid timestamp',
-          details: 'Client timestamp is in the future',
+          success: true,
         })
       );
     });
 
-    it('should reject client timestamps before green light', async () => {
+    it('should disqualify early taps based on server time (not client timestamp)', async () => {
       const userId = 'user-123';
       const matchId = 'match-1';
-      const greenLightTime = Date.now();
-      const earlyTimestamp = greenLightTime - 100; // 100ms before green light
+      const greenLightTime = Date.now() + 200; // Green light is 200ms in the FUTURE
+      const earlyClientTimestamp = greenLightTime - 100; // Client says 100ms before green (but we ignore this)
       
       (req as any).userId = userId;
-      req.body = { matchId, clientTimestamp: earlyTimestamp };
+      req.body = { matchId, clientTimestamp: earlyClientTimestamp };
 
       (MatchModel.findById as jest.Mock).mockResolvedValue({
         match_id: matchId,
@@ -125,14 +183,27 @@ describe('PollingMatchController.tap - Reaction Time Validation', () => {
         green_light_time: greenLightTime,
       });
 
+      (pool.query as jest.Mock).mockResolvedValue({ rows: [] });
+
+      (TapEventModel.create as jest.Mock).mockResolvedValue({
+        tap_id: 'tap-1',
+        user_id: userId,
+        reaction_ms: 0,
+        is_valid: false,
+        disqualified: true,
+        disqualification_reason: 'early_tap',
+      });
+
       await PollingMatchController.tap(req as Request, res as Response);
 
-      expect(res.status).toHaveBeenCalledWith(400);
-      expect(jsonMock).toHaveBeenCalledWith(
+      // Server detects early tap (beyond 150ms tolerance) and disqualifies with 200 response
+      // F1-STYLE: "jump_start" reason with Verstappen message
+      expect(res.json).toHaveBeenCalledWith(
         expect.objectContaining({
-          error: 'Invalid timestamp',
-          details: 'Tap timestamp is before green light',
-          earlyByMs: expect.any(Number),
+          success: true,
+          disqualified: true,
+          reason: 'jump_start',
+          message: expect.stringContaining('Jump start'),
         })
       );
     });

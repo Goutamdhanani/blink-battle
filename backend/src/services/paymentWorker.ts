@@ -129,7 +129,7 @@ export class PaymentWorker {
 
       // Step 2: Process each payment (OUTSIDE of transaction)
       for (const intent of paymentIntents) {
-        await this.processPaymentIntent(intent);
+        await this.processPaymentIntent(intent, shouldLog);
       }
     } catch (error) {
       await client.query('ROLLBACK');
@@ -143,14 +143,19 @@ export class PaymentWorker {
    * Process a single payment intent
    * Checks status with MiniKit Developer Portal and updates accordingly
    */
-  private async processPaymentIntent(intent: any): Promise<void> {
+  private async processPaymentIntent(intent: any, shouldLog: boolean = true): Promise<void> {
     const startTime = Date.now();
-    console.log(`[PaymentWorker:${this.workerId}] Processing payment ${intent.payment_reference}`);
+    if (shouldLog) {
+      console.log(`[PaymentWorker:${this.workerId}] Processing payment ${intent.payment_reference}`);
+    }
 
     try {
       // If no MiniKit transaction ID yet, skip (needs confirmation from client first)
       if (!intent.minikit_transaction_id) {
-        console.log(`[PaymentWorker:${this.workerId}] Payment ${intent.payment_reference} has no transaction ID yet (waiting for user to complete MiniKit flow), releasing lock`);
+        // Throttle logging to reduce spam (only log every 6th poll = every 60s instead of every 10s)
+        if (shouldLog) {
+          console.log(`[PaymentWorker:${this.workerId}] Payment ${intent.payment_reference} has no transaction ID yet (waiting for user to complete MiniKit flow), releasing lock`);
+        }
         await PaymentIntentModel.releaseLock(intent.payment_reference);
         return;
       }
@@ -243,7 +248,9 @@ export class PaymentWorker {
       await PaymentIntentModel.releaseLock(intent.payment_reference);
 
       const duration = Date.now() - startTime;
-      console.log(`[PaymentWorker:${this.workerId}] Processed payment ${intent.payment_reference} in ${duration}ms - status: ${normalizedStatus}`);
+      if (shouldLog) {
+        console.log(`[PaymentWorker:${this.workerId}] Processed payment ${intent.payment_reference} in ${duration}ms - status: ${normalizedStatus}`);
+      }
     } catch (error: any) {
       const errorMsg = error.message || 'Unknown error';
       console.error(`[PaymentWorker:${this.workerId}] Error processing payment ${intent.payment_reference}:`, errorMsg);
