@@ -236,7 +236,7 @@ export class AntiCheatService {
       }
 
       // Check for bot-like consistency
-      const variance = this.calculateVariance(reactions);
+      const variance = AntiCheatService.calculateVariance(reactions);
       if (avgReaction < BOT_CONSISTENCY_REACTION_MS && variance < BOT_CONSISTENCY_VARIANCE_MS && reactions.length >= 10) {
         await pool.query(`
           INSERT INTO suspicious_activity (user_id, reason, avg_reaction_ms, match_id, details)
