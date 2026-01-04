@@ -104,7 +104,7 @@ const PendingRefunds: React.FC<PendingRefundsProps> = ({ refunds, onRefundClaime
       </p>
 
       {refunds.map((refund) => (
-        <GlassCard key={refund.paymentReference} style={{ marginBottom: '1rem' }}>
+        <GlassCard key={refund.paymentReference} className="pending-refund-card">
           <div style={{ padding: '1rem' }}>
             <div style={{ 
               display: 'flex', 
