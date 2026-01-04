@@ -25,6 +25,12 @@ interface Match {
   claimStatus?: 'unclaimed' | 'claimed' | 'expired';
   claimTimeRemaining?: number; // seconds
   claimable?: boolean;
+  // Refund fields (for ties, both disqualified, or cancelled matches)
+  refundStatus?: 'none' | 'eligible' | 'processing' | 'completed' | 'failed';
+  refundAmount?: number;
+  refundReason?: string;
+  refundDeadline?: string;
+  resultType?: string; // tie, both_disqualified, etc.
 }
 
 interface PendingRefund {
@@ -185,11 +191,19 @@ const MatchHistory: React.FC = () => {
               </GlassCard>
             ) : (
               <div className="matches-list">
-            {matches.map((match) => (
-              <GlassCard key={match.matchId} className={`match-card ${match.won ? 'match-won' : 'match-lost'}`}>
+            {matches.map((match) => {
+              // Determine if match is refundable
+              const isRefundable = match.refundStatus === 'eligible' && match.stake > 0;
+              const isRefunded = match.refundStatus === 'completed';
+              const isTieOrDisqualified = match.resultType === 'tie' || 
+                                          match.resultType === 'both_disqualified' || 
+                                          match.resultType === 'both_timeout_tie';
+              
+              return (
+              <GlassCard key={match.matchId} className={`match-card ${match.won ? 'match-won' : (isTieOrDisqualified || isRefunded ? 'match-refund' : 'match-lost')}`}>
                 <div className="match-header">
-                  <span className={`match-result ${match.won ? 'result-win' : 'result-loss'}`}>
-                    {match.won ? '✓ WIN' : '✗ LOSS'}
+                  <span className={`match-result ${match.won ? 'result-win' : (isTieOrDisqualified || isRefunded ? 'result-refund' : 'result-loss')}`}>
+                    {match.won ? '✓ WIN' : (isRefunded ? '🔄 REFUNDED' : (isTieOrDisqualified ? '⏱️ TIE/CANCELLED' : '✗ LOSS'))}
                   </span>
                   <span className="match-stake">{match.stake} WLD</span>
                 </div>
@@ -261,13 +275,56 @@ const MatchHistory: React.FC = () => {
                       )}
                     </div>
                   )}
+
+                  {/* Show refund section for ties/cancelled matches */}
+                  {!match.won && isTieOrDisqualified && match.stake > 0 && (
+                    <div className="refund-section" style={{ marginTop: '1rem' }}>
+                      {isRefunded && (
+                        <div className="refund-status" style={{ color: '#00ffff', fontSize: '0.9rem' }}>
+                          ✅ Refunded: {match.refundAmount?.toFixed(2) || (match.stake * 0.97).toFixed(2)} WLD (3% fee deducted)
+                        </div>
+                      )}
+                      
+                      {isRefundable && (
+                        <>
+                          <div style={{ 
+                            background: 'rgba(255, 170, 0, 0.1)', 
+                            padding: '0.75rem', 
+                            borderRadius: '8px',
+                            marginBottom: '0.75rem'
+                          }}>
+                            <div style={{ fontSize: '0.85rem', marginBottom: '0.5rem' }}>
+                              <strong>Refund Available</strong>
+                            </div>
+                            <div style={{ fontSize: '0.8rem', opacity: 0.8 }}>
+                              Original: {match.stake} WLD<br/>
+                              Platform Fee (3%): -{(match.stake * 0.03).toFixed(2)} WLD<br/>
+                              <strong>You Receive: {(match.stake * 0.97).toFixed(2)} WLD</strong>
+                            </div>
+                            <div style={{ fontSize: '0.75rem', opacity: 0.7, marginTop: '0.5rem' }}>
+                              Reason: {match.refundReason || 'Match cancelled'}
+                            </div>
+                          </div>
+                          <NeonButton
+                            variant="secondary"
+                            size="small"
+                            fullWidth
+                            onClick={() => alert('Refund claim from match history - feature not yet implemented. Use pending refunds section above.')}
+                          >
+                            🔄 Claim Refund
+                          </NeonButton>
+                        </>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 <div className="match-footer">
                   <span className="match-date">{formatDate(match.completedAt)}</span>
                 </div>
               </GlassCard>
-            ))}
+              );
+            })}
           </div>
         )}
           </>

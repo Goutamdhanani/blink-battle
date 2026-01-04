@@ -252,3 +252,26 @@
 .pending-refund-card {
   margin-bottom: 1rem;
 }
+
+/* Refund status colors */
+.match-refund {
+  border-color: rgba(0, 255, 255, 0.3) !important;
+}
+
+.result-refund {
+  background: rgba(0, 255, 255, 0.2);
+  color: #00ffff;
+  border: 1px solid rgba(0, 255, 255, 0.4);
+}
+
+.refund-section {
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  padding-top: 1rem;
+}
+
+.refund-status {
+  padding: 0.5rem;
+  background: rgba(0, 255, 255, 0.1);
+  border-radius: 6px;
+  text-align: center;
+}
