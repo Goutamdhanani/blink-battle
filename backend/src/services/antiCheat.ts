@@ -287,6 +287,7 @@ export class AntiCheatService {
   /**
    * Check for timing discrepancy between client and server
    * Large discrepancies may indicate tampering
+   * SECURITY: Now throws error to reject taps with >500ms discrepancy
    */
   static checkTimingDiscrepancy(
     clientReactionMs: number,
@@ -294,13 +295,19 @@ export class AntiCheatService {
     userId: string
   ): boolean {
     const discrepancy = Math.abs(clientReactionMs - serverReactionMs);
+    const MAX_DISCREPANCY_MS = 500;
     
-    if (discrepancy > 500) {
+    if (discrepancy > MAX_DISCREPANCY_MS) {
       console.warn(
         `[AntiCheat] Large timing discrepancy for user ${userId}: ` +
         `client=${clientReactionMs}ms, server=${serverReactionMs}ms, diff=${discrepancy}ms`
       );
-      return true;
+      
+      // SECURITY: Reject taps with suspicious timing discrepancies
+      throw new Error(
+        `Timing discrepancy too large (${discrepancy}ms). ` +
+        `This may indicate clock manipulation or network issues.`
+      );
     }
     
     return false;

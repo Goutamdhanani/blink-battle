@@ -424,9 +424,12 @@ export class PollingMatchController {
       
       // FIXED: Check for early tap (tap BEFORE green light)
       // This is critical anti-cheat - prevents players from tapping before signal
-      if (timeSinceGreenLight < 0) {
+      // CRITICAL: Add tolerance for clock sync issues (50ms tolerance)
+      const CLOCK_SYNC_TOLERANCE_MS = 50; // Allow 50ms tolerance for network/clock sync issues
+      
+      if (timeSinceGreenLight < -CLOCK_SYNC_TOLERANCE_MS) {
         const earlyMs = Math.abs(timeSinceGreenLight);
-        console.log(`[Polling Match] ❌ EARLY TAP DETECTED - User ${userId} tapped ${earlyMs}ms BEFORE green light in match ${matchId}`);
+        console.log(`[Polling Match] ❌ EARLY TAP DETECTED - User ${userId} tapped ${earlyMs}ms BEFORE green light in match ${matchId} (beyond ${CLOCK_SYNC_TOLERANCE_MS}ms tolerance)`);
         
         // Mark player as disqualified
         const isPlayer1 = match.player1_id === userId;
@@ -457,6 +460,7 @@ export class PollingMatchController {
           greenLightTime
         );
         
+        // FIXED: Return success with disqualification instead of 400 error
         res.json({ 
           success: true, 
           disqualified: true,
@@ -465,6 +469,9 @@ export class PollingMatchController {
           message: 'You tapped before the green light! You are disqualified.'
         });
         return;
+      } else if (timeSinceGreenLight < 0) {
+        // Within tolerance - treat as valid tap at green light time
+        console.log(`[Polling Match] Tap within clock sync tolerance (${Math.abs(timeSinceGreenLight)}ms early) - treating as valid for user ${userId}`);
       }
       
       // Allow taps up to 10 seconds after green light (generous for network latency)
@@ -499,9 +506,19 @@ export class PollingMatchController {
       console.log(`[Polling Match] Tap recorded - User: ${userId}, Match: ${matchId}, Reaction: ${tap.reaction_ms}ms, Valid: ${tap.is_valid}, Disqualified: ${tap.disqualified}`);
 
       // Check for timing discrepancy between client and server (anti-cheat)
+      // SECURITY: This now throws an error to reject suspicious taps
       if (clientTimestamp && Number.isFinite(clientTimestamp)) {
-        const clientReaction = clientTimestamp - greenLightTime;
-        AntiCheatService.checkTimingDiscrepancy(clientReaction, tap.reaction_ms, userId);
+        try {
+          const clientReaction = clientTimestamp - greenLightTime;
+          AntiCheatService.checkTimingDiscrepancy(clientReaction, tap.reaction_ms, userId);
+        } catch (error: any) {
+          console.error(`[AntiCheat] Rejecting tap due to timing discrepancy: ${error.message}`);
+          res.status(400).json({ 
+            error: 'Timing validation failed',
+            details: error.message
+          });
+          return;
+        }
       }
 
       // Check for suspicious activity patterns (async, don't block response)

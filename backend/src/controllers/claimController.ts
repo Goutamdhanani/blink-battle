@@ -115,21 +115,34 @@ export class ClaimController {
 
       // Check for existing claim (idempotency)
       const idempotencyKey = `claim:${matchId}:${claimingWallet.toLowerCase()}`;
-      const existingClaim = await client.query(
-        'SELECT * FROM claims WHERE idempotency_key = $1',
+      const existingClaimResult = await client.query(
+        'SELECT * FROM claims WHERE idempotency_key = $1 FOR UPDATE',
         [idempotencyKey]
       );
 
-      if (existingClaim.rows.length > 0) {
+      if (existingClaimResult.rows.length > 0) {
+        const existingClaim = existingClaimResult.rows[0];
+        
+        // SECURITY: Double-check that claim hasn't been marked as claimed
+        if (existingClaim.claimed === true) {
+          await client.query('ROLLBACK');
+          res.status(400).json({ 
+            error: 'Claim already processed',
+            details: 'This claim has already been completed',
+            txHash: existingClaim.claim_transaction_hash
+          });
+          return;
+        }
+        
+        // If claim exists but not yet claimed, return existing claim info
         await client.query('COMMIT');
-        const claim = existingClaim.rows[0];
         res.json({ 
           success: true, 
           claim: {
-            txHash: claim.tx_hash,
-            amount: claim.net_payout,
-            amountFormatted: TreasuryService.formatWLD(BigInt(claim.net_payout)),
-            status: claim.status
+            txHash: existingClaim.tx_hash,
+            amount: existingClaim.net_payout,
+            amountFormatted: TreasuryService.formatWLD(BigInt(existingClaim.net_payout)),
+            status: existingClaim.status
           }
         });
         return;
@@ -140,12 +153,57 @@ export class ClaimController {
 
       console.log(`[Claim] Match ${matchId} - Total: ${totalPool}, Fee: ${platformFee}, Payout: ${netPayout}`);
 
+      // SECURITY: Get payment intents for this match and verify maximum payout (2x stake)
+      const paymentIntentsResult = await client.query(`
+        SELECT payment_reference, amount, total_claimed_amount 
+        FROM payment_intents 
+        WHERE match_id = $1 AND user_id = $2 AND normalized_status = 'confirmed'
+        FOR UPDATE
+      `, [matchId, userId]);
+
+      if (paymentIntentsResult.rows.length === 0) {
+        await client.query('ROLLBACK');
+        res.status(400).json({ 
+          error: 'No confirmed payment found for this match',
+          details: 'Unable to verify your stake for this match'
+        });
+        return;
+      }
+
+      const userPayment = paymentIntentsResult.rows[0];
+      const originalStake = parseFloat(userPayment.amount);
+      const alreadyClaimed = parseFloat(userPayment.total_claimed_amount || 0);
+      const maxPayout = originalStake * 2;
+
+      // SECURITY: Enforce maximum payout protection - user can NEVER receive more than 2x their stake
+      if (alreadyClaimed + parseFloat(TreasuryService.formatWLD(netPayout)) > maxPayout) {
+        await client.query('ROLLBACK');
+        console.error(`[Claim] SECURITY VIOLATION: User ${userId} attempting to claim more than 2x stake. Original: ${originalStake}, Already claimed: ${alreadyClaimed}, Attempting: ${TreasuryService.formatWLD(netPayout)}, Max: ${maxPayout}`);
+        res.status(400).json({ 
+          error: 'Maximum payout exceeded',
+          details: 'You cannot claim more than 2x your original stake',
+          maxPayout: maxPayout.toString(),
+          alreadyClaimed: alreadyClaimed.toString()
+        });
+        return;
+      }
+
+      // SECURITY: Mark payment as used to prevent reuse
+      await client.query(`
+        UPDATE payment_intents 
+        SET used_for_match = true 
+        WHERE payment_reference = $1 AND used_for_match = false
+      `, [userPayment.payment_reference]);
+
+      console.log(`[Claim] Security checks passed - Max payout: ${maxPayout}, Already claimed: ${alreadyClaimed}, This claim: ${TreasuryService.formatWLD(netPayout)}`);
+
       // FIXED: Store wei amounts as strings in VARCHAR columns (prevents numeric overflow)
       // Database columns are VARCHAR(78) which can store up to 2^256 in decimal
       // Wei amounts are stored as strings: e.g., "180000000000000000" for 0.18 WLD
+      // SECURITY: Mark as claimed immediately to prevent double claims (optimistic locking)
       await client.query(`
-        INSERT INTO claims (match_id, winner_wallet, amount, platform_fee, net_payout, idempotency_key, status)
-        VALUES ($1, $2, $3, $4, $5, $6, $7)
+        INSERT INTO claims (match_id, winner_wallet, amount, platform_fee, net_payout, idempotency_key, status, claimed, claim_timestamp)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
       `, [
         matchId, 
         claimingWallet.toLowerCase(), 
@@ -153,7 +211,8 @@ export class ClaimController {
         platformFee.toString(),    // Store as string (wei)
         netPayout.toString(),      // Store as string (wei)
         idempotencyKey,
-        ClaimStatus.PROCESSING
+        ClaimStatus.PROCESSING,
+        true  // Mark as claimed immediately (optimistic locking)
       ]);
 
       // Mark match as claimed
@@ -173,6 +232,21 @@ export class ClaimController {
         
         // Update claim with tx hash and mark as completed
         await ClaimModel.complete(idempotencyKey, txHash);
+        
+        // SECURITY: Update claim_transaction_hash to verify blockchain proof
+        await pool.query(`
+          UPDATE claims 
+          SET claim_transaction_hash = $1 
+          WHERE idempotency_key = $2
+        `, [txHash, idempotencyKey]);
+        
+        // SECURITY: Update total_claimed_amount to track cumulative claims
+        const payoutWLD = parseFloat(TreasuryService.formatWLD(netPayout));
+        await pool.query(`
+          UPDATE payment_intents 
+          SET total_claimed_amount = COALESCE(total_claimed_amount, 0) + $1 
+          WHERE payment_reference = $2
+        `, [payoutWLD, userPayment.payment_reference]);
 
         console.log(`[Claim] Successfully paid out ${netPayout} wei to ${claimingWallet}, tx: ${txHash}`);
 
@@ -185,8 +259,15 @@ export class ClaimController {
       } catch (error: any) {
         console.error(`[Claim] Payout failed for match ${matchId}:`, error);
         
-        // Mark claim as failed
+        // Mark claim as failed and unclaim it for retry
         await ClaimModel.markFailed(idempotencyKey, error.message);
+        
+        // SECURITY: Reset claimed flag on failure to allow retry
+        await pool.query(`
+          UPDATE claims 
+          SET claimed = false 
+          WHERE idempotency_key = $1
+        `, [idempotencyKey]);
         
         // Rollback match claim status
         await pool.query(

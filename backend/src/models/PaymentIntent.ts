@@ -264,6 +264,21 @@ export class PaymentIntentModel {
   }
 
   /**
+   * Find recent payment intents for a user within specified minutes
+   * Used for spam prevention
+   */
+  static async findRecentByUserId(userId: string, withinMinutes: number): Promise<PaymentIntent[]> {
+    const result = await pool.query(
+      `SELECT * FROM payment_intents 
+       WHERE user_id = $1 
+         AND created_at > CURRENT_TIMESTAMP - ($2 || ' minutes')::INTERVAL
+       ORDER BY created_at DESC`,
+      [userId, withinMinutes.toString()]
+    );
+    return result.rows;
+  }
+
+  /**
    * Expire stale payments without transaction IDs
    * Returns the number of payments expired
    */
