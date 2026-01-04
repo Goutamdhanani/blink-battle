@@ -203,3 +203,30 @@ export function calculatePlatformFee(stake: number): {
   };
 }
 
+/**
+ * Calculate refund amount after gas fee deduction
+ * Uses GAS_FEE_PERCENT (default 3%) for refunds
+ * 
+ * @param amount - Original payment amount in WLD (floating point)
+ * @param gasFeePercent - Gas fee percentage (default 3%)
+ * @returns Object with amountWei, gasFeeWei, refundWei, and refundWLD
+ */
+export function calculateRefundAmount(amount: number, gasFeePercent: number = 3): {
+  amountWei: bigint;
+  gasFeeWei: bigint;
+  refundWei: bigint;
+  refundWLD: number;
+} {
+  const amountWei = BigInt(Math.floor(amount * 1e18));
+  const gasFeeWei = (amountWei * BigInt(gasFeePercent)) / 100n;
+  const refundWei = amountWei - gasFeeWei;
+  const refundWLD = parseFloat((Number(refundWei) / 1e18).toFixed(8));
+  
+  return {
+    amountWei,
+    gasFeeWei,
+    refundWei,
+    refundWLD
+  };
+}
+

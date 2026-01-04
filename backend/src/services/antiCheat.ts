@@ -192,19 +192,6 @@ export class AntiCheatService {
    */
   static async detectAndRecordSuspiciousActivity(userId: string, matchId?: string): Promise<boolean> {
     try {
-      // Check if suspicious_activity table exists
-      const tableExists = await pool.query(`
-        SELECT EXISTS (
-          SELECT FROM information_schema.tables 
-          WHERE table_name = 'suspicious_activity'
-        );
-      `);
-      
-      if (!tableExists.rows[0]?.exists) {
-        // Table doesn't exist yet, skip check
-        return false;
-      }
-
       // Get recent taps for this user (last 20 valid taps)
       const recentTaps = await pool.query(`
         SELECT reaction_ms FROM tap_events
@@ -283,6 +270,12 @@ export class AntiCheatService {
       return false;
     } catch (error: any) {
       // Don't fail the match if anti-cheat check fails
+      // Handle table not existing gracefully
+      if (error.code === '42P01') {
+        // Table doesn't exist yet (code 42P01 = undefined_table)
+        console.log('[AntiCheat] suspicious_activity table not yet created, skipping check');
+        return false;
+      }
       console.error('[AntiCheat] Error checking suspicious activity:', error.message);
       return false;
     }
