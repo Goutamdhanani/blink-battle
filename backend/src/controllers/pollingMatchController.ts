@@ -780,13 +780,15 @@ export class PollingMatchController {
    * Determine winner based on tap events
    * CRITICAL: Compute winner BEFORE calling escrow/payment to avoid undefined winner
    * TREASURY ARCHITECTURE: Sets winner_wallet and claim_deadline, no on-chain payment
+   * SECURITY: Handles one-sided matches where only one player taps
    */
   private static async determineWinner(match: any, taps: any[]): Promise<void> {
     const player1Tap = taps.find(t => t.user_id === match.player1_id);
     const player2Tap = taps.find(t => t.user_id === match.player2_id);
 
-    if (!player1Tap || !player2Tap) {
-      console.log(`[Polling Match] Cannot determine winner - missing taps`);
+    // SECURITY: Handle one-sided matches (only one player tapped)
+    if (!player1Tap && !player2Tap) {
+      console.log(`[Polling Match] No taps recorded yet - cannot determine winner`);
       return;
     }
 
@@ -796,88 +798,131 @@ export class PollingMatchController {
     let winnerWallet: string | undefined;
     let loserWallet: string | undefined;
 
-    // STEP 1: Determine winner and result FIRST (before any payment calls)
-    // Check disqualifications (early taps)
-    if (player1Tap.disqualified && player2Tap.disqualified) {
-      // Both disqualified - no winner
-      winnerId = undefined;
-      loserId = undefined;
-      result = MatchResult.BOTH_DISQUALIFIED;
-    } else if (player1Tap.disqualified) {
-      // Player 1 disqualified, player 2 wins
-      winnerId = match.player2_id;
-      loserId = match.player1_id;
-      winnerWallet = match.player2_wallet;
-      loserWallet = match.player1_wallet;
-      result = MatchResult.PLAYER1_DISQUALIFIED;
-    } else if (player2Tap.disqualified) {
-      // Player 2 disqualified, player 1 wins
-      winnerId = match.player1_id;
-      loserId = match.player2_id;
-      winnerWallet = match.player1_wallet;
-      loserWallet = match.player2_wallet;
-      result = MatchResult.PLAYER2_DISQUALIFIED;
-    } else if (!player1Tap.is_valid && !player2Tap.is_valid) {
-      // Both invalid (too slow) - compare actual times, faster player wins
-      // This fixes the bug where both players get "both_timeout" incorrectly
-      const diff = Math.abs(player1Tap.reaction_ms - player2Tap.reaction_ms);
-      
-      if (diff <= TIE_THRESHOLD_MS) {
-        // True tie - both equally slow
+    // Handle case where only one player tapped
+    if (!player1Tap && player2Tap) {
+      // Only player 2 tapped
+      if (player2Tap.is_valid && !player2Tap.disqualified) {
+        // Player 2 wins by default (player 1 didn't tap)
+        winnerId = match.player2_id;
+        loserId = match.player1_id;
+        winnerWallet = match.player2_wallet;
+        loserWallet = match.player1_wallet;
+        result = MatchResult.PLAYER1_TIMEOUT;
+        console.log(`[Polling Match] One-sided match: Player 2 wins (Player 1 didn't tap)`);
+      } else {
+        // Player 2's tap was invalid/disqualified and player 1 didn't tap - no winner
         winnerId = undefined;
         loserId = undefined;
         result = MatchResult.BOTH_TIMEOUT_TIE;
-      } else {
-        // One was faster even though both were slow
-        winnerId = player1Tap.reaction_ms < player2Tap.reaction_ms 
-          ? match.player1_id 
-          : match.player2_id;
-        loserId = winnerId === match.player1_id ? match.player2_id : match.player1_id;
-        winnerWallet = winnerId === match.player1_id 
-          ? match.player1_wallet 
-          : match.player2_wallet;
-        loserWallet = loserId === match.player1_id
-          ? match.player1_wallet
-          : match.player2_wallet;
-        result = player1Tap.reaction_ms < player2Tap.reaction_ms ? MatchResult.PLAYER1_SLOW_WIN : MatchResult.PLAYER2_SLOW_WIN;
+        console.log(`[Polling Match] One-sided match: No winner (Player 2 disqualified, Player 1 didn't tap)`);
       }
-    } else if (!player1Tap.is_valid) {
-      // Player 1 too slow, player 2 wins
-      winnerId = match.player2_id;
-      loserId = match.player1_id;
-      winnerWallet = match.player2_wallet;
-      loserWallet = match.player1_wallet;
-      result = MatchResult.PLAYER1_TIMEOUT;
-    } else if (!player2Tap.is_valid) {
-      // Player 2 too slow, player 1 wins
-      winnerId = match.player1_id;
-      loserId = match.player2_id;
-      winnerWallet = match.player1_wallet;
-      loserWallet = match.player2_wallet;
-      result = MatchResult.PLAYER2_TIMEOUT;
-    } else {
-      // Both valid, compare reaction times
-      const diff = Math.abs(player1Tap.reaction_ms - player2Tap.reaction_ms);
-      
-      if (diff <= TIE_THRESHOLD_MS) {
-        // Tie (within threshold) - no winner
+    } else if (player1Tap && !player2Tap) {
+      // Only player 1 tapped
+      if (player1Tap.is_valid && !player1Tap.disqualified) {
+        // Player 1 wins by default (player 2 didn't tap)
+        winnerId = match.player1_id;
+        loserId = match.player2_id;
+        winnerWallet = match.player1_wallet;
+        loserWallet = match.player2_wallet;
+        result = MatchResult.PLAYER2_TIMEOUT;
+        console.log(`[Polling Match] One-sided match: Player 1 wins (Player 2 didn't tap)`);
+      } else {
+        // Player 1's tap was invalid/disqualified and player 2 didn't tap - no winner
         winnerId = undefined;
         loserId = undefined;
-        result = MatchResult.TIE;
-      } else {
-        // Normal win
-        winnerId = player1Tap.reaction_ms < player2Tap.reaction_ms 
-          ? match.player1_id 
-          : match.player2_id;
-        loserId = winnerId === match.player1_id ? match.player2_id : match.player1_id;
-        winnerWallet = winnerId === match.player1_id 
-          ? match.player1_wallet 
-          : match.player2_wallet;
-        loserWallet = loserId === match.player1_id
-          ? match.player1_wallet
-          : match.player2_wallet;
-        result = MatchResult.NORMAL_WIN;
+        result = MatchResult.BOTH_TIMEOUT_TIE;
+        console.log(`[Polling Match] One-sided match: No winner (Player 1 disqualified, Player 2 didn't tap)`);
       }
+    } else if (player1Tap && player2Tap) {
+      // Both players tapped - use existing logic
+    } else if (player1Tap && player2Tap) {
+      // Both players tapped - use existing logic
+      // Check disqualifications (early taps)
+      if (player1Tap.disqualified && player2Tap.disqualified) {
+        // Both disqualified - no winner, refund with fee
+        winnerId = undefined;
+        loserId = undefined;
+        result = MatchResult.BOTH_DISQUALIFIED;
+      } else if (player1Tap.disqualified) {
+        // Player 1 disqualified, player 2 wins
+        winnerId = match.player2_id;
+        loserId = match.player1_id;
+        winnerWallet = match.player2_wallet;
+        loserWallet = match.player1_wallet;
+        result = MatchResult.PLAYER1_DISQUALIFIED;
+      } else if (player2Tap.disqualified) {
+        // Player 2 disqualified, player 1 wins
+        winnerId = match.player1_id;
+        loserId = match.player2_id;
+        winnerWallet = match.player1_wallet;
+        loserWallet = match.player2_wallet;
+        result = MatchResult.PLAYER2_DISQUALIFIED;
+      } else if (!player1Tap.is_valid && !player2Tap.is_valid) {
+        // Both invalid (too slow) - compare actual times, faster player wins
+        // This fixes the bug where both players get "both_timeout" incorrectly
+        const diff = Math.abs(player1Tap.reaction_ms - player2Tap.reaction_ms);
+        
+        if (diff <= TIE_THRESHOLD_MS) {
+          // True tie - both equally slow
+          winnerId = undefined;
+          loserId = undefined;
+          result = MatchResult.BOTH_TIMEOUT_TIE;
+        } else {
+          // One was faster even though both were slow
+          winnerId = player1Tap.reaction_ms < player2Tap.reaction_ms 
+            ? match.player1_id 
+            : match.player2_id;
+          loserId = winnerId === match.player1_id ? match.player2_id : match.player1_id;
+          winnerWallet = winnerId === match.player1_id 
+            ? match.player1_wallet 
+            : match.player2_wallet;
+          loserWallet = loserId === match.player1_id
+            ? match.player1_wallet
+            : match.player2_wallet;
+          result = player1Tap.reaction_ms < player2Tap.reaction_ms ? MatchResult.PLAYER1_SLOW_WIN : MatchResult.PLAYER2_SLOW_WIN;
+        }
+      } else if (!player1Tap.is_valid) {
+        // Player 1 too slow, player 2 wins
+        winnerId = match.player2_id;
+        loserId = match.player1_id;
+        winnerWallet = match.player2_wallet;
+        loserWallet = match.player1_wallet;
+        result = MatchResult.PLAYER1_TIMEOUT;
+      } else if (!player2Tap.is_valid) {
+        // Player 2 too slow, player 1 wins
+        winnerId = match.player1_id;
+        loserId = match.player2_id;
+        winnerWallet = match.player1_wallet;
+        loserWallet = match.player2_wallet;
+        result = MatchResult.PLAYER2_TIMEOUT;
+      } else {
+        // Both valid, compare reaction times
+        const diff = Math.abs(player1Tap.reaction_ms - player2Tap.reaction_ms);
+        
+        if (diff <= TIE_THRESHOLD_MS) {
+          // Tie (within threshold) - no winner
+          winnerId = undefined;
+          loserId = undefined;
+          result = MatchResult.TIE;
+        } else {
+          // Normal win
+          winnerId = player1Tap.reaction_ms < player2Tap.reaction_ms 
+            ? match.player1_id 
+            : match.player2_id;
+          loserId = winnerId === match.player1_id ? match.player2_id : match.player1_id;
+          winnerWallet = winnerId === match.player1_id 
+            ? match.player1_wallet 
+            : match.player2_wallet;
+          loserWallet = loserId === match.player1_id
+            ? match.player1_wallet
+            : match.player2_wallet;
+          result = MatchResult.NORMAL_WIN;
+        }
+      }
+    } else {
+      // Should not reach here
+      console.error(`[Polling Match] Unexpected state in determineWinner`);
+      return;
     }
 
     console.log(`[Polling Match] Winner determined: ${winnerId || 'none'}, Result: ${result}`);
@@ -932,19 +977,19 @@ export class PollingMatchController {
       await MatchModel.completeMatch({
         matchId: match.match_id,
         winnerId,
-        player1ReactionMs: player1Tap.reaction_ms,
-        player2ReactionMs: player2Tap.reaction_ms,
+        player1ReactionMs: player1Tap?.reaction_ms || -1,
+        player2ReactionMs: player2Tap?.reaction_ms || -1,
         reason: result,
       });
 
       // Update user stats
       if (winnerId && loserId) {
         const winnerReaction = winnerId === match.player1_id 
-          ? player1Tap.reaction_ms 
-          : player2Tap.reaction_ms;
+          ? (player1Tap?.reaction_ms || -1) 
+          : (player2Tap?.reaction_ms || -1);
         const loserReaction = loserId === match.player1_id 
-          ? player1Tap.reaction_ms 
-          : player2Tap.reaction_ms;
+          ? (player1Tap?.reaction_ms || -1) 
+          : (player2Tap?.reaction_ms || -1);
 
         await UserModel.updateStats(winnerId, true, winnerReaction);
         await UserModel.updateStats(loserId, false, loserReaction);
