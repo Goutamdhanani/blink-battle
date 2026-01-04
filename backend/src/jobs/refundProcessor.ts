@@ -106,8 +106,8 @@ export async function processOrphanedPayments(): Promise<void> {
 
     const refundDeadline = new Date(Date.now() + 4 * 60 * 60 * 1000);
 
-    // Find confirmed payments >15 min old with no match
-    const result = await pool.query(`
+    // Find confirmed payments >15 min old with no match (legacy check)
+    const orphanResult = await pool.query(`
       UPDATE payment_intents 
       SET refund_status = 'eligible',
           refund_deadline = $1,
@@ -119,8 +119,26 @@ export async function processOrphanedPayments(): Promise<void> {
       RETURNING payment_reference
     `, [refundDeadline]);
 
-    if (result.rows.length > 0) {
-      console.log(`[RefundProcessor] Marked ${result.rows.length} orphaned payments for refund`);
+    if (orphanResult.rows.length > 0) {
+      console.log(`[RefundProcessor] Marked ${orphanResult.rows.length} orphaned payments for refund`);
+    }
+
+    // NEW: Check for expired payments (using expires_at column)
+    const expiredResult = await pool.query(`
+      UPDATE payment_intents 
+      SET refund_status = 'eligible',
+          refund_deadline = $1,
+          refund_reason = 'payment_expired'
+      WHERE normalized_status = 'confirmed'
+        AND match_id IS NULL
+        AND expires_at IS NOT NULL
+        AND expires_at < NOW()
+        AND (refund_status IS NULL OR refund_status = 'none')
+      RETURNING payment_reference
+    `, [refundDeadline]);
+
+    if (expiredResult.rows.length > 0) {
+      console.log(`[RefundProcessor] Marked ${expiredResult.rows.length} expired payments for refund`);
     }
   } catch (error: any) {
     if (error.code !== '42703') {

@@ -44,12 +44,15 @@ export class PaymentIntentModel {
       return existing;
     }
 
+    // Set expiry to 15 minutes from now
+    const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
+    
     const result = await pool.query(
       `INSERT INTO payment_intents 
-        (payment_reference, user_id, amount, match_id, normalized_status) 
-       VALUES ($1, $2, $3, $4, $5) 
+        (payment_reference, user_id, amount, match_id, normalized_status, expires_at) 
+       VALUES ($1, $2, $3, $4, $5, $6) 
        RETURNING *`,
-      [paymentReference, userId, amount, matchId || null, NormalizedPaymentStatus.PENDING]
+      [paymentReference, userId, amount, matchId || null, NormalizedPaymentStatus.PENDING, expiresAt]
     );
     return result.rows[0];
   }
