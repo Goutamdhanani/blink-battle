@@ -835,8 +835,6 @@ export class PollingMatchController {
       }
     } else if (player1Tap && player2Tap) {
       // Both players tapped - use existing logic
-    } else if (player1Tap && player2Tap) {
-      // Both players tapped - use existing logic
       // Check disqualifications (early taps)
       if (player1Tap.disqualified && player2Tap.disqualified) {
         // Both disqualified - no winner, refund with fee
