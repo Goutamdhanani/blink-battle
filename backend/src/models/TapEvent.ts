@@ -32,18 +32,28 @@ export class TapEventModel {
     serverTimestamp: number,
     greenLightTime: number
   ): Promise<TapEvent> {
-    const reactionMs = serverTimestamp - greenLightTime;
+    // Calculate raw reaction time for audit
+    const rawReactionMs = serverTimestamp - greenLightTime;
     
-    // Validate reaction time WITHOUT clamping
-    // Store actual reaction time for audit and display purposes
-    // is_valid = true only if reaction is within acceptable range (0-3000ms)
+    // CRITICAL: Clamp reaction time to prevent negative/garbage values
+    // - Never negative (min: 0ms) - prevents negative timestamps in logs/UI
+    // - Cap at 10 seconds (max: 10000ms) - sane upper bound for tap window
+    const MAX_REACTION_MS = 10000; // 10 seconds
+    const reactionMs = Math.max(0, Math.min(rawReactionMs, MAX_REACTION_MS));
+    
+    // Validate reaction time (is_valid = true only if within acceptable range 0-3000ms)
     const isValid = reactionMs >= 0 && reactionMs <= 3000; // 3 second max for valid reaction
-    const disqualified = reactionMs < 0; // Tapped before green light
+    const disqualified = rawReactionMs < 0; // Tapped before green light (use raw for detection)
     const disqualificationReason = disqualified ? 'early_tap' : undefined;
     
-    // Log if reaction is out of valid range (but still store actual value)
+    // Log clamping if it occurred
+    if (rawReactionMs !== reactionMs) {
+      console.warn(`[TapEvent] Clamped reaction time: ${rawReactionMs}ms → ${reactionMs}ms for match ${matchId}, user ${userId}`);
+    }
+    
+    // Log if reaction is out of valid range
     if (!isValid && !disqualified) {
-      console.warn(`[TapEvent] ⚠️  Slow reaction: ${reactionMs}ms for match ${matchId}, user ${userId} (marked as invalid but stored)`);
+      console.warn(`[TapEvent] ⚠️  Slow reaction: ${reactionMs}ms for match ${matchId}, user ${userId} (marked as invalid)`);
     }
     
     // First-write-wins: If a tap already exists for this (match_id, user_id), 

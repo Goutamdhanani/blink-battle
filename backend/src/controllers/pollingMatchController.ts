@@ -383,54 +383,36 @@ export class PollingMatchController {
         return;
       }
 
-      // Validate green_light_time is reasonable (not too far in past or future)
+      // SERVER TIME IS AUTHORITATIVE
+      // Use server timestamp to compute time since green light
       const now = Date.now();
       const timeSinceGreenLight = now - greenLightTime;
       
-      // Validate client timestamp if provided (prevent manipulation)
+      // Validate client timestamp if provided (for audit only - reject malformed but don't use for game logic)
       // Check for explicit presence (not just truthy) to catch 0 and negative values
       if (clientTimestamp !== undefined && clientTimestamp !== null) {
-        // Reject negative or zero timestamps
+        // Reject negative or zero timestamps (malformed)
         if (clientTimestamp <= 0) {
-          console.warn(`[Polling Match] Invalid client timestamp: ${clientTimestamp}`);
-          res.status(400).json({ 
-            error: 'Invalid timestamp',
-            details: 'Client timestamp must be positive'
-          });
-          return;
+          console.warn(`[Polling Match] Invalid client timestamp: ${clientTimestamp} - ignoring and using server time`);
+          // Don't reject - just ignore client timestamp
         }
         
         // Reject timestamps from the future (with 5 second tolerance for clock skew)
-        if (clientTimestamp > now + 5000) {
-          console.warn(`[Polling Match] Future timestamp detected: ${clientTimestamp} vs server: ${now}`);
-          res.status(400).json({ 
-            error: 'Invalid timestamp',
-            details: 'Client timestamp is in the future'
-          });
-          return;
-        }
-        
-        // Reject timestamps before green light time (additional client-side validation)
-        if (clientTimestamp < greenLightTime) {
-          const earlyMs = greenLightTime - clientTimestamp;
-          console.warn(`[Polling Match] Client timestamp before green light: ${earlyMs}ms early`);
-          res.status(400).json({ 
-            error: 'Invalid timestamp',
-            details: 'Tap timestamp is before green light',
-            earlyByMs: earlyMs
-          });
-          return;
+        else if (clientTimestamp > now + 5000) {
+          console.warn(`[Polling Match] Future timestamp detected: ${clientTimestamp} vs server: ${now} - ignoring`);
+          // Don't reject - just ignore client timestamp
         }
       }
       
-      // FIXED: Check for early tap (tap BEFORE green light)
-      // This is critical anti-cheat - prevents players from tapping before signal
-      // CRITICAL: Add tolerance for clock sync issues (50ms tolerance)
-      const CLOCK_SYNC_TOLERANCE_MS = 50; // Allow 50ms tolerance for network/clock sync issues
+      // CONSOLIDATED EARLY TAP HANDLING (single branch)
+      // Server time is authority; apply tolerance for clock drift
+      // Tolerance increased from 50ms to 150ms to handle network/clock sync issues
+      const CLOCK_SYNC_TOLERANCE_MS = 150; // 100-150ms tolerance for clock drift (per requirements)
       
       if (timeSinceGreenLight < -CLOCK_SYNC_TOLERANCE_MS) {
+        // Early tap beyond tolerance - disqualify but return 200 (no 400s)
         const earlyMs = Math.abs(timeSinceGreenLight);
-        console.log(`[Polling Match] ❌ EARLY TAP DETECTED - User ${userId} tapped ${earlyMs}ms BEFORE green light in match ${matchId} (beyond ${CLOCK_SYNC_TOLERANCE_MS}ms tolerance)`);
+        console.log(`[Polling Match] ❌ EARLY TAP - User ${userId} tapped ${earlyMs}ms before green light (beyond ${CLOCK_SYNC_TOLERANCE_MS}ms tolerance) - DISQUALIFIED`);
         
         // Mark player as disqualified
         const isPlayer1 = match.player1_id === userId;
@@ -461,7 +443,7 @@ export class PollingMatchController {
           greenLightTime
         );
         
-        // FIXED: Return success with disqualification instead of 400 error
+        // Return success with disqualification (no 400 errors for early taps)
         res.json({ 
           success: true, 
           disqualified: true,
@@ -471,8 +453,8 @@ export class PollingMatchController {
         });
         return;
       } else if (timeSinceGreenLight < 0) {
-        // Within tolerance - treat as valid tap at green light time
-        console.log(`[Polling Match] Tap within clock sync tolerance (${Math.abs(timeSinceGreenLight)}ms early) - treating as valid for user ${userId}`);
+        // Within tolerance - accept as valid tap at green light time
+        console.log(`[Polling Match] Tap within tolerance (${Math.abs(timeSinceGreenLight)}ms early) - accepted for user ${userId}`);
       }
       
       // Allow taps up to 10 seconds after green light (generous for network latency)
