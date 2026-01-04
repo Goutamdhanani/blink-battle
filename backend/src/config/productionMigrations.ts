@@ -7,6 +7,8 @@ import * as migration005 from './migrations/005_payment_intent_transaction_id_in
 import * as migration006 from './migrations/006_treasury_tables';
 import * as migration007 from './migrations/007_fix_claims_numeric_overflow';
 import * as migration008 from './migrations/008_add_game_randomness_columns';
+import * as migration009 from './migrations/009_refund_and_disconnect_system';
+import * as migration010 from './migrations/010_state_versioning_and_security';
 
 interface Migration {
   name: string;
@@ -23,6 +25,8 @@ const migrations: Migration[] = [
   { name: '006_treasury_tables', ...migration006 },
   { name: '007_fix_claims_numeric_overflow', ...migration007 },
   { name: '008_add_game_randomness_columns', ...migration008 },
+  { name: '009_refund_and_disconnect_system', ...migration009 },
+  { name: '010_state_versioning_and_security', ...migration010 },
 ];
 
 /**

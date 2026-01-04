@@ -170,4 +170,39 @@ export class RefundController {
       res.status(500).json({ error: 'Failed to check refund status' });
     }
   }
+
+  /**
+   * GET /api/refund/eligible
+   * Get all payments eligible for refund for the current user
+   */
+  static async getEligibleRefunds(req: Request, res: Response): Promise<void> {
+    try {
+      const userId = (req as any).userId;
+
+      const eligiblePayments = await pool.query(
+        `SELECT payment_reference, amount, refund_reason, 
+                refund_deadline, created_at
+         FROM payment_intents
+         WHERE user_id = $1
+           AND refund_status = 'eligible'
+           AND refund_deadline > NOW()
+         ORDER BY created_at DESC`,
+        [userId]
+      );
+
+      res.json({
+        refunds: eligiblePayments.rows.map(p => ({
+          paymentReference: p.payment_reference,
+          amount: p.amount,
+          refundAmount: p.amount * 0.97, // 3% gas fee
+          reason: p.refund_reason,
+          deadline: p.refund_deadline,
+          createdAt: p.created_at
+        }))
+      });
+    } catch (error: any) {
+      console.error('[Refund] Get eligible refunds error:', error);
+      res.status(500).json({ error: 'Failed to get eligible refunds' });
+    }
+  }
 }

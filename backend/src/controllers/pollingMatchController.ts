@@ -765,10 +765,29 @@ export class PollingMatchController {
       loserWallet = match.player2_wallet;
       result = 'player2_disqualified';
     } else if (!player1Tap.is_valid && !player2Tap.is_valid) {
-      // Both invalid (too slow) - no winner
-      winnerId = undefined;
-      loserId = undefined;
-      result = 'both_timeout';
+      // Both invalid (too slow) - compare actual times, faster player wins
+      // This fixes the bug where both players with valid taps get "both_timeout"
+      const diff = Math.abs(player1Tap.reaction_ms - player2Tap.reaction_ms);
+      
+      if (diff <= 1) {
+        // True tie - both equally slow
+        winnerId = undefined;
+        loserId = undefined;
+        result = 'both_timeout_tie';
+      } else {
+        // One was faster even though both were slow
+        winnerId = player1Tap.reaction_ms < player2Tap.reaction_ms 
+          ? match.player1_id 
+          : match.player2_id;
+        loserId = winnerId === match.player1_id ? match.player2_id : match.player1_id;
+        winnerWallet = winnerId === match.player1_id 
+          ? match.player1_wallet 
+          : match.player2_wallet;
+        loserWallet = loserId === match.player1_id
+          ? match.player1_wallet
+          : match.player2_wallet;
+        result = player1Tap.reaction_ms < player2Tap.reaction_ms ? 'player1_slow_win' : 'player2_slow_win';
+      }
     } else if (!player1Tap.is_valid) {
       // Player 1 too slow, player 2 wins
       winnerId = match.player2_id;
@@ -840,6 +859,20 @@ export class PollingMatchController {
       // Update status if refund scenario (tie or both disqualified)
       if (!winnerId) {
         await MatchModel.updateStatus(match.match_id, MatchStatus.CANCELLED);
+        
+        // Mark payment intents as refundable (with 3% gas fee deducted)
+        const refundDeadline = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours to claim
+        await pool.query(
+          `UPDATE payment_intents 
+           SET refund_status = 'eligible',
+               refund_deadline = $1,
+               refund_reason = $2
+           WHERE match_id = $3 
+           AND normalized_status = 'confirmed'
+           AND (refund_status IS NULL OR refund_status = 'none')`,
+          [refundDeadline, result, match.match_id]
+        );
+        console.log(`[Polling Match] Marked payments as refundable for match ${match.match_id} - reason: ${result}`);
       }
 
       // Complete match in DB with winner information
