@@ -280,6 +280,7 @@ app.get('/api/claim/status/:matchId', authenticate, matchRateLimiter, requestTra
 // Refund endpoints (rate limited to prevent abuse)
 app.post('/api/refund/claim', authenticate, matchRateLimiter, requestTrackingMiddleware, RefundController.claimRefund);
 app.get('/api/refund/status/:paymentReference', authenticate, matchRateLimiter, requestTrackingMiddleware, RefundController.checkRefundStatus);
+app.get('/api/refund/eligible', authenticate, matchRateLimiter, requestTrackingMiddleware, RefundController.getEligibleRefunds);
 
 // Heartbeat endpoint for disconnect detection (rate limited)
 app.post('/api/match/heartbeat', authenticate, matchRateLimiter, requestTrackingMiddleware, PollingMatchController.heartbeat);

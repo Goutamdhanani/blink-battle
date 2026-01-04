@@ -14,6 +14,30 @@ import pool from '../config/database';
 
 // Constants
 const COUNTDOWN_DURATION_MS = 3000; // 3 seconds for countdown display
+const TIE_THRESHOLD_MS = 1; // Reaction time difference considered a tie
+const REFUND_DEADLINE_HOURS = 24; // Hours to claim refund after match cancellation
+
+/**
+ * Possible match result values
+ * These are stored in the matches.result_type column
+ */
+export enum MatchResult {
+  // Disqualification results
+  BOTH_DISQUALIFIED = 'both_disqualified',      // Both players tapped before green light
+  PLAYER1_DISQUALIFIED = 'player1_disqualified', // Player 1 tapped early
+  PLAYER2_DISQUALIFIED = 'player2_disqualified', // Player 2 tapped early
+  
+  // Timeout results
+  BOTH_TIMEOUT_TIE = 'both_timeout_tie',        // Both players too slow (>3s) with same time
+  PLAYER1_TIMEOUT = 'player1_timeout',          // Player 1 too slow, player 2 wins
+  PLAYER2_TIMEOUT = 'player2_timeout',          // Player 2 too slow, player 1 wins
+  PLAYER1_SLOW_WIN = 'player1_slow_win',        // Both slow but player 1 faster
+  PLAYER2_SLOW_WIN = 'player2_slow_win',        // Both slow but player 2 faster
+  
+  // Normal results
+  TIE = 'tie',                                   // Both players valid, within 1ms
+  NORMAL_WIN = 'normal_win',                     // Standard win by faster reaction
+}
 
 /**
  * Parse green_light_time value that may be returned as string from PostgreSQL BIGINT
@@ -473,6 +497,17 @@ export class PollingMatchController {
 
       console.log(`[Polling Match] Tap recorded - User: ${userId}, Match: ${matchId}, Reaction: ${tap.reaction_ms}ms, Valid: ${tap.is_valid}, Disqualified: ${tap.disqualified}`);
 
+      // Check for timing discrepancy between client and server (anti-cheat)
+      if (clientTimestamp && Number.isFinite(clientTimestamp)) {
+        const clientReaction = clientTimestamp - greenLightTime;
+        AntiCheatService.checkTimingDiscrepancy(clientReaction, tap.reaction_ms, userId);
+      }
+
+      // Check for suspicious activity patterns (async, don't block response)
+      AntiCheatService.detectAndRecordSuspiciousActivity(userId, matchId).catch(err => {
+        console.error('[AntiCheat] Error checking suspicious activity:', err);
+      });
+
       // Record reaction in match
       await MatchModel.recordReaction(matchId, userId, tap.reaction_ms);
 
@@ -749,49 +784,68 @@ export class PollingMatchController {
       // Both disqualified - no winner
       winnerId = undefined;
       loserId = undefined;
-      result = 'both_disqualified';
+      result = MatchResult.BOTH_DISQUALIFIED;
     } else if (player1Tap.disqualified) {
       // Player 1 disqualified, player 2 wins
       winnerId = match.player2_id;
       loserId = match.player1_id;
       winnerWallet = match.player2_wallet;
       loserWallet = match.player1_wallet;
-      result = 'player1_disqualified';
+      result = MatchResult.PLAYER1_DISQUALIFIED;
     } else if (player2Tap.disqualified) {
       // Player 2 disqualified, player 1 wins
       winnerId = match.player1_id;
       loserId = match.player2_id;
       winnerWallet = match.player1_wallet;
       loserWallet = match.player2_wallet;
-      result = 'player2_disqualified';
+      result = MatchResult.PLAYER2_DISQUALIFIED;
     } else if (!player1Tap.is_valid && !player2Tap.is_valid) {
-      // Both invalid (too slow) - no winner
-      winnerId = undefined;
-      loserId = undefined;
-      result = 'both_timeout';
+      // Both invalid (too slow) - compare actual times, faster player wins
+      // This fixes the bug where both players get "both_timeout" incorrectly
+      const diff = Math.abs(player1Tap.reaction_ms - player2Tap.reaction_ms);
+      
+      if (diff <= TIE_THRESHOLD_MS) {
+        // True tie - both equally slow
+        winnerId = undefined;
+        loserId = undefined;
+        result = MatchResult.BOTH_TIMEOUT_TIE;
+      } else {
+        // One was faster even though both were slow
+        winnerId = player1Tap.reaction_ms < player2Tap.reaction_ms 
+          ? match.player1_id 
+          : match.player2_id;
+        loserId = winnerId === match.player1_id ? match.player2_id : match.player1_id;
+        winnerWallet = winnerId === match.player1_id 
+          ? match.player1_wallet 
+          : match.player2_wallet;
+        loserWallet = loserId === match.player1_id
+          ? match.player1_wallet
+          : match.player2_wallet;
+        result = player1Tap.reaction_ms < player2Tap.reaction_ms ? MatchResult.PLAYER1_SLOW_WIN : MatchResult.PLAYER2_SLOW_WIN;
+      }
     } else if (!player1Tap.is_valid) {
       // Player 1 too slow, player 2 wins
       winnerId = match.player2_id;
       loserId = match.player1_id;
       winnerWallet = match.player2_wallet;
       loserWallet = match.player1_wallet;
-      result = 'player1_timeout';
+      result = MatchResult.PLAYER1_TIMEOUT;
     } else if (!player2Tap.is_valid) {
       // Player 2 too slow, player 1 wins
       winnerId = match.player1_id;
       loserId = match.player2_id;
       winnerWallet = match.player1_wallet;
       loserWallet = match.player2_wallet;
-      result = 'player2_timeout';
+      result = MatchResult.PLAYER2_TIMEOUT;
     } else {
       // Both valid, compare reaction times
       const diff = Math.abs(player1Tap.reaction_ms - player2Tap.reaction_ms);
       
-      if (diff <= 1) {
-        // Tie (within 1ms) - no winner
+      if (diff <= TIE_THRESHOLD_MS) {
+        // Tie (within threshold) - no winner
         winnerId = undefined;
         loserId = undefined;
-        result = 'tie';
+        result = MatchResult.TIE;
       } else {
         // Normal win
         winnerId = player1Tap.reaction_ms < player2Tap.reaction_ms 
@@ -804,7 +858,7 @@ export class PollingMatchController {
         loserWallet = loserId === match.player1_id
           ? match.player1_wallet
           : match.player2_wallet;
-        result = 'normal_win';
+        result = MatchResult.NORMAL_WIN;
       }
     }
 
@@ -840,6 +894,20 @@ export class PollingMatchController {
       // Update status if refund scenario (tie or both disqualified)
       if (!winnerId) {
         await MatchModel.updateStatus(match.match_id, MatchStatus.CANCELLED);
+        
+        // Mark payment intents as refundable (with 3% gas fee deducted)
+        const refundDeadline = new Date(Date.now() + REFUND_DEADLINE_HOURS * 60 * 60 * 1000);
+        await pool.query(
+          `UPDATE payment_intents 
+           SET refund_status = 'eligible',
+               refund_deadline = $1,
+               refund_reason = $2
+           WHERE match_id = $3 
+           AND normalized_status = 'confirmed'
+           AND (refund_status IS NULL OR refund_status = 'none')`,
+          [refundDeadline, result, match.match_id]
+        );
+        console.log(`[Polling Match] Marked payments as refundable for match ${match.match_id} - reason: ${result}`);
       }
 
       // Complete match in DB with winner information

@@ -2,6 +2,10 @@ import { Request, Response } from 'express';
 import { ethers } from 'ethers';
 import pool from '../config/database';
 import { TreasuryService } from '../services/treasuryService';
+import { calculateRefundAmount } from '../services/paymentUtils';
+
+// Constants
+const GAS_FEE_PERCENT = 3; // Gas fee deducted from refunds (3%)
 
 /**
  * RefundController - Handles refund claims for cancelled/timeout matches
@@ -67,13 +71,10 @@ export class RefundController {
         return;
       }
 
-      // Calculate refund (97% - 3% gas fee)
-      const amountWei = BigInt(Math.floor(paymentData.amount * 1e18));
-      const gasFeeWei = (amountWei * 3n) / 100n;
-      const refundWei = amountWei - gasFeeWei;
-      const refundWLD = parseFloat(ethers.formatEther(refundWei));
+      // Calculate refund using shared utility
+      const refund = calculateRefundAmount(paymentData.amount, GAS_FEE_PERCENT);
 
-      console.log(`[Refund] Processing for user ${userId}, Payment: ${paymentReference}, Refund: ${refundWLD} WLD`);
+      console.log(`[Refund] Processing for user ${userId}, Payment: ${paymentReference}, Refund: ${refund.refundWLD} WLD`);
 
       // Mark as processing
       await client.query(
@@ -82,7 +83,7 @@ export class RefundController {
              refund_amount = $1,
              refund_claimed_at = NOW()
          WHERE payment_reference = $2`,
-        [refundWLD, paymentReference]
+        [refund.refundWLD, paymentReference]
       );
 
       // Get user wallet
@@ -99,7 +100,7 @@ export class RefundController {
       }
 
       // Send refund
-      const txHash = await TreasuryService.sendPayout(walletAddress, refundWei);
+      const txHash = await TreasuryService.sendPayout(walletAddress, refund.refundWei);
 
       // Mark as completed
       await client.query(
@@ -116,8 +117,8 @@ export class RefundController {
 
       res.json({
         success: true,
-        refundAmount: refundWLD,
-        gasFee: parseFloat(ethers.formatEther(gasFeeWei)),
+        refundAmount: refund.refundWLD,
+        gasFee: parseFloat(ethers.formatEther(refund.gasFeeWei)),
         transactionHash: txHash
       });
 
@@ -168,6 +169,41 @@ export class RefundController {
     } catch (error: any) {
       console.error('[Refund] Status check error:', error);
       res.status(500).json({ error: 'Failed to check refund status' });
+    }
+  }
+
+  /**
+   * GET /api/refund/eligible
+   * Get all payments eligible for refund for the current user
+   */
+  static async getEligibleRefunds(req: Request, res: Response): Promise<void> {
+    try {
+      const userId = (req as any).userId;
+
+      const eligiblePayments = await pool.query(
+        `SELECT payment_reference, amount, refund_reason, 
+                refund_deadline, created_at
+         FROM payment_intents
+         WHERE user_id = $1
+           AND refund_status = 'eligible'
+           AND refund_deadline > NOW()
+         ORDER BY created_at DESC`,
+        [userId]
+      );
+
+      res.json({
+        refunds: eligiblePayments.rows.map(p => ({
+          paymentReference: p.payment_reference,
+          amount: p.amount,
+          refundAmount: p.amount * (1 - GAS_FEE_PERCENT / 100), // Deduct gas fee
+          reason: p.refund_reason,
+          deadline: p.refund_deadline,
+          createdAt: p.created_at
+        }))
+      });
+    } catch (error: any) {
+      console.error('[Refund] Get eligible refunds error:', error);
+      res.status(500).json({ error: 'Failed to get eligible refunds' });
     }
   }
 }

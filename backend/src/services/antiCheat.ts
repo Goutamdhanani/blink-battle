@@ -1,6 +1,18 @@
 /**
  * Anti-cheat service for detecting suspicious gameplay patterns
  */
+import pool from '../config/database';
+
+// Anti-cheat thresholds (configurable via environment variables)
+const INHUMAN_REACTION_THRESHOLD_MS = parseInt(process.env.INHUMAN_REACTION_THRESHOLD_MS || '100', 10);
+const BOT_CONSISTENCY_REACTION_MS = parseInt(process.env.BOT_CONSISTENCY_REACTION_MS || '150', 10);
+const BOT_CONSISTENCY_VARIANCE_MS = parseInt(process.env.BOT_CONSISTENCY_VARIANCE_MS || '10', 10);
+const HIGH_WIN_RATE_THRESHOLD = parseFloat(process.env.HIGH_WIN_RATE_THRESHOLD || '90');
+const MIN_MATCHES_FOR_WIN_RATE = parseInt(process.env.MIN_MATCHES_FOR_WIN_RATE || '20', 10);
+
+// PostgreSQL error codes
+const PG_ERROR_UNDEFINED_TABLE = '42P01';
+
 export class AntiCheatService {
   private static readonly MIN_HUMAN_REACTION_MS = parseInt(
     process.env.MIN_REACTION_MS || '80',
@@ -170,5 +182,127 @@ export class AntiCheatService {
       timestamp: new Date().toISOString(),
       ...data,
     });
+  }
+
+  /**
+   * Detect and record suspicious activity to database
+   * Flags users with:
+   * - Reaction times consistently < 100ms
+   * - Win rate > 90% over 20+ matches
+   * - Inhuman reaction patterns
+   * 
+   * @returns true if suspicious activity was detected and recorded
+   */
+  static async detectAndRecordSuspiciousActivity(userId: string, matchId?: string): Promise<boolean> {
+    try {
+      // Get recent taps for this user (last 20 valid taps)
+      const recentTaps = await pool.query(`
+        SELECT reaction_ms FROM tap_events
+        WHERE user_id = $1 AND is_valid = true AND disqualified = false
+        ORDER BY created_at DESC LIMIT 20
+      `, [userId]);
+
+      if (!recentTaps.rowCount || recentTaps.rowCount < 5) {
+        // Not enough data to assess
+        return false;
+      }
+
+      const reactions = recentTaps.rows.map(r => r.reaction_ms);
+      const avgReaction = reactions.reduce((sum, t) => sum + t, 0) / reactions.length;
+
+      // Flag if average reaction < INHUMAN_REACTION_THRESHOLD_MS (humanly impossible)
+      if (avgReaction < INHUMAN_REACTION_THRESHOLD_MS) {
+        await pool.query(`
+          INSERT INTO suspicious_activity (user_id, reason, avg_reaction_ms, match_id, details)
+          VALUES ($1, 'inhuman_reaction_time', $2, $3, $4)
+        `, [
+          userId, 
+          avgReaction, 
+          matchId || null,
+          `Average reaction time of ${avgReaction.toFixed(2)}ms over ${reactions.length} matches is inhuman (< ${INHUMAN_REACTION_THRESHOLD_MS}ms)`
+        ]);
+        console.warn(`[AntiCheat] Flagged user ${userId} for inhuman reaction time: ${avgReaction.toFixed(2)}ms`);
+        return true;
+      }
+
+      // Check for bot-like consistency
+      const variance = AntiCheatService.calculateVariance(reactions);
+      if (avgReaction < BOT_CONSISTENCY_REACTION_MS && variance < BOT_CONSISTENCY_VARIANCE_MS && reactions.length >= 10) {
+        await pool.query(`
+          INSERT INTO suspicious_activity (user_id, reason, avg_reaction_ms, match_id, details)
+          VALUES ($1, 'bot_like_consistency', $2, $3, $4)
+        `, [
+          userId,
+          avgReaction,
+          matchId || null,
+          `Bot-like consistency detected: avg ${avgReaction.toFixed(2)}ms, variance ${variance.toFixed(2)}ms over ${reactions.length} matches`
+        ]);
+        console.warn(`[AntiCheat] Flagged user ${userId} for bot-like consistency`);
+        return true;
+      }
+
+      // Check win rate (if enough matches)
+      const matchStats = await pool.query(`
+        SELECT 
+          COUNT(*) as total_matches,
+          SUM(CASE WHEN winner_id = $1 THEN 1 ELSE 0 END) as wins
+        FROM matches
+        WHERE (player1_id = $1 OR player2_id = $1)
+          AND status = 'completed'
+          AND completed_at > NOW() - INTERVAL '7 days'
+      `, [userId]);
+
+      const { total_matches, wins } = matchStats.rows[0] || { total_matches: 0, wins: 0 };
+      if (total_matches >= MIN_MATCHES_FOR_WIN_RATE) {
+        const winRate = (wins / total_matches) * 100;
+        if (winRate > HIGH_WIN_RATE_THRESHOLD) {
+          await pool.query(`
+            INSERT INTO suspicious_activity (user_id, reason, avg_reaction_ms, match_id, details)
+            VALUES ($1, 'high_win_rate', $2, $3, $4)
+          `, [
+            userId,
+            avgReaction,
+            matchId || null,
+            `Suspiciously high win rate: ${winRate.toFixed(1)}% over ${total_matches} matches in last 7 days`
+          ]);
+          console.warn(`[AntiCheat] Flagged user ${userId} for high win rate: ${winRate.toFixed(1)}%`);
+          return true;
+        }
+      }
+
+      return false;
+    } catch (error: any) {
+      // Don't fail the match if anti-cheat check fails
+      // Handle table not existing gracefully
+      if (error.code === PG_ERROR_UNDEFINED_TABLE) {
+        // Table doesn't exist yet
+        console.log('[AntiCheat] suspicious_activity table not yet created, skipping check');
+        return false;
+      }
+      console.error('[AntiCheat] Error checking suspicious activity:', error.message);
+      return false;
+    }
+  }
+
+  /**
+   * Check for timing discrepancy between client and server
+   * Large discrepancies may indicate tampering
+   */
+  static checkTimingDiscrepancy(
+    clientReactionMs: number,
+    serverReactionMs: number,
+    userId: string
+  ): boolean {
+    const discrepancy = Math.abs(clientReactionMs - serverReactionMs);
+    
+    if (discrepancy > 500) {
+      console.warn(
+        `[AntiCheat] Large timing discrepancy for user ${userId}: ` +
+        `client=${clientReactionMs}ms, server=${serverReactionMs}ms, diff=${discrepancy}ms`
+      );
+      return true;
+    }
+    
+    return false;
   }
 }

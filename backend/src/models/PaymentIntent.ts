@@ -1,5 +1,8 @@
 import pool from '../config/database';
 
+// Constants
+const PAYMENT_EXPIRY_MINUTES = 15; // Payment expires after 15 minutes if not confirmed
+
 export enum NormalizedPaymentStatus {
   PENDING = 'pending',
   CONFIRMED = 'confirmed',
@@ -44,12 +47,15 @@ export class PaymentIntentModel {
       return existing;
     }
 
+    // Set expiry based on configured timeout
+    const expiresAt = new Date(Date.now() + PAYMENT_EXPIRY_MINUTES * 60 * 1000);
+    
     const result = await pool.query(
       `INSERT INTO payment_intents 
-        (payment_reference, user_id, amount, match_id, normalized_status) 
-       VALUES ($1, $2, $3, $4, $5) 
+        (payment_reference, user_id, amount, match_id, normalized_status, expires_at) 
+       VALUES ($1, $2, $3, $4, $5, $6) 
        RETURNING *`,
-      [paymentReference, userId, amount, matchId || null, NormalizedPaymentStatus.PENDING]
+      [paymentReference, userId, amount, matchId || null, NormalizedPaymentStatus.PENDING, expiresAt]
     );
     return result.rows[0];
   }

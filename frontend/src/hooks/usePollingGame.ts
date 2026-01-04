@@ -7,18 +7,20 @@ import { useGameContext } from '../context/GameContext';
  * Optimized for smooth gameplay with reduced server load
  * 
  * NOTE: Polling rates have been adjusted to reduce excessive polling:
- * - Most phases use 750ms-2000ms to reduce server load
+ * - Most phases use 1500ms-3000ms to reduce server load
  * - Critical phases (countdown, playing) use faster rates only when necessary
  * - Polling stops immediately when match completes
  * - Rate limiting applied via matchRateLimiter (500 req/min)
+ * 
+ * UPDATED: Further reduced to minimize server load based on production logs
  */
 const POLLING_RATES = {
   IDLE: 5000,           // 5s - not in game
   MATCHMAKING: 2000,    // 2s - searching for match
-  MATCHED: 1000,        // 1s - waiting for ready (was 500ms)
-  COUNTDOWN: 500,       // 500ms - countdown active (was 100ms)
-  PLAYING: 250,         // 250ms - during reaction test (was 50ms) 
-  WAITING_RESULT: 750,  // 750ms - waiting for opponent (was 200ms)
+  MATCHED: 3000,        // 3s - waiting for ready (reduced from 1000ms)
+  COUNTDOWN: 1500,      // 1.5s - countdown active (reduced from 500ms)
+  PLAYING: 1000,        // 1s - during reaction test (reduced from 250ms)
+  WAITING_RESULT: 2000, // 2s - waiting for opponent (increased from 750ms)
   RESULT: 2000          // 2s - showing results
 };
 
