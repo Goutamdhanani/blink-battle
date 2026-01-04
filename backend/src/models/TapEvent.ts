@@ -41,10 +41,12 @@ export class TapEventModel {
     const MAX_REACTION_MS = 10000; // 10 seconds
     const reactionMs = Math.max(0, Math.min(rawReactionMs, MAX_REACTION_MS));
     
-    // Validate reaction time (is_valid = true only if within acceptable range 0-3000ms)
-    const isValid = reactionMs >= 0 && reactionMs <= 3000; // 3 second max for valid reaction
+    // Check for disqualification (early tap based on raw value)
     const disqualified = rawReactionMs < 0; // Tapped before green light (use raw for detection)
     const disqualificationReason = disqualified ? 'early_tap' : undefined;
+    
+    // Validate reaction time (is_valid = true only if within acceptable range 0-3000ms AND not disqualified)
+    const isValid = !disqualified && reactionMs >= 0 && reactionMs <= 3000; // 3 second max for valid reaction
     
     // Log clamping if it occurred
     if (rawReactionMs !== reactionMs) {
