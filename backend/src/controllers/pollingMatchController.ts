@@ -801,7 +801,7 @@ export class PollingMatchController {
       result = MatchResult.PLAYER2_DISQUALIFIED;
     } else if (!player1Tap.is_valid && !player2Tap.is_valid) {
       // Both invalid (too slow) - compare actual times, faster player wins
-      // This fixes the bug where both players with valid taps get "both_timeout"
+      // This fixes the bug where both players get "both_timeout" incorrectly
       const diff = Math.abs(player1Tap.reaction_ms - player2Tap.reaction_ms);
       
       if (diff <= TIE_THRESHOLD_MS) {

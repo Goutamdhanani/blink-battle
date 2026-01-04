@@ -10,6 +10,9 @@ const BOT_CONSISTENCY_VARIANCE_MS = parseInt(process.env.BOT_CONSISTENCY_VARIANC
 const HIGH_WIN_RATE_THRESHOLD = parseFloat(process.env.HIGH_WIN_RATE_THRESHOLD || '90');
 const MIN_MATCHES_FOR_WIN_RATE = parseInt(process.env.MIN_MATCHES_FOR_WIN_RATE || '20', 10);
 
+// PostgreSQL error codes
+const PG_ERROR_UNDEFINED_TABLE = '42P01';
+
 export class AntiCheatService {
   private static readonly MIN_HUMAN_REACTION_MS = parseInt(
     process.env.MIN_REACTION_MS || '80',
@@ -271,8 +274,8 @@ export class AntiCheatService {
     } catch (error: any) {
       // Don't fail the match if anti-cheat check fails
       // Handle table not existing gracefully
-      if (error.code === '42P01') {
-        // Table doesn't exist yet (code 42P01 = undefined_table)
+      if (error.code === PG_ERROR_UNDEFINED_TABLE) {
+        // Table doesn't exist yet
         console.log('[AntiCheat] suspicious_activity table not yet created, skipping check');
         return false;
       }
