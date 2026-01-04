@@ -161,6 +161,15 @@ export class MatchController {
       res.json({
         success: true, // Add success flag for frontend
         matches: mappedMatches,
+        pendingRefunds: orphanedPayments.rows.map((p: any) => ({
+          paymentReference: p.payment_reference,
+          amount: p.amount,
+          createdAt: p.created_at,
+          type: 'matchmaking_cancelled',
+          canClaimDeposit: true, // Flag to show claim button
+          refundAmount: p.amount * 0.97, // 3% protocol fee
+          protocolFeePercent: 3
+        })),
         cancelledPayments: orphanedPayments.rows.map((p: any) => ({
           paymentReference: p.payment_reference,
           amount: p.amount,

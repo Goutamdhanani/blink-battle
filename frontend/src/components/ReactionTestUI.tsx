@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useMemo, useCallback } from 'react';
 import ReactionLights from './ReactionLights';
+import SmoothCountdown from './SmoothCountdown';
 import './ReactionTestUI.css';
 
 export type ReactionPhase = 'idle' | 'countdown' | 'waiting' | 'go' | 'tapped';
@@ -16,6 +17,7 @@ interface ReactionTestUIProps {
 /**
  * Shared reaction test UI component for both Practice and Battle modes
  * Features F1-style lights, consistent layout, and polished design
+ * Optimized with React.memo to prevent unnecessary re-renders
  */
 const ReactionTestUI: React.FC<ReactionTestUIProps> = ({
   phase,
@@ -26,9 +28,18 @@ const ReactionTestUI: React.FC<ReactionTestUIProps> = ({
   opponentInfo,
 }) => {
   // CRITICAL: Clamp countdown to valid range (prevent negative/invalid display)
-  const clampedCountdown = countdown !== null && countdown !== undefined
-    ? Math.max(0, Math.min(10, countdown))  // Valid range: 0-10
-    : null;
+  const clampedCountdown = useMemo(() => {
+    return countdown !== null && countdown !== undefined
+      ? Math.max(0, Math.min(10, countdown))  // Valid range: 0-10
+      : null;
+  }, [countdown]);
+
+  // Memoize tap handler to prevent recreation
+  const handleTap = useCallback(() => {
+    if (!disabled && onTap) {
+      onTap();
+    }
+  }, [disabled, onTap]);
 
   const renderContent = () => {
     switch (phase) {
@@ -44,13 +55,7 @@ const ReactionTestUI: React.FC<ReactionTestUIProps> = ({
             
             <ReactionLights state="red" countdown={clampedCountdown} />
             
-            {clampedCountdown !== null && (
-              <div className="reaction-countdown-display">
-                <div className="reaction-countdown-number glow-secondary pulse">
-                  {clampedCountdown}
-                </div>
-              </div>
-            )}
+            <SmoothCountdown countdown={clampedCountdown} />
           </div>
         );
 
@@ -58,7 +63,7 @@ const ReactionTestUI: React.FC<ReactionTestUIProps> = ({
         return (
           <div 
             className="reaction-test-content reaction-clickable fade-in" 
-            onClick={!disabled ? onTap : undefined}
+            onClick={handleTap}
           >
             <div className="reaction-status">
               <h2 className="reaction-status-text">Wait for it...</h2>
@@ -76,7 +81,7 @@ const ReactionTestUI: React.FC<ReactionTestUIProps> = ({
         return (
           <div 
             className="reaction-test-content reaction-go-phase fade-in" 
-            onClick={!disabled ? onTap : undefined}
+            onClick={handleTap}
           >
             <div className="reaction-status">
               <h2 className="reaction-status-text reaction-status-go">GO!</h2>

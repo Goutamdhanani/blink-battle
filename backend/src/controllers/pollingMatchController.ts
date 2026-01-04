@@ -324,6 +324,7 @@ export class PollingMatchController {
         player2ReactionMs: matchState.player2_reaction_ms,
         completedAt: matchState.completed_at,
         stateLocked, // Add state locking flag
+        serverTime: Date.now(), // Add server timestamp for client time sync
         opponent: {
           userId: opponentId,
           wallet: isPlayer1 ? matchState.player2_wallet : matchState.player1_wallet

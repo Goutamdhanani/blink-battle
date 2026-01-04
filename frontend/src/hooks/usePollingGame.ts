@@ -8,17 +8,18 @@ import { useGameContext } from '../context/GameContext';
  * 
  * NOTE: Polling rates have been adjusted to reduce excessive polling:
  * - Most phases use 1500ms-3000ms to reduce server load
- * - Critical phases (countdown, playing) use faster rates only when necessary
+ * - Countdown phase uses LOCAL timers (no polling after greenLightTime received)
+ * - Playing phase uses faster rate only for result updates
  * - Polling stops immediately when match completes
  * - Rate limiting applied via matchRateLimiter (500 req/min)
  * 
- * UPDATED: Further reduced to minimize server load based on production logs
+ * UPDATED: Countdown now uses local timers based on server time sync
  */
 const POLLING_RATES = {
   IDLE: 5000,           // 5s - not in game
   MATCHMAKING: 2000,    // 2s - searching for match
   MATCHED: 3000,        // 3s - waiting for ready (reduced from 1000ms)
-  COUNTDOWN: 1500,      // 1.5s - countdown active (reduced from 500ms)
+  COUNTDOWN: 0,         // 0ms - NO POLLING during countdown (use local timers)
   PLAYING: 1000,        // 1s - during reaction test (reduced from 250ms)
   WAITING_RESULT: 2000, // 2s - waiting for opponent (increased from 750ms)
   RESULT: 2000          // 2s - showing results
@@ -46,11 +47,77 @@ export const usePollingGame = () => {
   const currentPollingRateRef = useRef<number>(POLLING_RATES.IDLE);
   const unchangedStateCountRef = useRef<number>(0);
   const lastStateHashRef = useRef<string>('');
+  const countdownTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const greenLightTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const serverTimeOffsetRef = useRef<number>(0);
+  const greenLightTimeReceivedRef = useRef<boolean>(false);
 
   // Update polling service token when it changes
   useEffect(() => {
     pollingService.setToken(state.token);
   }, [state.token]);
+
+  /**
+   * Start local countdown based on greenLightTime and server time sync
+   * This eliminates the need for polling during countdown
+   */
+  const startLocalCountdown = useCallback((greenLightTime: number, serverTime: number) => {
+    // Clear any existing timers
+    if (countdownTimerRef.current) {
+      clearTimeout(countdownTimerRef.current);
+      countdownTimerRef.current = null;
+    }
+    if (greenLightTimerRef.current) {
+      clearTimeout(greenLightTimerRef.current);
+      greenLightTimerRef.current = null;
+    }
+
+    // Calculate server time offset for synchronization
+    const clientTime = Date.now();
+    serverTimeOffsetRef.current = serverTime - clientTime;
+    
+    console.log(`[LocalCountdown] Server time offset: ${serverTimeOffsetRef.current}ms`);
+    console.log(`[LocalCountdown] Green light at: ${new Date(greenLightTime).toISOString()}`);
+
+    const COUNTDOWN_DURATION_MS = 3000; // Last 3 seconds show countdown numbers
+
+    const updateCountdown = () => {
+      const now = Date.now() + serverTimeOffsetRef.current; // Sync with server time
+      const timeUntilGo = greenLightTime - now;
+
+      if (timeUntilGo <= 0) {
+        // Green light!
+        setGamePhase('signal');
+        setSignalTimestamp(greenLightTime);
+        setCountdown(null);
+        console.log('[LocalCountdown] 🟢 GREEN LIGHT!');
+        
+        // Resume polling for result updates
+        greenLightTimeReceivedRef.current = false; // Reset flag
+      } else if (timeUntilGo <= COUNTDOWN_DURATION_MS) {
+        // Countdown phase (3, 2, 1)
+        const countdown = Math.ceil(timeUntilGo / 1000);
+        setGamePhase('countdown');
+        setCountdown(countdown);
+        console.log(`[LocalCountdown] Countdown: ${countdown}`);
+        
+        // Schedule next update
+        countdownTimerRef.current = setTimeout(updateCountdown, 100); // Update every 100ms for smooth countdown
+      } else {
+        // Waiting phase (before countdown)
+        setGamePhase('waiting');
+        setCountdown(null);
+        console.log(`[LocalCountdown] Waiting... ${Math.round(timeUntilGo / 1000)}s until countdown`);
+        
+        // Schedule next check when countdown should start
+        const delayUntilCountdown = timeUntilGo - COUNTDOWN_DURATION_MS;
+        countdownTimerRef.current = setTimeout(updateCountdown, Math.max(100, delayUntilCountdown));
+      }
+    };
+
+    // Start the countdown
+    updateCountdown();
+  }, [setGamePhase, setCountdown, setSignalTimestamp]);
 
   // Clear polling and heartbeat on unmount
   useEffect(() => {
@@ -62,6 +129,14 @@ export const usePollingGame = () => {
       if (heartbeatIntervalRef.current) {
         clearInterval(heartbeatIntervalRef.current);
         heartbeatIntervalRef.current = null;
+      }
+      if (countdownTimerRef.current) {
+        clearTimeout(countdownTimerRef.current);
+        countdownTimerRef.current = null;
+      }
+      if (greenLightTimerRef.current) {
+        clearTimeout(greenLightTimerRef.current);
+        greenLightTimerRef.current = null;
       }
     };
   }, []);
@@ -143,6 +218,35 @@ export const usePollingGame = () => {
         const matchState: MatchState = await pollingService.getMatchState(matchId);
         matchStateRef.current = matchState;
 
+        // Sync server time on every poll for accuracy
+        if (matchState.serverTime) {
+          const clientTime = Date.now();
+          serverTimeOffsetRef.current = matchState.serverTime - clientTime;
+        }
+
+        // Check if greenLightTime was just received
+        if (matchState.greenLightTime && 
+            !greenLightTimeReceivedRef.current && 
+            matchState.greenLightTime > 0) {
+          greenLightTimeReceivedRef.current = true;
+          
+          console.log('[Polling] 🎯 Green light time received! Starting local countdown...');
+          console.log(`[Polling] Server time: ${matchState.serverTime}, Client time: ${Date.now()}, Offset: ${serverTimeOffsetRef.current}ms`);
+          
+          // Start local countdown based on greenLightTime
+          startLocalCountdown(matchState.greenLightTime, matchState.serverTime || Date.now());
+          
+          // STOP POLLING during countdown - use local timers instead
+          if (pollIntervalRef.current) {
+            clearInterval(pollIntervalRef.current);
+            pollIntervalRef.current = null;
+            console.log('[Polling] ⏸️  Polling STOPPED - using local countdown timers');
+          }
+          
+          // Don't poll again until after green light
+          return;
+        }
+
         // Create state hash to detect changes
         const stateHash = `${matchState.state}-${matchState.status}-${matchState.countdown}-${matchState.playerTapped}-${matchState.opponentTapped}`;
         
@@ -179,28 +283,31 @@ export const usePollingGame = () => {
         // Determine polling rate based on game state
         let newRate = POLLING_RATES.MATCHED;
 
-        // Update game phase based on state
-        if (matchState.state === 'ready_wait') {
-          setGamePhase('waiting');
-          newRate = POLLING_RATES.MATCHED;
-        } else if (matchState.state === 'countdown') {
-          setGamePhase('countdown');
-          if (matchState.countdown !== undefined) {
-            setCountdown(matchState.countdown);
+        // Update game phase based on state (only if not using local countdown)
+        if (!greenLightTimeReceivedRef.current) {
+          if (matchState.state === 'ready_wait') {
+            setGamePhase('waiting');
+            newRate = POLLING_RATES.MATCHED;
+          } else if (matchState.state === 'countdown' || matchState.state === 'waiting_for_go') {
+            // These states should not happen if greenLightTime is set, but handle them anyway
+            setGamePhase(matchState.state === 'countdown' ? 'countdown' : 'waiting');
+            if (matchState.countdown !== undefined) {
+              setCountdown(matchState.countdown);
+            }
+            newRate = POLLING_RATES.MATCHED; // Keep polling until greenLightTime is received
+          } else if (matchState.state === 'go' && matchState.greenLightActive) {
+            // Green light is active!
+            setGamePhase('signal');
+            setSignalTimestamp(matchState.greenLightTime || Date.now());
+            setCountdown(null);
+            newRate = POLLING_RATES.PLAYING; // Resume polling for result updates
           }
-          newRate = POLLING_RATES.COUNTDOWN; // 500ms during countdown (was 100ms)
-        } else if (matchState.state === 'waiting_for_go') {
-          // In the random delay before green light
-          setGamePhase('waiting');
-          setCountdown(null);
-          newRate = POLLING_RATES.COUNTDOWN; // 500ms during waiting for go (was 100ms)
         } else if (matchState.state === 'go' && matchState.greenLightActive) {
-          // Green light is active!
-          setGamePhase('signal');
-          setSignalTimestamp(matchState.greenLightTime || Date.now());
-          setCountdown(null);
-          newRate = POLLING_RATES.PLAYING; // 250ms during active gameplay (was 50ms)
-        } else if (matchState.state === 'resolved' || matchState.status === 'completed') {
+          // Resume polling after green light for result updates
+          newRate = POLLING_RATES.PLAYING;
+        }
+
+        if (matchState.state === 'resolved' || matchState.status === 'completed') {
           // CRITICAL: Match is complete - stop polling IMMEDIATELY
           if (heartbeatIntervalRef.current) {
             clearInterval(heartbeatIntervalRef.current);
@@ -210,7 +317,16 @@ export const usePollingGame = () => {
             clearInterval(pollIntervalRef.current);
             pollIntervalRef.current = null;
           }
+          if (countdownTimerRef.current) {
+            clearTimeout(countdownTimerRef.current);
+            countdownTimerRef.current = null;
+          }
+          if (greenLightTimerRef.current) {
+            clearTimeout(greenLightTimerRef.current);
+            greenLightTimerRef.current = null;
+          }
           setIsPolling(false);
+          greenLightTimeReceivedRef.current = false;
           
           setMatchResult(matchState.winnerId || null, 'completed');
           setGamePhase('result');
@@ -218,8 +334,10 @@ export const usePollingGame = () => {
           return; // Exit early to prevent ANY further polling
         }
 
-        // Adjust polling rate if needed (only if not backing off)
-        if (unchangedStateCountRef.current < 5 && newRate !== currentPollingRateRef.current) {
+        // Adjust polling rate if needed (only if not backing off and not in countdown)
+        if (unchangedStateCountRef.current < 5 && 
+            newRate !== currentPollingRateRef.current &&
+            !greenLightTimeReceivedRef.current) {
           currentPollingRateRef.current = newRate;
           if (pollIntervalRef.current) {
             clearInterval(pollIntervalRef.current);
