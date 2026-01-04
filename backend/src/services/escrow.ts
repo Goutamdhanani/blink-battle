@@ -440,10 +440,11 @@ export class EscrowService {
           );
 
           // Record fee transaction
+          // Fee is multiplied by 2 because we collect 3% from BOTH players' refunds
           const feeTx = await TransactionModel.create(
             matchId,
             TransactionType.FEE,
-            platformFee * 2, // Fee from both refunds
+            platformFee * 2, // Total fee from both refunds
             'treasury',
             'platform',
             tx1Hash

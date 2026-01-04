@@ -174,11 +174,14 @@ export class ClaimController {
       const originalStake = parseFloat(userPayment.amount);
       const alreadyClaimed = parseFloat(userPayment.total_claimed_amount || 0);
       const maxPayout = originalStake * 2;
+      
+      // Convert netPayout to WLD once for efficiency
+      const netPayoutWLD = parseFloat(TreasuryService.formatWLD(netPayout));
 
       // SECURITY: Enforce maximum payout protection - user can NEVER receive more than 2x their stake
-      if (alreadyClaimed + parseFloat(TreasuryService.formatWLD(netPayout)) > maxPayout) {
+      if (alreadyClaimed + netPayoutWLD > maxPayout) {
         await client.query('ROLLBACK');
-        console.error(`[Claim] SECURITY VIOLATION: User ${userId} attempting to claim more than 2x stake. Original: ${originalStake}, Already claimed: ${alreadyClaimed}, Attempting: ${TreasuryService.formatWLD(netPayout)}, Max: ${maxPayout}`);
+        console.error(`[Claim] SECURITY VIOLATION: User ${userId} attempting to claim more than 2x stake. Original: ${originalStake}, Already claimed: ${alreadyClaimed}, Attempting: ${netPayoutWLD}, Max: ${maxPayout}`);
         res.status(400).json({ 
           error: 'Maximum payout exceeded',
           details: 'You cannot claim more than 2x your original stake',
@@ -195,7 +198,7 @@ export class ClaimController {
         WHERE payment_reference = $1 AND used_for_match = false
       `, [userPayment.payment_reference]);
 
-      console.log(`[Claim] Security checks passed - Max payout: ${maxPayout}, Already claimed: ${alreadyClaimed}, This claim: ${TreasuryService.formatWLD(netPayout)}`);
+      console.log(`[Claim] Security checks passed - Max payout: ${maxPayout}, Already claimed: ${alreadyClaimed}, This claim: ${netPayoutWLD}`);
 
       // FIXED: Store wei amounts as strings in VARCHAR columns (prevents numeric overflow)
       // Database columns are VARCHAR(78) which can store up to 2^256 in decimal
@@ -241,12 +244,11 @@ export class ClaimController {
         `, [txHash, idempotencyKey]);
         
         // SECURITY: Update total_claimed_amount to track cumulative claims
-        const payoutWLD = parseFloat(TreasuryService.formatWLD(netPayout));
         await pool.query(`
           UPDATE payment_intents 
           SET total_claimed_amount = COALESCE(total_claimed_amount, 0) + $1 
           WHERE payment_reference = $2
-        `, [payoutWLD, userPayment.payment_reference]);
+        `, [netPayoutWLD, userPayment.payment_reference]);
 
         console.log(`[Claim] Successfully paid out ${netPayout} wei to ${claimingWallet}, tx: ${txHash}`);
 

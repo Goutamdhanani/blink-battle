@@ -51,6 +51,7 @@ const MatchHistory: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [claimingMatchId, setClaimingMatchId] = useState<string | null>(null);
   const [claimErrors, setClaimErrors] = useState<Record<string, string>>({});
+  const [refundMessage, setRefundMessage] = useState<string | null>(null);
 
   useEffect(() => {
     if (!state.user || !state.token) {
@@ -309,10 +310,35 @@ const MatchHistory: React.FC = () => {
                             variant="secondary"
                             size="small"
                             fullWidth
-                            onClick={() => alert('Refund claim from match history - feature not yet implemented. Use pending refunds section above.')}
+                            onClick={() => setRefundMessage('Refund claiming from match history will be available soon. Please use the Pending Refunds section above to claim refunds for now.')}
                           >
                             🔄 Claim Refund
                           </NeonButton>
+                          {refundMessage && (
+                            <div style={{ 
+                              marginTop: '0.75rem',
+                              padding: '0.75rem',
+                              background: 'rgba(255, 170, 0, 0.15)',
+                              borderRadius: '6px',
+                              fontSize: '0.85rem',
+                              color: '#ffaa00'
+                            }}>
+                              ℹ️ {refundMessage}
+                              <button
+                                onClick={() => setRefundMessage(null)}
+                                style={{
+                                  marginLeft: '0.5rem',
+                                  background: 'none',
+                                  border: 'none',
+                                  color: '#ffaa00',
+                                  cursor: 'pointer',
+                                  fontSize: '1.2em'
+                                }}
+                              >
+                                ×
+                              </button>
+                            </div>
+                          )}
                         </>
                       )}
                     </div>

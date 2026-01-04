@@ -36,6 +36,8 @@ export async function up(client: PoolClient): Promise<void> {
 
   // Add total_claimed_amount tracking to payment_intents
   // This prevents users from claiming more than 2x their original stake
+  // NUMERIC(18, 8) precision: supports up to 9,999,999,999.99999999 WLD
+  // This is sufficient as max stake is typically < 1000 WLD and max claim is 2x stake
   const paymentColumns = [
     { name: 'total_claimed_amount', type: 'NUMERIC(18, 8) DEFAULT 0' },
     { name: 'used_for_match', type: 'BOOLEAN DEFAULT false' },

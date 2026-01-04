@@ -16,6 +16,7 @@ import pool from '../config/database';
 const COUNTDOWN_DURATION_MS = 3000; // 3 seconds for countdown display
 const TIE_THRESHOLD_MS = 1; // Reaction time difference considered a tie
 const REFUND_DEADLINE_HOURS = 24; // Hours to claim refund after match cancellation
+const NO_REACTION_TIME = -1; // Sentinel value for missing/invalid reaction times
 
 /**
  * Possible match result values
@@ -439,16 +440,16 @@ export class PollingMatchController {
           await pool.query(`
             UPDATE matches 
             SET player1_disqualified = true,
-                player1_reaction_ms = -1
-            WHERE match_id = $1
-          `, [matchId]);
+                player1_reaction_ms = $1
+            WHERE match_id = $2
+          `, [NO_REACTION_TIME, matchId]);
         } else {
           await pool.query(`
             UPDATE matches 
             SET player2_disqualified = true,
-                player2_reaction_ms = -1
-            WHERE match_id = $1
-          `, [matchId]);
+                player2_reaction_ms = $1
+            WHERE match_id = $2
+          `, [NO_REACTION_TIME, matchId]);
         }
         
         // Record the early tap in tap_events for audit
@@ -975,19 +976,19 @@ export class PollingMatchController {
       await MatchModel.completeMatch({
         matchId: match.match_id,
         winnerId,
-        player1ReactionMs: player1Tap?.reaction_ms || -1,
-        player2ReactionMs: player2Tap?.reaction_ms || -1,
+        player1ReactionMs: player1Tap?.reaction_ms || NO_REACTION_TIME,
+        player2ReactionMs: player2Tap?.reaction_ms || NO_REACTION_TIME,
         reason: result,
       });
 
       // Update user stats
       if (winnerId && loserId) {
         const winnerReaction = winnerId === match.player1_id 
-          ? (player1Tap?.reaction_ms || -1) 
-          : (player2Tap?.reaction_ms || -1);
+          ? (player1Tap?.reaction_ms || NO_REACTION_TIME) 
+          : (player2Tap?.reaction_ms || NO_REACTION_TIME);
         const loserReaction = loserId === match.player1_id 
-          ? (player1Tap?.reaction_ms || -1) 
-          : (player2Tap?.reaction_ms || -1);
+          ? (player1Tap?.reaction_ms || NO_REACTION_TIME) 
+          : (player2Tap?.reaction_ms || NO_REACTION_TIME);
 
         await UserModel.updateStats(winnerId, true, winnerReaction);
         await UserModel.updateStats(loserId, false, loserReaction);
