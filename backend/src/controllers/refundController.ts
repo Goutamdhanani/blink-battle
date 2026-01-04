@@ -3,6 +3,9 @@ import { ethers } from 'ethers';
 import pool from '../config/database';
 import { TreasuryService } from '../services/treasuryService';
 
+// Constants
+const GAS_FEE_PERCENT = 3; // Gas fee deducted from refunds (3%)
+
 /**
  * RefundController - Handles refund claims for cancelled/timeout matches
  */
@@ -67,9 +70,9 @@ export class RefundController {
         return;
       }
 
-      // Calculate refund (97% - 3% gas fee)
+      // Calculate refund (deduct gas fee)
       const amountWei = BigInt(Math.floor(paymentData.amount * 1e18));
-      const gasFeeWei = (amountWei * 3n) / 100n;
+      const gasFeeWei = (amountWei * BigInt(GAS_FEE_PERCENT)) / 100n;
       const refundWei = amountWei - gasFeeWei;
       const refundWLD = parseFloat(ethers.formatEther(refundWei));
 
@@ -194,7 +197,7 @@ export class RefundController {
         refunds: eligiblePayments.rows.map(p => ({
           paymentReference: p.payment_reference,
           amount: p.amount,
-          refundAmount: p.amount * 0.97, // 3% gas fee
+          refundAmount: p.amount * (1 - GAS_FEE_PERCENT / 100), // Deduct gas fee
           reason: p.refund_reason,
           deadline: p.refund_deadline,
           createdAt: p.created_at

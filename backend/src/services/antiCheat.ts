@@ -3,6 +3,13 @@
  */
 import pool from '../config/database';
 
+// Anti-cheat thresholds (configurable via environment variables)
+const INHUMAN_REACTION_THRESHOLD_MS = parseInt(process.env.INHUMAN_REACTION_THRESHOLD_MS || '100', 10);
+const BOT_CONSISTENCY_REACTION_MS = parseInt(process.env.BOT_CONSISTENCY_REACTION_MS || '150', 10);
+const BOT_CONSISTENCY_VARIANCE_MS = parseInt(process.env.BOT_CONSISTENCY_VARIANCE_MS || '10', 10);
+const HIGH_WIN_RATE_THRESHOLD = parseFloat(process.env.HIGH_WIN_RATE_THRESHOLD || '90');
+const MIN_MATCHES_FOR_WIN_RATE = parseInt(process.env.MIN_MATCHES_FOR_WIN_RATE || '20', 10);
+
 export class AntiCheatService {
   private static readonly MIN_HUMAN_REACTION_MS = parseInt(
     process.env.MIN_REACTION_MS || '80',
@@ -175,13 +182,15 @@ export class AntiCheatService {
   }
 
   /**
-   * Check for suspicious activity and record to database
+   * Detect and record suspicious activity to database
    * Flags users with:
    * - Reaction times consistently < 100ms
    * - Win rate > 90% over 20+ matches
    * - Inhuman reaction patterns
+   * 
+   * @returns true if suspicious activity was detected and recorded
    */
-  static async checkSuspiciousActivity(userId: string, matchId?: string): Promise<boolean> {
+  static async detectAndRecordSuspiciousActivity(userId: string, matchId?: string): Promise<boolean> {
     try {
       // Check if suspicious_activity table exists
       const tableExists = await pool.query(`
@@ -211,8 +220,8 @@ export class AntiCheatService {
       const reactions = recentTaps.rows.map(r => r.reaction_ms);
       const avgReaction = reactions.reduce((sum, t) => sum + t, 0) / reactions.length;
 
-      // Flag if average reaction < 100ms (humanly impossible)
-      if (avgReaction < 100) {
+      // Flag if average reaction < INHUMAN_REACTION_THRESHOLD_MS (humanly impossible)
+      if (avgReaction < INHUMAN_REACTION_THRESHOLD_MS) {
         await pool.query(`
           INSERT INTO suspicious_activity (user_id, reason, avg_reaction_ms, match_id, details)
           VALUES ($1, 'inhuman_reaction_time', $2, $3, $4)
@@ -220,7 +229,7 @@ export class AntiCheatService {
           userId, 
           avgReaction, 
           matchId || null,
-          `Average reaction time of ${avgReaction.toFixed(2)}ms over ${reactions.length} matches is inhuman (< 100ms)`
+          `Average reaction time of ${avgReaction.toFixed(2)}ms over ${reactions.length} matches is inhuman (< ${INHUMAN_REACTION_THRESHOLD_MS}ms)`
         ]);
         console.warn(`[AntiCheat] Flagged user ${userId} for inhuman reaction time: ${avgReaction.toFixed(2)}ms`);
         return true;
@@ -228,7 +237,7 @@ export class AntiCheatService {
 
       // Check for bot-like consistency
       const variance = this.calculateVariance(reactions);
-      if (avgReaction < 150 && variance < 10 && reactions.length >= 10) {
+      if (avgReaction < BOT_CONSISTENCY_REACTION_MS && variance < BOT_CONSISTENCY_VARIANCE_MS && reactions.length >= 10) {
         await pool.query(`
           INSERT INTO suspicious_activity (user_id, reason, avg_reaction_ms, match_id, details)
           VALUES ($1, 'bot_like_consistency', $2, $3, $4)
@@ -254,9 +263,9 @@ export class AntiCheatService {
       `, [userId]);
 
       const { total_matches, wins } = matchStats.rows[0] || { total_matches: 0, wins: 0 };
-      if (total_matches >= 20) {
+      if (total_matches >= MIN_MATCHES_FOR_WIN_RATE) {
         const winRate = (wins / total_matches) * 100;
-        if (winRate > 90) {
+        if (winRate > HIGH_WIN_RATE_THRESHOLD) {
           await pool.query(`
             INSERT INTO suspicious_activity (user_id, reason, avg_reaction_ms, match_id, details)
             VALUES ($1, 'high_win_rate', $2, $3, $4)

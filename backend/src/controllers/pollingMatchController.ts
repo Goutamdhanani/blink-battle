@@ -14,6 +14,8 @@ import pool from '../config/database';
 
 // Constants
 const COUNTDOWN_DURATION_MS = 3000; // 3 seconds for countdown display
+const TIE_THRESHOLD_MS = 1; // Reaction time difference considered a tie
+const REFUND_DEADLINE_HOURS = 24; // Hours to claim refund after match cancellation
 
 /**
  * Parse green_light_time value that may be returned as string from PostgreSQL BIGINT
@@ -480,7 +482,7 @@ export class PollingMatchController {
       }
 
       // Check for suspicious activity patterns (async, don't block response)
-      AntiCheatService.checkSuspiciousActivity(userId, matchId).catch(err => {
+      AntiCheatService.detectAndRecordSuspiciousActivity(userId, matchId).catch(err => {
         console.error('[AntiCheat] Error checking suspicious activity:', err);
       });
 
@@ -817,8 +819,8 @@ export class PollingMatchController {
       // Both valid, compare reaction times
       const diff = Math.abs(player1Tap.reaction_ms - player2Tap.reaction_ms);
       
-      if (diff <= 1) {
-        // Tie (within 1ms) - no winner
+      if (diff <= TIE_THRESHOLD_MS) {
+        // Tie (within threshold) - no winner
         winnerId = undefined;
         loserId = undefined;
         result = 'tie';
@@ -872,7 +874,7 @@ export class PollingMatchController {
         await MatchModel.updateStatus(match.match_id, MatchStatus.CANCELLED);
         
         // Mark payment intents as refundable (with 3% gas fee deducted)
-        const refundDeadline = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours to claim
+        const refundDeadline = new Date(Date.now() + REFUND_DEADLINE_HOURS * 60 * 60 * 1000);
         await pool.query(
           `UPDATE payment_intents 
            SET refund_status = 'eligible',
