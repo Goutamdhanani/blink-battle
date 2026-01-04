@@ -1,6 +1,8 @@
 /**
  * Anti-cheat service for detecting suspicious gameplay patterns
  */
+import pool from '../config/database';
+
 export class AntiCheatService {
   private static readonly MIN_HUMAN_REACTION_MS = parseInt(
     process.env.MIN_REACTION_MS || '80',
@@ -170,5 +172,132 @@ export class AntiCheatService {
       timestamp: new Date().toISOString(),
       ...data,
     });
+  }
+
+  /**
+   * Check for suspicious activity and record to database
+   * Flags users with:
+   * - Reaction times consistently < 100ms
+   * - Win rate > 90% over 20+ matches
+   * - Inhuman reaction patterns
+   */
+  static async checkSuspiciousActivity(userId: string, matchId?: string): Promise<boolean> {
+    try {
+      // Check if suspicious_activity table exists
+      const tableExists = await pool.query(`
+        SELECT EXISTS (
+          SELECT FROM information_schema.tables 
+          WHERE table_name = 'suspicious_activity'
+        );
+      `);
+      
+      if (!tableExists.rows[0]?.exists) {
+        // Table doesn't exist yet, skip check
+        return false;
+      }
+
+      // Get recent taps for this user (last 20 valid taps)
+      const recentTaps = await pool.query(`
+        SELECT reaction_ms FROM tap_events
+        WHERE user_id = $1 AND is_valid = true AND disqualified = false
+        ORDER BY created_at DESC LIMIT 20
+      `, [userId]);
+
+      if (!recentTaps.rowCount || recentTaps.rowCount < 5) {
+        // Not enough data to assess
+        return false;
+      }
+
+      const reactions = recentTaps.rows.map(r => r.reaction_ms);
+      const avgReaction = reactions.reduce((sum, t) => sum + t, 0) / reactions.length;
+
+      // Flag if average reaction < 100ms (humanly impossible)
+      if (avgReaction < 100) {
+        await pool.query(`
+          INSERT INTO suspicious_activity (user_id, reason, avg_reaction_ms, match_id, details)
+          VALUES ($1, 'inhuman_reaction_time', $2, $3, $4)
+        `, [
+          userId, 
+          avgReaction, 
+          matchId || null,
+          `Average reaction time of ${avgReaction.toFixed(2)}ms over ${reactions.length} matches is inhuman (< 100ms)`
+        ]);
+        console.warn(`[AntiCheat] Flagged user ${userId} for inhuman reaction time: ${avgReaction.toFixed(2)}ms`);
+        return true;
+      }
+
+      // Check for bot-like consistency
+      const variance = this.calculateVariance(reactions);
+      if (avgReaction < 150 && variance < 10 && reactions.length >= 10) {
+        await pool.query(`
+          INSERT INTO suspicious_activity (user_id, reason, avg_reaction_ms, match_id, details)
+          VALUES ($1, 'bot_like_consistency', $2, $3, $4)
+        `, [
+          userId,
+          avgReaction,
+          matchId || null,
+          `Bot-like consistency detected: avg ${avgReaction.toFixed(2)}ms, variance ${variance.toFixed(2)}ms over ${reactions.length} matches`
+        ]);
+        console.warn(`[AntiCheat] Flagged user ${userId} for bot-like consistency`);
+        return true;
+      }
+
+      // Check win rate (if enough matches)
+      const matchStats = await pool.query(`
+        SELECT 
+          COUNT(*) as total_matches,
+          SUM(CASE WHEN winner_id = $1 THEN 1 ELSE 0 END) as wins
+        FROM matches
+        WHERE (player1_id = $1 OR player2_id = $1)
+          AND status = 'completed'
+          AND completed_at > NOW() - INTERVAL '7 days'
+      `, [userId]);
+
+      const { total_matches, wins } = matchStats.rows[0] || { total_matches: 0, wins: 0 };
+      if (total_matches >= 20) {
+        const winRate = (wins / total_matches) * 100;
+        if (winRate > 90) {
+          await pool.query(`
+            INSERT INTO suspicious_activity (user_id, reason, avg_reaction_ms, match_id, details)
+            VALUES ($1, 'high_win_rate', $2, $3, $4)
+          `, [
+            userId,
+            avgReaction,
+            matchId || null,
+            `Suspiciously high win rate: ${winRate.toFixed(1)}% over ${total_matches} matches in last 7 days`
+          ]);
+          console.warn(`[AntiCheat] Flagged user ${userId} for high win rate: ${winRate.toFixed(1)}%`);
+          return true;
+        }
+      }
+
+      return false;
+    } catch (error: any) {
+      // Don't fail the match if anti-cheat check fails
+      console.error('[AntiCheat] Error checking suspicious activity:', error.message);
+      return false;
+    }
+  }
+
+  /**
+   * Check for timing discrepancy between client and server
+   * Large discrepancies may indicate tampering
+   */
+  static checkTimingDiscrepancy(
+    clientReactionMs: number,
+    serverReactionMs: number,
+    userId: string
+  ): boolean {
+    const discrepancy = Math.abs(clientReactionMs - serverReactionMs);
+    
+    if (discrepancy > 500) {
+      console.warn(
+        `[AntiCheat] Large timing discrepancy for user ${userId}: ` +
+        `client=${clientReactionMs}ms, server=${serverReactionMs}ms, diff=${discrepancy}ms`
+      );
+      return true;
+    }
+    
+    return false;
   }
 }

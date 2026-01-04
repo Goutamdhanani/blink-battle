@@ -473,6 +473,17 @@ export class PollingMatchController {
 
       console.log(`[Polling Match] Tap recorded - User: ${userId}, Match: ${matchId}, Reaction: ${tap.reaction_ms}ms, Valid: ${tap.is_valid}, Disqualified: ${tap.disqualified}`);
 
+      // Check for timing discrepancy between client and server (anti-cheat)
+      if (clientTimestamp && Number.isFinite(clientTimestamp)) {
+        const clientReaction = clientTimestamp - greenLightTime;
+        AntiCheatService.checkTimingDiscrepancy(clientReaction, tap.reaction_ms, userId);
+      }
+
+      // Check for suspicious activity patterns (async, don't block response)
+      AntiCheatService.checkSuspiciousActivity(userId, matchId).catch(err => {
+        console.error('[AntiCheat] Error checking suspicious activity:', err);
+      });
+
       // Record reaction in match
       await MatchModel.recordReaction(matchId, userId, tap.reaction_ms);
 
