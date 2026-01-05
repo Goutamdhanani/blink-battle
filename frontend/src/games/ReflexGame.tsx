@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { saveGameScore } from '../lib/indexedDB';
+import { saveGameScoreWithSync as saveGameScore } from '../lib/indexedDB';
 import { GameScore, ReflexTrial } from './types';
 import './ReflexGame.css';
 

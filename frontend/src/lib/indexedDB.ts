@@ -66,6 +66,34 @@ export async function saveGameScore(score: GameScore): Promise<void> {
 }
 
 /**
+ * Save game score to both IndexedDB and backend (if authenticated)
+ * This is the recommended function to use in games
+ */
+export async function saveGameScoreWithSync(score: GameScore): Promise<void> {
+  // Always save to IndexedDB first (offline support)
+  await saveGameScore(score);
+  
+  // Try to sync to backend if authenticated
+  try {
+    const token = localStorage.getItem('token');
+    if (token) {
+      const { brainTrainingService } = await import('../services/brainTrainingService');
+      await brainTrainingService.saveGameScore(token, {
+        gameType: score.gameType,
+        score: score.score,
+        accuracy: score.accuracy,
+        timeMs: score.timeMs,
+        level: score.level,
+      });
+      console.log('[IndexedDB] Game score synced to backend');
+    }
+  } catch (error) {
+    // Don't fail if backend sync fails - IndexedDB save was successful
+    console.warn('[IndexedDB] Failed to sync score to backend (offline or error):', error);
+  }
+}
+
+/**
  * Get all scores for a specific game type
  */
 export async function getGameScores(gameType: string): Promise<GameScore[]> {

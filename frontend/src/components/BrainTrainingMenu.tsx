@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { getPlayerProfile } from '../lib/indexedDB';
-import { PlayerProfile, GameType as GameTypeEnum } from '../games/types';
+import { GameType as GameTypeEnum, Achievement } from '../games/types';
 import { useBrainTrainingData } from '../hooks/useBrainTrainingData';
 import MemoryGame from '../games/MemoryGame';
 import AttentionGame from '../games/AttentionGame';
@@ -31,7 +30,7 @@ const BrainTrainingMenu: React.FC = () => {
   const token = localStorage.getItem('token');
   
   // Use hook to fetch data from backend or IndexedDB
-  const { profile, loading, error, refresh } = useBrainTrainingData(token);
+  const { profile, refresh } = useBrainTrainingData(token);
 
   useEffect(() => {
     const timer = setTimeout(() => setShowWelcome(false), 3000);
@@ -162,7 +161,7 @@ const BrainTrainingMenu: React.FC = () => {
                 </div>
                 <div className="quick-stat-item">
                   <div className="quick-stat-icon">🏆</div>
-                  <div className="quick-stat-value">{profile.achievements?.filter(a => a.isUnlocked).length || 0}</div>
+                  <div className="quick-stat-value">{profile.achievements?.filter((a: Achievement) => a.isUnlocked).length || 0}</div>
                   <div className="quick-stat-label">Badges</div>
                 </div>
                 <div className="quick-stat-item">

@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { GameStats as GameStatsType } from '../games/types';
 
 // Normalize API URL to ensure no trailing slash
 const API_URL = (import.meta.env.VITE_API_URL || 'http://localhost:3001').replace(/\/$/, '');
@@ -11,32 +12,21 @@ export interface GameScore {
   level: number;
 }
 
-export interface GameStats {
-  gameType: string;
-  gamesPlayed: number;
-  bestScore: number;
-  averageScore: number;
-  averageAccuracy: number;
-  averageTimeMs: number;
-  highestLevel: number;
-  lastPlayed?: number;
-}
-
 export interface BrainTrainingProfile {
   totalGames: number;
-  memory: GameStats;
-  attention: GameStats;
-  reflex: GameStats;
-  word_flash?: GameStats;
-  shape_shadow?: GameStats;
-  sequence_builder?: GameStats;
-  focus_filter?: GameStats;
-  path_memory?: GameStats;
-  missing_number?: GameStats;
-  color_swap?: GameStats;
-  reverse_recall?: GameStats;
-  blink_count?: GameStats;
-  word_pair_match?: GameStats;
+  memory: GameStatsType;
+  attention: GameStatsType;
+  reflex: GameStatsType;
+  word_flash?: GameStatsType;
+  shape_shadow?: GameStatsType;
+  sequence_builder?: GameStatsType;
+  focus_filter?: GameStatsType;
+  path_memory?: GameStatsType;
+  missing_number?: GameStatsType;
+  color_swap?: GameStatsType;
+  reverse_recall?: GameStatsType;
+  blink_count?: GameStatsType;
+  word_pair_match?: GameStatsType;
 }
 
 export interface UserPercentile {
@@ -101,7 +91,7 @@ class BrainTrainingService {
   /**
    * Get stats for a specific game type
    */
-  async getGameStats(token: string, gameType: string): Promise<GameStats> {
+  async getGameStats(token: string, gameType: string): Promise<GameStatsType> {
     try {
       const response = await axios.get(`${API_URL}/api/games/stats/${gameType}`, {
         headers: {

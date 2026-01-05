@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { getPlayerProfile, PlayerProfile } from '../lib/indexedDB';
+import { getPlayerProfile } from '../lib/indexedDB';
+import { PlayerProfile, GameStats } from '../games/types';
 import { brainTrainingService } from '../services/brainTrainingService';
 
 interface UseBrainTrainingDataResult {
@@ -45,19 +46,19 @@ export function useBrainTrainingData(token?: string | null): UseBrainTrainingDat
             cognitiveIndex: cognitive.userCognitiveIndex,
             overallAccuracy: Math.round((backendProfile.memory.averageAccuracy + backendProfile.attention.averageAccuracy + backendProfile.reflex.averageAccuracy) / 3),
             gameStats: {
-              memory: backendProfile.memory,
-              attention: backendProfile.attention,
-              reflex: backendProfile.reflex,
-              word_flash: backendProfile.word_flash || { gameType: 'word_flash', gamesPlayed: 0, bestScore: 0, averageScore: 0, averageAccuracy: 0, averageTimeMs: 0, highestLevel: 0 },
-              shape_shadow: backendProfile.shape_shadow || { gameType: 'shape_shadow', gamesPlayed: 0, bestScore: 0, averageScore: 0, averageAccuracy: 0, averageTimeMs: 0, highestLevel: 0 },
-              sequence_builder: backendProfile.sequence_builder || { gameType: 'sequence_builder', gamesPlayed: 0, bestScore: 0, averageScore: 0, averageAccuracy: 0, averageTimeMs: 0, highestLevel: 0 },
-              focus_filter: backendProfile.focus_filter || { gameType: 'focus_filter', gamesPlayed: 0, bestScore: 0, averageScore: 0, averageAccuracy: 0, averageTimeMs: 0, highestLevel: 0 },
-              path_memory: backendProfile.path_memory || { gameType: 'path_memory', gamesPlayed: 0, bestScore: 0, averageScore: 0, averageAccuracy: 0, averageTimeMs: 0, highestLevel: 0 },
-              missing_number: backendProfile.missing_number || { gameType: 'missing_number', gamesPlayed: 0, bestScore: 0, averageScore: 0, averageAccuracy: 0, averageTimeMs: 0, highestLevel: 0 },
-              color_swap: backendProfile.color_swap || { gameType: 'color_swap', gamesPlayed: 0, bestScore: 0, averageScore: 0, averageAccuracy: 0, averageTimeMs: 0, highestLevel: 0 },
-              reverse_recall: backendProfile.reverse_recall || { gameType: 'reverse_recall', gamesPlayed: 0, bestScore: 0, averageScore: 0, averageAccuracy: 0, averageTimeMs: 0, highestLevel: 0 },
-              blink_count: backendProfile.blink_count || { gameType: 'blink_count', gamesPlayed: 0, bestScore: 0, averageScore: 0, averageAccuracy: 0, averageTimeMs: 0, highestLevel: 0 },
-              word_pair_match: backendProfile.word_pair_match || { gameType: 'word_pair_match', gamesPlayed: 0, bestScore: 0, averageScore: 0, averageAccuracy: 0, averageTimeMs: 0, highestLevel: 0 },
+              memory: backendProfile.memory as GameStats,
+              attention: backendProfile.attention as GameStats,
+              reflex: backendProfile.reflex as GameStats,
+              word_flash: (backendProfile.word_flash || { gameType: 'word_flash' as const, gamesPlayed: 0, bestScore: 0, averageScore: 0, averageAccuracy: 0, averageTimeMs: 0, highestLevel: 0 }) as GameStats,
+              shape_shadow: (backendProfile.shape_shadow || { gameType: 'shape_shadow' as const, gamesPlayed: 0, bestScore: 0, averageScore: 0, averageAccuracy: 0, averageTimeMs: 0, highestLevel: 0 }) as GameStats,
+              sequence_builder: (backendProfile.sequence_builder || { gameType: 'sequence_builder' as const, gamesPlayed: 0, bestScore: 0, averageScore: 0, averageAccuracy: 0, averageTimeMs: 0, highestLevel: 0 }) as GameStats,
+              focus_filter: (backendProfile.focus_filter || { gameType: 'focus_filter' as const, gamesPlayed: 0, bestScore: 0, averageScore: 0, averageAccuracy: 0, averageTimeMs: 0, highestLevel: 0 }) as GameStats,
+              path_memory: (backendProfile.path_memory || { gameType: 'path_memory' as const, gamesPlayed: 0, bestScore: 0, averageScore: 0, averageAccuracy: 0, averageTimeMs: 0, highestLevel: 0 }) as GameStats,
+              missing_number: (backendProfile.missing_number || { gameType: 'missing_number' as const, gamesPlayed: 0, bestScore: 0, averageScore: 0, averageAccuracy: 0, averageTimeMs: 0, highestLevel: 0 }) as GameStats,
+              color_swap: (backendProfile.color_swap || { gameType: 'color_swap' as const, gamesPlayed: 0, bestScore: 0, averageScore: 0, averageAccuracy: 0, averageTimeMs: 0, highestLevel: 0 }) as GameStats,
+              reverse_recall: (backendProfile.reverse_recall || { gameType: 'reverse_recall' as const, gamesPlayed: 0, bestScore: 0, averageScore: 0, averageAccuracy: 0, averageTimeMs: 0, highestLevel: 0 }) as GameStats,
+              blink_count: (backendProfile.blink_count || { gameType: 'blink_count' as const, gamesPlayed: 0, bestScore: 0, averageScore: 0, averageAccuracy: 0, averageTimeMs: 0, highestLevel: 0 }) as GameStats,
+              word_pair_match: (backendProfile.word_pair_match || { gameType: 'word_pair_match' as const, gamesPlayed: 0, bestScore: 0, averageScore: 0, averageAccuracy: 0, averageTimeMs: 0, highestLevel: 0 }) as GameStats,
             },
             achievements: [], // TODO: Calculate from backend data
             unlockedThemes: calculateUnlockedThemes(Math.floor(Math.sqrt((backendProfile.memory.averageScore + backendProfile.attention.averageScore + backendProfile.reflex.averageScore) / 100)) + 1),
