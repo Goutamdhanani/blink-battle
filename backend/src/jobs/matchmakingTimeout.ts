@@ -53,6 +53,7 @@ export async function processExpiredMatchmaking(): Promise<void> {
       if (entry.stake > 0) {
         // Find the user's most recent confirmed payment for this stake amount
         // that hasn't been linked to a match yet
+        // BUG FIX: FOR UPDATE must come before ORDER BY in PostgreSQL
         const paymentResult = await client.query(`
           SELECT payment_reference, amount
           FROM payment_intents
@@ -61,9 +62,9 @@ export async function processExpiredMatchmaking(): Promise<void> {
             AND normalized_status = 'confirmed'
             AND match_id IS NULL
             AND (refund_status IS NULL OR refund_status = 'none')
+          FOR UPDATE
           ORDER BY created_at DESC
           LIMIT 1
-          FOR UPDATE
         `, [entry.user_id, entry.stake]);
 
         if (paymentResult.rows.length > 0) {
