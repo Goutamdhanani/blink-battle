@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { saveGameScoreWithSync as saveGameScore } from '../lib/indexedDB';
 import { GameScore } from './types';
 import './ColorSwap.css';
@@ -8,18 +8,54 @@ interface ColorSwapProps {
   onExit: () => void;
 }
 
+const COLORS = [
+  { name: 'RED', hex: '#ff4444' },
+  { name: 'BLUE', hex: '#4444ff' },
+  { name: 'GREEN', hex: '#44ff44' },
+  { name: 'YELLOW', hex: '#ffff44' },
+  { name: 'PURPLE', hex: '#ff44ff' },
+  { name: 'ORANGE', hex: '#ff8844' },
+];
+
 const ColorSwap: React.FC<ColorSwapProps> = ({ onGameComplete, onExit }) => {
   const [level, setLevel] = useState(1);
   const [score, setScore] = useState(0);
   const [gamePhase, setGamePhase] = useState<'instructions' | 'playing' | 'complete'>('instructions');
   const [startTime] = useState(Date.now());
   const [round, setRound] = useState(0);
-  const TOTAL_ROUNDS = 10;
+  const [wordText, setWordText] = useState('');
+  const [wordColor, setWordColor] = useState('');
+  const [correctAnswer, setCorrectAnswer] = useState('');
+  const [correctAnswers, setCorrectAnswers] = useState(0);
+  const [feedback, setFeedback] = useState<'correct' | 'wrong' | null>(null);
+  const [questionType, setQuestionType] = useState<'word' | 'color'>('word');
+  
+  const TOTAL_ROUNDS = 12;
+
+  useEffect(() => {
+    if (gamePhase === 'playing' && round < TOTAL_ROUNDS) {
+      presentQuestion();
+    } else if (round >= TOTAL_ROUNDS && gamePhase === 'playing') {
+      completeGame();
+    }
+  }, [round, gamePhase]);
+
+  const presentQuestion = () => {
+    const wordColor = COLORS[Math.floor(Math.random() * COLORS.length)];
+    const displayColor = COLORS[Math.floor(Math.random() * COLORS.length)];
+    const askAbout = Math.random() > 0.5 ? 'word' : 'color';
+
+    setWordText(wordColor.name);
+    setWordColor(displayColor.hex);
+    setQuestionType(askAbout);
+    setCorrectAnswer(askAbout === 'word' ? wordColor.name : displayColor.hex);
+    setFeedback(null);
+  };
 
   const completeGame = async () => {
     setGamePhase('complete');
     const timeMs = Date.now() - startTime;
-    const accuracy = Math.round(Math.random() * 30 + 70);
+    const accuracy = Math.round((correctAnswers / TOTAL_ROUNDS) * 100);
 
     const gameScore: GameScore = {
       gameType: 'color_swap',
@@ -38,18 +74,31 @@ const ColorSwap: React.FC<ColorSwapProps> = ({ onGameComplete, onExit }) => {
     setGamePhase('playing');
     setScore(0);
     setRound(0);
-    // Simulate gameplay
-    const interval = setInterval(() => {
-      setRound(prev => {
-        if (prev >= TOTAL_ROUNDS - 1) {
-          clearInterval(interval);
-          setTimeout(completeGame, 500);
-          return prev;
-        }
-        setScore(s => s + (10 * level));
-        return prev + 1;
-      });
-    }, 800);
+    setCorrectAnswers(0);
+  };
+
+  const handleAnswer = (colorName: string) => {
+    if (feedback) return;
+
+    let isCorrect = false;
+    if (questionType === 'word') {
+      isCorrect = wordText === colorName;
+    } else {
+      const selectedColor = COLORS.find(c => c.name === colorName);
+      isCorrect = selectedColor?.hex === correctAnswer;
+    }
+
+    if (isCorrect) {
+      setCorrectAnswers(prev => prev + 1);
+      setScore(prev => prev + (12 * level));
+      setFeedback('correct');
+    } else {
+      setFeedback('wrong');
+    }
+
+    setTimeout(() => {
+      setRound(prev => prev + 1);
+    }, 1000);
   };
 
   if (gamePhase === 'instructions') {
@@ -60,9 +109,11 @@ const ColorSwap: React.FC<ColorSwapProps> = ({ onGameComplete, onExit }) => {
           <h2>🎨 Color Swap</h2>
           <p className="game-subtitle">Level {level}</p>
           <div className="instructions-content">
-            <p>🎮 Challenge your cognitive abilities</p>
-            <p>🧠 Improve your brain skills</p>
-            <p>📈 Track your progress</p>
+            <p>👁️ See a word displayed in color</p>
+            <p>🧠 Answer based on the question:</p>
+            <p>📝 "What WORD?" - select the word you read</p>
+            <p>🎨 "What COLOR?" - select the color you see</p>
+            <p>⚡ Test your focus and avoid distractions!</p>
             <p>🎯 {TOTAL_ROUNDS} rounds per level</p>
           </div>
           <button className="start-btn" onClick={startGame}>
@@ -74,6 +125,7 @@ const ColorSwap: React.FC<ColorSwapProps> = ({ onGameComplete, onExit }) => {
   }
 
   if (gamePhase === 'complete') {
+    const accuracy = Math.round((correctAnswers / TOTAL_ROUNDS) * 100);
     return (
       <div className="color_swap-game">
         <div className="game-complete">
@@ -84,8 +136,12 @@ const ColorSwap: React.FC<ColorSwapProps> = ({ onGameComplete, onExit }) => {
               <div className="stat-label">Score</div>
             </div>
             <div className="stat-item">
-              <div className="stat-value">{TOTAL_ROUNDS}</div>
-              <div className="stat-label">Rounds</div>
+              <div className="stat-value">{accuracy}%</div>
+              <div className="stat-label">Accuracy</div>
+            </div>
+            <div className="stat-item">
+              <div className="stat-value">{correctAnswers}/{TOTAL_ROUNDS}</div>
+              <div className="stat-label">Correct</div>
             </div>
           </div>
           <div className="action-buttons">
@@ -110,11 +166,36 @@ const ColorSwap: React.FC<ColorSwapProps> = ({ onGameComplete, onExit }) => {
         </div>
       </div>
       <div className="game-arena">
-        <div className="game-content">
-          <h3>Playing ColorSwap...</h3>
-          <div className="progress-bar">
-            <div className="progress-fill" style={{ width: `${(round / TOTAL_ROUNDS) * 100}%` }} />
+        <div className="question-text">
+          {questionType === 'word' ? 'What WORD do you see?' : 'What COLOR do you see?'}
+        </div>
+
+        <div className="color-word-display" style={{ color: wordColor }}>
+          {wordText}
+        </div>
+
+        {feedback && (
+          <div className={`feedback ${feedback}`}>
+            {feedback === 'correct' ? '✓ Correct!' : '✗ Wrong!'}
           </div>
+        )}
+
+        {!feedback && (
+          <div className="color-options">
+            {COLORS.map((color) => (
+              <button
+                key={color.name}
+                className="color-option"
+                onClick={() => handleAnswer(color.name)}
+              >
+                {color.name}
+              </button>
+            ))}
+          </div>
+        )}
+
+        <div className="progress-bar">
+          <div className="progress-fill" style={{ width: `${(round / TOTAL_ROUNDS) * 100}%` }} />
         </div>
       </div>
     </div>
