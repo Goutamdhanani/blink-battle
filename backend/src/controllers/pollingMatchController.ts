@@ -13,11 +13,12 @@ import pool from '../config/database';
  * 
  * REACTION LIGHTS GAME MECHANICS:
  * 1. 5 lights turn RED sequentially (~500ms each = ~2.5s total)
- * 2. Mandatory 2-second minimum wait with all lights RED
- * 3. Random delay (2-5s) after the minimum wait
- * 4. Lights turn GREEN → trigger moment (players react)
+ * 2. Mandatory 2-second wait with all lights RED
+ * 3. Random delay (0-5s) after the minimum wait
+ * 4. Lights turn GREEN → GO signal (players can tap after additional 2s mandatory wait)
  * 
- * Total timing: ~2.5s (lights) + 2s (min wait) + 2-5s (random) = ~6.5-9.5s
+ * Total timing: ~2.5s (lights) + 2s (min wait) + 0-5s (random) = ~4.5-9.5s before green
+ *               + 2s (mandatory wait after green) before taps are accepted
  */
 
 // Constants
@@ -25,6 +26,7 @@ const TIE_THRESHOLD_MS = 1; // Reaction time difference considered a tie
 const REFUND_DEADLINE_HOURS = 24; // Hours to claim refund after match cancellation
 const NO_REACTION_TIME = -1; // Sentinel value for missing/invalid reaction times
 const MINIMUM_WAIT_AFTER_RED_MS = 2000; // Mandatory 2-second wait after all lights turn red
+const MANDATORY_WAIT_AFTER_GREEN_MS = 2000; // Mandatory 2-second wait after green light before accepting taps
 
 /**
  * Possible match result values
@@ -161,19 +163,19 @@ export class PollingMatchController {
         // CRITICAL: Mandatory 2-second minimum wait AFTER all lights are red
         const minimumWaitMs = MINIMUM_WAIT_AFTER_RED_MS; // 2000ms
         
-        // Random delay AFTER the minimum wait (2-5 seconds)
-        const minRandomDelay = parseInt(process.env.SIGNAL_DELAY_MIN_MS || '2000', 10);
+        // Random delay AFTER the minimum wait (0-5 seconds as per requirements)
+        const minRandomDelay = parseInt(process.env.SIGNAL_DELAY_MIN_MS || '0', 10);
         const maxRandomDelay = parseInt(process.env.SIGNAL_DELAY_MAX_MS || '5000', 10);
         const randomDelay = generateRandomDelay(minRandomDelay, maxRandomDelay);
         
         const now = Date.now();
-        // TIMING FORMULA (implements 6.5-9.5 second total timing):
+        // TIMING FORMULA (updated per requirements):
         // greenLightTime = now + totalLightsTime + minimumWaitMs + randomDelay
         // Where:
         //   - totalLightsTime: ~2.5s (5 lights × ~500ms each)
         //   - minimumWaitMs: 2.0s (mandatory wait after all lights red)
-        //   - randomDelay: 2-5s (random delay after minimum wait)
-        // Total range: ~6.5s to ~9.5s
+        //   - randomDelay: 0-5s (random delay after minimum wait)
+        // Total range: ~4.5s to ~9.5s
         const greenLightTime = now + totalLightsTime + minimumWaitMs + randomDelay;
 
         await client.query(`
@@ -443,6 +445,53 @@ export class PollingMatchController {
       // Server time is authority; apply tolerance for clock drift
       // Tolerance increased from 50ms to 150ms to handle network/clock sync issues
       const CLOCK_SYNC_TOLERANCE_MS = 150; // 100-150ms tolerance for clock drift (per requirements)
+      
+      // CRITICAL: Enforce 2-second mandatory wait AFTER green light appears
+      // This ensures fair start for all players as green light may render at different times
+      if (timeSinceGreenLight < MANDATORY_WAIT_AFTER_GREEN_MS) {
+        // Tap during mandatory wait period - disqualify
+        const tooEarlyMs = MANDATORY_WAIT_AFTER_GREEN_MS - timeSinceGreenLight;
+        console.log(`[Polling Match] ⚠️ TOO EARLY! User ${userId} tapped ${tooEarlyMs}ms before mandatory 2s wait completed - DISQUALIFIED`);
+        
+        // Mark player as disqualified
+        const isPlayer1 = match.player1_id === userId;
+        
+        // SECURITY: Use separate queries to avoid SQL injection via column names
+        if (isPlayer1) {
+          await pool.query(`
+            UPDATE matches 
+            SET player1_disqualified = true,
+                player1_reaction_ms = $1
+            WHERE match_id = $2
+          `, [NO_REACTION_TIME, matchId]);
+        } else {
+          await pool.query(`
+            UPDATE matches 
+            SET player2_disqualified = true,
+                player2_reaction_ms = $1
+            WHERE match_id = $2
+          `, [NO_REACTION_TIME, matchId]);
+        }
+        
+        // Record the early tap in tap_events for audit
+        await TapEventModel.create(
+          matchId,
+          userId,
+          validatedClientTimestamp || now,
+          now,
+          greenLightTime
+        );
+        
+        // Return success with disqualification
+        res.json({ 
+          success: true, 
+          disqualified: true,
+          reason: 'too_early',
+          tooEarlyByMs: tooEarlyMs,
+          message: `Please wait ${MANDATORY_WAIT_AFTER_GREEN_MS / 1000} seconds after green light before tapping! ⏱️`
+        });
+        return;
+      }
       
       if (timeSinceGreenLight < -CLOCK_SYNC_TOLERANCE_MS) {
         // Early tap beyond tolerance - disqualify but return 200 (no 400s)

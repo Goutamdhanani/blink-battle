@@ -5,6 +5,10 @@ import { UserModel } from '../models/User';
 import { MatchStatus } from '../models/types';
 import { generateRandomDelay } from '../services/randomness';
 import { PaymentIntentModel, NormalizedPaymentStatus } from '../models/PaymentIntent';
+import pool from '../config/database';
+
+// Constants
+const REFUND_DEADLINE_HOURS = 24; // Hours to claim refund after match cancellation
 
 /**
  * HTTP Polling Matchmaking Controller
@@ -270,8 +274,11 @@ export class PollingMatchmakingController {
   /**
    * DELETE /api/matchmaking/cancel/:userId
    * Cancel matchmaking
+   * UPDATED: Mark associated payment as refund eligible
    */
   static async cancel(req: Request, res: Response): Promise<void> {
+    const client = await pool.connect();
+    
     try {
       const { userId } = req.params;
       const authUserId = (req as any).userId;
@@ -282,14 +289,61 @@ export class PollingMatchmakingController {
         return;
       }
 
-      await MatchQueueModel.cancel(userId);
+      await client.query('BEGIN');
+
+      // Get queue entry to find associated payment
+      const queueEntry = await client.query(
+        `SELECT * FROM match_queue 
+         WHERE user_id = $1 AND status = $2
+         FOR UPDATE`,
+        [userId, QueueStatus.SEARCHING]
+      );
+
+      // Cancel queue entry
+      await client.query(
+        `UPDATE match_queue 
+         SET status = $1, updated_at = NOW() 
+         WHERE user_id = $2 
+           AND status = $3`,
+        [QueueStatus.CANCELLED, userId, QueueStatus.SEARCHING]
+      );
+
+      // Mark payment as refund eligible (cancelled matchmaking)
+      if (queueEntry.rows.length > 0) {
+        const stake = queueEntry.rows[0].stake;
+        
+        // Find the most recent confirmed payment for this stake without a match
+        const refundDeadline = new Date(Date.now() + REFUND_DEADLINE_HOURS * 60 * 60 * 1000);
+        
+        await client.query(
+          `UPDATE payment_intents 
+           SET refund_status = 'eligible',
+               refund_reason = 'matchmaking_cancelled',
+               refund_deadline = $1
+           WHERE user_id = $2
+             AND amount = $3
+             AND normalized_status = 'confirmed'
+             AND match_id IS NULL
+             AND refund_status IS NULL
+           ORDER BY created_at DESC
+           LIMIT 1`,
+          [refundDeadline, userId, stake]
+        );
+        
+        console.log(`[HTTP Matchmaking] Marked payment for user ${userId} (stake: ${stake}) as refund eligible due to matchmaking cancellation`);
+      }
+
+      await client.query('COMMIT');
 
       console.log(`[HTTP Matchmaking] User ${userId} cancelled matchmaking`);
 
       res.json({ success: true });
     } catch (error) {
+      await client.query('ROLLBACK');
       console.error('[HTTP Matchmaking] Error in cancel:', error);
       res.status(500).json({ error: 'Failed to cancel matchmaking' });
+    } finally {
+      client.release();
     }
   }
 

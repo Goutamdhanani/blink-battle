@@ -222,7 +222,8 @@ export class ClaimController {
       // FIXED: Store wei amounts as strings in VARCHAR columns (prevents numeric overflow)
       // Database columns are VARCHAR(78) which can store up to 2^256 in decimal
       // Wei amounts are stored as strings: e.g., "180000000000000000" for 0.18 WLD
-      // SECURITY: Mark as claimed immediately to prevent double claims (optimistic locking)
+      // SECURITY FIX: Do NOT mark as claimed until transaction succeeds
+      // This prevents "already claimed" errors when transaction fails
       await client.query(`
         INSERT INTO claims (match_id, winner_wallet, amount, platform_fee, net_payout, idempotency_key, status, claimed, claim_timestamp)
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
@@ -234,7 +235,7 @@ export class ClaimController {
         netPayout.toString(),      // Store as string (wei)
         idempotencyKey,
         ClaimStatus.PROCESSING,
-        true  // Mark as claimed immediately (optimistic locking)
+        false  // Only mark as claimed after successful transaction
       ]);
 
       // Mark match as claimed and update total_claimed_amount (wei)
@@ -256,9 +257,11 @@ export class ClaimController {
         await ClaimModel.complete(idempotencyKey, txHash);
         
         // SECURITY: Update claim_transaction_hash to verify blockchain proof
+        // SECURITY FIX: Mark as claimed only AFTER successful transaction
         await pool.query(`
           UPDATE claims 
-          SET claim_transaction_hash = $1 
+          SET claim_transaction_hash = $1,
+              claimed = true
           WHERE idempotency_key = $2
         `, [txHash, idempotencyKey]);
         
@@ -288,15 +291,8 @@ export class ClaimController {
       } catch (error: any) {
         console.error(`[Claim] Payout failed for match ${matchId}:`, error);
         
-        // Mark claim as failed and unclaim it for retry
+        // Mark claim as failed (already not claimed)
         await ClaimModel.markFailed(idempotencyKey, error.message);
-        
-        // SECURITY: Reset claimed flag on failure to allow retry
-        await pool.query(`
-          UPDATE claims 
-          SET claimed = false 
-          WHERE idempotency_key = $1
-        `, [idempotencyKey]);
         
         // Rollback match claim status
         await pool.query(
