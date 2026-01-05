@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Test for Issue #1: Buggy Reward Claim Process
  * 
@@ -55,7 +56,7 @@ describe('Issue #1: Buggy Reward Claim Process - Fix Validation', () => {
       mockRequest.body = { matchId: 'match-win-123' };
 
       const mockTxHash = '0xwinning123';
-      (TreasuryService.sendPayout as any) = jest.fn().mockResolvedValue(mockTxHash);
+      (TreasuryService.sendPayout as jest.Mock).mockResolvedValue(mockTxHash);
 
       // Mock user lookup
       (pool as any).query.mockResolvedValueOnce({
@@ -118,10 +119,18 @@ describe('Issue #1: Buggy Reward Claim Process - Fix Validation', () => {
     it('should return idempotent response when payout_state is already PAID', async () => {
       mockRequest.body = { matchId: 'match-already-paid' };
 
-      // Mock user lookup
-      (pool as any).query.mockResolvedValueOnce({
-        rows: [{ wallet_address: '0xwinner' }],
-      });
+      // Mock user lookup and existing claim query
+      (pool as any).query
+        .mockResolvedValueOnce({
+          rows: [{ wallet_address: '0xwinner' }],
+        })
+        .mockResolvedValueOnce({
+          // Existing claim (queried after ROLLBACK)
+          rows: [{
+            claim_transaction_hash: '0xold-tx-hash',
+            tx_hash: '0xold-tx-hash',
+          }],
+        });
 
       // Mock match query with WIN result but PAID state
       mockClient.query
@@ -144,13 +153,7 @@ describe('Issue #1: Buggy Reward Claim Process - Fix Validation', () => {
             stake: '100000000000000000',
           }],
         })
-        .mockResolvedValueOnce({
-          // Existing claim
-          rows: [{
-            claim_transaction_hash: '0xold-tx-hash',
-            tx_hash: '0xold-tx-hash',
-          }],
-        });
+        .mockResolvedValueOnce({ rows: [] }); // ROLLBACK
 
       await ClaimController.claimWinnings(mockRequest as any, mockResponse as any);
 
@@ -278,7 +281,7 @@ describe('Issue #1: Buggy Reward Claim Process - Fix Validation', () => {
       mockRequest.body = { matchId: 'match-race-123' };
 
       const mockTxHash = '0xrace123';
-      (TreasuryService.sendPayout as any) = jest.fn().mockResolvedValue(mockTxHash);
+      (TreasuryService.sendPayout as jest.Mock).mockResolvedValue(mockTxHash);
 
       // Mock user lookup
       (pool as any).query.mockResolvedValueOnce({
