@@ -180,10 +180,18 @@
 /* Quick Stats */
 .quick-stats {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   gap: 12px;
   margin-bottom: 32px;
   animation: fadeInUp 0.6s ease-out 0.1s both;
+}
+
+/* Mobile: 2x2 grid on small screens */
+@media (max-width: 480px) {
+  .quick-stats {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+  }
 }
 
 .quick-stat-item {
@@ -529,7 +537,7 @@
 }
 
 /* Responsive */
-@media (max-width: 380px) {
+@media (max-width: 480px) {
   .welcome-title {
     font-size: 36px;
   }
@@ -539,7 +547,11 @@
   }
 
   .menu-container {
-    padding: 16px 12px;
+    padding: 16px 12px 20px;
+  }
+  
+  .brain-training-menu {
+    padding-bottom: 90px; /* Extra space for bottom nav on mobile */
   }
 
   .game-card {
@@ -561,24 +573,23 @@
   .nav-icon {
     font-size: 20px;
   }
+  
+  .action-card {
+    padding: 16px;
+  }
+  
+  .glass-card {
+    padding: 20px;
+  }
+  
+  .card-title {
+    font-size: 16px;
+  }
 }
 
 /* Dashboard Section */
 .dashboard-section {
   margin-bottom: 32px;
-}
-
-.quick-stats {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 12px;
-  margin-bottom: 24px;
-}
-
-@media (max-width: 380px) {
-  .quick-stats {
-    grid-template-columns: repeat(2, 1fr);
-  }
 }
 
 /* Glass Card */
@@ -606,6 +617,26 @@
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 16px;
+}
+
+@media (max-width: 480px) {
+  .performance-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+  
+  .performance-item {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 16px;
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: 12px;
+  }
+  
+  .perf-label {
+    text-align: left;
+  }
 }
 
 .performance-item {

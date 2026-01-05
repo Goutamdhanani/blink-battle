@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { getPlayerProfile } from '../lib/indexedDB';
 import { PlayerProfile } from '../games/types';
+import { useBrainTrainingData } from '../hooks/useBrainTrainingData';
 import PersonalizedBrainCard from './PersonalizedBrainCard';
 import './EnhancedProfile.css';
 
@@ -9,25 +10,19 @@ interface EnhancedProfileProps {
 }
 
 const EnhancedProfile: React.FC<EnhancedProfileProps> = ({ onBack }) => {
-  const [profile, setProfile] = useState<PlayerProfile | null>(null);
-  const [loading, setLoading] = useState(true);
   const [selectedTheme, setSelectedTheme] = useState('Rookie');
+  
+  // Get token from localStorage if user is authenticated
+  const token = localStorage.getItem('token');
+  
+  // Use hook to fetch data from backend or IndexedDB
+  const { profile, loading, error } = useBrainTrainingData(token);
 
   useEffect(() => {
-    loadProfile();
-  }, []);
-
-  const loadProfile = async () => {
-    try {
-      const data = await getPlayerProfile();
-      setProfile(data);
-      setSelectedTheme(data.currentTheme);
-    } catch (error) {
-      console.error('Failed to load profile:', error);
-    } finally {
-      setLoading(false);
+    if (profile) {
+      setSelectedTheme(profile.currentTheme);
     }
-  };
+  }, [profile]);
 
   if (loading) {
     return (
