@@ -399,7 +399,7 @@ async function runStartupMigrations(): Promise<void> {
           WHEN winner_id = player2_id AND claim_status = 'claimed' THEN 'PAID'
           ELSE 'NOT_PAID'
         END
-      WHERE (player1_match_result IS NULL OR player2_match_result IS NULL) AND status IN ('completed', 'cancelled')
+      WHERE (player1_match_result IS NULL OR player2_match_result IS NULL OR player1_payout_state IS NULL OR player2_payout_state IS NULL) AND status IN ('completed', 'cancelled')
     `);
     console.log('[Migration] ✅ Backfilled match_result and payout_state for existing matches');
 

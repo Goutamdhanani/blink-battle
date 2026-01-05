@@ -86,6 +86,16 @@ export class ClaimController {
       const playerMatchResult = isPlayer1 ? match.player1_match_result : match.player2_match_result;
       const playerPayoutState = isPlayer1 ? match.player1_payout_state : match.player2_payout_state;
 
+      // Handle edge case where match_result fields are not set (legacy matches)
+      if (!playerMatchResult) {
+        await client.query('ROLLBACK');
+        res.status(500).json({ 
+          error: 'Match result not set',
+          details: 'This match does not have result information. Please contact support.',
+        });
+        return;
+      }
+
       // CRITICAL SECURITY: Validate match result - only WIN can claim
       if (playerMatchResult !== 'WIN') {
         await client.query('ROLLBACK');

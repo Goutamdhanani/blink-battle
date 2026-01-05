@@ -1,5 +1,5 @@
 import pool from '../config/database';
-import { Match, MatchStatus, GameResult } from './types';
+import { Match, MatchStatus, GameResult, MatchResult } from './types';
 
 export class MatchModel {
   /**
@@ -125,19 +125,19 @@ export class MatchModel {
     const fee = totalPot * (platformFeePercent / 100);
 
     // Determine match results for each player
-    let player1MatchResult: string;
-    let player2MatchResult: string;
+    let player1MatchResult: MatchResult;
+    let player2MatchResult: MatchResult;
     
     if (result.winnerId === match.player1_id) {
-      player1MatchResult = 'WIN';
-      player2MatchResult = 'LOSS';
+      player1MatchResult = MatchResult.WIN;
+      player2MatchResult = MatchResult.LOSS;
     } else if (result.winnerId === match.player2_id) {
-      player1MatchResult = 'LOSS';
-      player2MatchResult = 'WIN';
+      player1MatchResult = MatchResult.LOSS;
+      player2MatchResult = MatchResult.WIN;
     } else {
       // No winner - either draw or no match
-      player1MatchResult = result.reason === 'tie' ? 'DRAW' : 'NO_MATCH';
-      player2MatchResult = result.reason === 'tie' ? 'DRAW' : 'NO_MATCH';
+      player1MatchResult = result.reason === 'tie' ? MatchResult.DRAW : MatchResult.NO_MATCH;
+      player2MatchResult = result.reason === 'tie' ? MatchResult.DRAW : MatchResult.NO_MATCH;
     }
 
     // CRITICAL: Always set result_type to ensure match decisions are saved
