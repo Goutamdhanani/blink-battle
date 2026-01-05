@@ -287,7 +287,8 @@ export class AntiCheatService {
   /**
    * Check for timing discrepancy between client and server
    * Large discrepancies may indicate tampering
-   * SECURITY: Now throws error to reject taps with >500ms discrepancy
+   * AUDIT-ONLY: Logs suspicious discrepancies but does NOT reject taps
+   * Server time is authoritative - client time is for audit only
    */
   static checkTimingDiscrepancy(
     clientReactionMs: number,
@@ -303,11 +304,9 @@ export class AntiCheatService {
         `client=${clientReactionMs}ms, server=${serverReactionMs}ms, diff=${discrepancy}ms`
       );
       
-      // SECURITY: Reject taps with suspicious timing discrepancies
-      throw new Error(
-        `Timing discrepancy too large (${discrepancy}ms). ` +
-        `This may indicate clock manipulation or network issues.`
-      );
+      // AUDIT-ONLY: Log but don't reject - server time is authoritative
+      // Client timestamps are unreliable due to clock skew, network latency, etc.
+      return true; // Return true to indicate suspicious pattern detected
     }
     
     return false;

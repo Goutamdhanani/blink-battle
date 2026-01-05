@@ -15,6 +15,7 @@ interface Match {
   yourReaction: number;
   opponentReaction: number;
   won: boolean;
+  outcome?: 'win' | 'loss' | 'draw' | 'cancelled'; // NEW: explicit outcome
   opponent: {
     wallet: string;
     avgReaction: number;
@@ -193,18 +194,29 @@ const MatchHistory: React.FC = () => {
             ) : (
               <div className="matches-list">
             {matches.map((match) => {
-              // Determine if match is refundable
-              const isRefundable = match.refundStatus === 'eligible' && match.stake > 0;
+              // Use explicit outcome field if available, otherwise derive from result
+              const outcome = match.outcome || (
+                match.won ? 'win' : 
+                (match.resultType === 'tie' || match.resultType === 'both_disqualified' || match.resultType === 'both_timeout_tie') ? 'draw' : 
+                'loss'
+              );
+              
+              // Determine display based on outcome
+              const isDraw = outcome === 'draw';
+              const isCancelled = outcome === 'cancelled';
+              const isRefundable = (isDraw || isCancelled) && match.refundStatus === 'eligible' && match.stake > 0;
               const isRefunded = match.refundStatus === 'completed';
-              const isTieOrDisqualified = match.resultType === 'tie' || 
-                                          match.resultType === 'both_disqualified' || 
-                                          match.resultType === 'both_timeout_tie';
+              const isRefundProcessing = match.refundStatus === 'processing';
               
               return (
-              <GlassCard key={match.matchId} className={`match-card ${match.won ? 'match-won' : (isTieOrDisqualified || isRefunded ? 'match-refund' : 'match-lost')}`}>
+              <GlassCard key={match.matchId} className={`match-card ${outcome === 'win' ? 'match-won' : (isDraw || isCancelled || isRefunded ? 'match-refund' : 'match-lost')}`}>
                 <div className="match-header">
-                  <span className={`match-result ${match.won ? 'result-win' : (isTieOrDisqualified || isRefunded ? 'result-refund' : 'result-loss')}`}>
-                    {match.won ? '✓ WIN' : (isRefunded ? '🔄 REFUNDED' : (isTieOrDisqualified ? '⏱️ TIE/CANCELLED' : '✗ LOSS'))}
+                  <span className={`match-result ${outcome === 'win' ? 'result-win' : (isDraw || isCancelled || isRefunded ? 'result-refund' : 'result-loss')}`}>
+                    {outcome === 'win' ? '✓ WIN' : 
+                     isRefunded ? '🔄 REFUNDED' : 
+                     isDraw ? '⏱️ DRAW' :
+                     isCancelled ? '❌ CANCELLED' :
+                     '✗ LOSS'}
                   </span>
                   <span className="match-stake">{match.stake} WLD</span>
                 </div>
@@ -214,14 +226,14 @@ const MatchHistory: React.FC = () => {
                     <div className="reaction-item">
                       <span className="reaction-label">You</span>
                       <span className={`reaction-value ${match.yourReaction < match.opponentReaction ? 'reaction-better' : ''}`}>
-                        {match.yourReaction}ms
+                        {match.yourReaction >= 0 ? `${match.yourReaction}ms` : 'N/A'}
                       </span>
                     </div>
                     <div className="vs-divider">VS</div>
                     <div className="reaction-item">
                       <span className="reaction-label">Opponent</span>
                       <span className={`reaction-value ${match.opponentReaction < match.yourReaction ? 'reaction-better' : ''}`}>
-                        {match.opponentReaction}ms
+                        {match.opponentReaction >= 0 ? `${match.opponentReaction}ms` : 'N/A'}
                       </span>
                     </div>
                   </div>
@@ -236,7 +248,7 @@ const MatchHistory: React.FC = () => {
                   )}
 
                   {/* FIXED: Show claim button with timer for unclaimed wins */}
-                  {match.won && match.stake > 0 && (
+                  {outcome === 'win' && match.stake > 0 && (
                     <div className="claim-section" style={{ marginTop: '1rem' }}>
                       {match.claimStatus === 'claimed' && (
                         <div className="claim-status" style={{ color: '#00ff88', fontSize: '0.9rem' }}>
@@ -277,8 +289,8 @@ const MatchHistory: React.FC = () => {
                     </div>
                   )}
 
-                  {/* Show refund section for ties/cancelled matches */}
-                  {!match.won && isTieOrDisqualified && match.stake > 0 && (
+                  {/* Show refund section for draw/cancelled matches */}
+                  {(isDraw || isCancelled) && match.stake > 0 && (
                     <div className="refund-section" style={{ marginTop: '1rem' }}>
                       {isRefunded && (
                         <div className="refund-status" style={{ color: '#00ffff', fontSize: '0.9rem' }}>
@@ -286,7 +298,13 @@ const MatchHistory: React.FC = () => {
                         </div>
                       )}
                       
-                      {isRefundable && (
+                      {isRefundProcessing && (
+                        <div className="refund-status" style={{ color: '#ffaa00', fontSize: '0.9rem' }}>
+                          ⏳ Refund Processing...
+                        </div>
+                      )}
+                      
+                      {isRefundable && !isRefundProcessing && (
                         <>
                           <div style={{ 
                             background: 'rgba(255, 170, 0, 0.1)', 

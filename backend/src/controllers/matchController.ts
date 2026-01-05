@@ -120,22 +120,45 @@ export class MatchController {
           claimTimeRemaining = Math.max(0, Math.floor((deadline - now) / 1000));
         }
 
+        // Determine match outcome for UI
+        // Priority: result_type (specific reason) > status/cancelled (general state)
+        let outcome: 'win' | 'loss' | 'draw' | 'cancelled' = 'loss';
+        if (m.result_type === 'tie' || m.result_type === 'both_disqualified' || m.result_type === 'both_timeout_tie') {
+          outcome = 'draw';
+        } else if (m.status === 'cancelled' || m.cancelled) {
+          outcome = 'cancelled';
+        } else if (!m.winner_id) {
+          // No winner and no specific result_type - treat as cancelled/draw
+          outcome = 'draw';
+        } else if (won) {
+          outcome = 'win';
+        }
+
+        // Determine if refund is available (draw/cancelled matches only)
+        const isRefundEligible = (outcome === 'draw' || outcome === 'cancelled') && 
+                                  m.refund_status === 'eligible' &&
+                                  m.refund_deadline && 
+                                  new Date() < new Date(m.refund_deadline);
+
         return {
           matchId: m.match_id,
           stake: m.stake,
           yourReaction,
           opponentReaction,
           won,
+          outcome, // Add explicit outcome field
+          resultType: m.result_type, // Include result_type for detailed info
           opponent: opponentWallet ? {
             wallet: opponentWallet,
             avgReaction: opponentAvgReaction || 0
           } : null,
           completedAt: m.completed_at,
-          // Claim fields for frontend
+          // Claim fields for frontend (only for wins)
           claimDeadline: m.claim_deadline || undefined,
           claimStatus: m.claim_status || undefined,
           claimTimeRemaining,
           claimable: won && 
+                     outcome === 'win' &&
                      m.claim_status === 'unclaimed' && 
                      m.claim_deadline &&
                      new Date() < new Date(m.claim_deadline),
@@ -143,17 +166,18 @@ export class MatchController {
           status: m.status,
           isWinner: won,
           canClaim: won && 
+                    outcome === 'win' &&
                     m.claim_status === 'unclaimed' && 
                     m.claim_deadline &&
                     new Date() < new Date(m.claim_deadline),
-          canRefund: m.refund_status === 'eligible' && 
-                     m.refund_deadline && 
-                     new Date() < new Date(m.refund_deadline),
+          // Refund fields (only for draw/cancelled)
+          canRefund: isRefundEligible,
           refundExpired: m.refund_status === 'eligible' && 
                          m.refund_deadline && 
                          new Date() > new Date(m.refund_deadline),
           refundStatus: m.refund_status,
           refundReason: m.refund_reason,
+          refundAmount: m.refund_amount,
           paymentReference: m.payment_reference,
           createdAt: m.created_at,
           cancelled: m.cancelled,

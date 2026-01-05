@@ -50,24 +50,44 @@ export class RefundController {
         return;
       }
 
-      // EXPLOIT PREVENTION: Check if already refunded
+      // EXPLOIT PREVENTION: Check if already refunded or processing
       if (paymentData.refund_status === 'completed') {
         await client.query('ROLLBACK');
-        res.status(400).json({ error: 'Already refunded' });
+        res.status(400).json({ 
+          error: 'Already refunded',
+          alreadyClaimed: true,
+          refundStatus: 'completed'
+        });
+        return;
+      }
+
+      if (paymentData.refund_status === 'processing') {
+        await client.query('ROLLBACK');
+        res.status(400).json({ 
+          error: 'Refund already in progress',
+          alreadyClaimed: true,
+          refundStatus: 'processing'
+        });
         return;
       }
 
       // Check if eligible for refund
       if (paymentData.refund_status !== 'eligible') {
         await client.query('ROLLBACK');
-        res.status(400).json({ error: 'Not eligible for refund' });
+        res.status(400).json({ 
+          error: 'Not eligible for refund',
+          refundStatus: paymentData.refund_status 
+        });
         return;
       }
 
       // Check refund deadline (4 hours)
       if (paymentData.refund_deadline && new Date() > new Date(paymentData.refund_deadline)) {
         await client.query('ROLLBACK');
-        res.status(400).json({ error: 'Refund deadline expired' });
+        res.status(400).json({ 
+          error: 'Refund deadline expired',
+          expired: true 
+        });
         return;
       }
 
@@ -260,10 +280,24 @@ export class RefundController {
         return;
       }
 
-      // Check if already refunded
+      // Check if already refunded or processing
       if (paymentData.refund_status === 'completed') {
         await client.query('ROLLBACK');
-        res.status(400).json({ error: 'Already refunded' });
+        res.status(400).json({ 
+          error: 'Already refunded',
+          alreadyClaimed: true,
+          refundStatus: 'completed'
+        });
+        return;
+      }
+
+      if (paymentData.refund_status === 'processing') {
+        await client.query('ROLLBACK');
+        res.status(400).json({ 
+          error: 'Refund already in progress',
+          alreadyClaimed: true,
+          refundStatus: 'processing'
+        });
         return;
       }
 
