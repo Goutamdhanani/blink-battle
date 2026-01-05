@@ -2,8 +2,23 @@
  * Core types for brain-training games
  */
 
+export type GameType = 
+  | 'memory' 
+  | 'attention' 
+  | 'reflex'
+  | 'word_flash'
+  | 'shape_shadow'
+  | 'sequence_builder'
+  | 'focus_filter'
+  | 'path_memory'
+  | 'missing_number'
+  | 'color_swap'
+  | 'reverse_recall'
+  | 'blink_count'
+  | 'word_pair_match';
+
 export interface GameScore {
-  gameType: 'memory' | 'attention' | 'reflex';
+  gameType: GameType;
   score: number;
   accuracy: number;
   timeMs: number;
@@ -12,7 +27,7 @@ export interface GameScore {
 }
 
 export interface GameStats {
-  gameType: 'memory' | 'attention' | 'reflex';
+  gameType: GameType;
   gamesPlayed: number;
   bestScore: number;
   averageScore: number;
@@ -20,16 +35,71 @@ export interface GameStats {
   averageTimeMs: number;
   highestLevel: number;
   lastPlayed?: number;
+  percentile?: number;
 }
 
 export interface PlayerProfile {
+  // Basic info
+  username?: string;
+  avatarUrl?: string;
+  joinDate: number;
+  
+  // XP & Leveling
+  xp: number;
+  level: number;
+  rankBadge: string;
+  
+  // Engagement metrics
   totalGamesPlayed: number;
-  memoryStats: GameStats;
-  attentionStats: GameStats;
-  reflexStats: GameStats;
-  achievements: string[];
+  totalSessions: number;
+  currentStreak: number;
+  longestStreak: number;
+  averageDailyPlayTime: number;
+  
+  // Cognitive metrics
+  cognitiveIndex: number;
+  overallAccuracy: number;
+  
+  // Game-specific stats
+  gameStats: Record<GameType, GameStats>;
+  
+  // Achievements & Themes
+  achievements: Achievement[];
+  unlockedThemes: string[];
+  currentTheme: string;
+  
+  // Timestamps
   createdAt: number;
   lastActive: number;
+  lastPlayDate?: string;
+}
+
+export interface Achievement {
+  id: string;
+  name: string;
+  description: string;
+  icon: string;
+  category: string;
+  earnedAt?: number;
+  progress?: number;
+  isUnlocked: boolean;
+}
+
+export interface DailyTrend {
+  date: string;
+  gamesPlayed: number;
+  averageScore: number;
+  averageAccuracy: number;
+  cognitiveIndex: number;
+}
+
+export interface ImprovementCurve {
+  gameType: GameType;
+  dataPoints: {
+    week: string;
+    averageScore: number;
+    improvement: number;
+  }[];
 }
 
 export interface MemoryGameState {

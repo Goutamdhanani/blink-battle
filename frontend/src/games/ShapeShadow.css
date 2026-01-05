@@ -1,0 +1,222 @@
+.shape-shadow-game {
+  min-height: 100vh;
+  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.game-instructions, .game-complete {
+  background: rgba(255, 255, 255, 0.95);
+  border-radius: 20px;
+  padding: 40px;
+  max-width: 500px;
+  width: 100%;
+  text-align: center;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  position: relative;
+}
+
+.game-instructions h2, .game-complete h2 {
+  font-size: 2.5em;
+  margin: 0 0 10px 0;
+  background: linear-gradient(135deg, #f093fb, #f5576c);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.exit-btn {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  background: white;
+  border: 2px solid #ddd;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  font-size: 1.5em;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.exit-btn:hover {
+  background: #ff6b6b;
+  color: white;
+  transform: rotate(90deg);
+}
+
+.game-header {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  background: rgba(255, 255, 255, 0.95);
+  padding: 20px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+  z-index: 10;
+}
+
+.game-info {
+  display: flex;
+  justify-content: space-around;
+  max-width: 600px;
+  margin: 0 auto;
+  font-weight: bold;
+  color: #f5576c;
+}
+
+.game-arena {
+  margin-top: 100px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 30px;
+}
+
+.shadow-display {
+  background: rgba(255, 255, 255, 0.9);
+  padding: 30px;
+  border-radius: 20px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+}
+
+.shadow-label {
+  font-size: 1.2em;
+  color: #666;
+  margin-bottom: 10px;
+}
+
+.shadow-shape {
+  font-size: 5em;
+  color: #ccc;
+}
+
+.shadow-shape.correct {
+  color: #51cf66;
+  animation: pulse 0.5s ease;
+}
+
+.shadow-shape.wrong {
+  color: #ff6b6b;
+  animation: shake 0.5s ease;
+}
+
+@keyframes pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.2); }
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-10px); }
+  75% { transform: translateX(10px); }
+}
+
+.shape-options {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+  gap: 15px;
+  max-width: 600px;
+}
+
+.shape-option {
+  background: white;
+  border: 3px solid #f093fb;
+  padding: 30px;
+  font-size: 3em;
+  border-radius: 15px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.shape-option:hover:not(:disabled) {
+  transform: translateY(-5px);
+  box-shadow: 0 10px 30px rgba(240, 147, 251, 0.4);
+}
+
+.shape-option.correct-answer {
+  border-color: #51cf66;
+  background: rgba(81, 207, 102, 0.1);
+}
+
+.feedback {
+  font-size: 2em;
+  font-weight: bold;
+  padding: 20px;
+  border-radius: 15px;
+}
+
+.feedback.correct {
+  color: #51cf66;
+}
+
+.feedback.wrong {
+  color: #ff6b6b;
+}
+
+.progress-bar {
+  width: 400px;
+  height: 10px;
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #f093fb, #f5576c);
+  transition: width 0.3s ease;
+}
+
+.start-btn, .next-level-btn, .menu-btn {
+  background: linear-gradient(135deg, #f093fb, #f5576c);
+  color: white;
+  border: none;
+  padding: 15px 40px;
+  font-size: 1.2em;
+  border-radius: 50px;
+  cursor: pointer;
+  margin: 10px;
+  font-weight: bold;
+}
+
+.start-btn:hover, .next-level-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 30px rgba(245, 87, 108, 0.4);
+}
+
+.menu-btn {
+  background: linear-gradient(135deg, #868e96, #495057);
+}
+
+.final-stats {
+  display: flex;
+  justify-content: space-around;
+  margin: 30px 0;
+  gap: 20px;
+}
+
+.stat-item {
+  flex: 1;
+  background: rgba(240, 147, 251, 0.1);
+  padding: 20px;
+  border-radius: 15px;
+}
+
+.stat-value {
+  font-size: 2.5em;
+  font-weight: bold;
+  color: #f5576c;
+}
+
+.stat-label {
+  color: #666;
+  margin-top: 5px;
+}
+
+.action-buttons {
+  display: flex;
+  justify-content: center;
+  gap: 15px;
+}
