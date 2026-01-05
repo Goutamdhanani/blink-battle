@@ -339,6 +339,18 @@ export function stopPaymentWorker(): void {
  * Issue #15: Expose circuit breaker stats for health checks
  */
 export function getCircuitBreakerStats() {
-  const worker = getPaymentWorker();
-  return worker.getCircuitBreakerStats();
+  if (!workerInstance) {
+    // Return default stats if worker not initialized yet
+    return {
+      state: 'CLOSED' as const,
+      failures: 0,
+      successes: 0,
+      lastFailureTime: undefined,
+      lastStateChange: Date.now(),
+      totalAttempts: 0,
+      totalFailures: 0,
+      totalSuccesses: 0
+    };
+  }
+  return workerInstance.getCircuitBreakerStats();
 }
