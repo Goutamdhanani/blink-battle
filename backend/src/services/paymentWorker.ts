@@ -100,11 +100,11 @@ export class PaymentWorker {
       this.pollCount++;
       const shouldLog = this.pollCount % this.LOG_EVERY_N_POLLS === 0;
 
-      // Step 0: Expire stale payments without transaction IDs (older than 10 minutes)
+      // Step 0: Expire stale payments without transaction IDs (older than 5 minutes)
       // This prevents workers from retrying orphaned payments indefinitely
-      const expiredCount = await PaymentIntentModel.expireStalePayments(10);
+      const expiredCount = await PaymentIntentModel.expireStalePayments(5);
       if (expiredCount > 0 && shouldLog) {
-        console.log(`[PaymentWorker:${this.workerId}] Expired ${expiredCount} stale payments without transaction IDs (>10 min old)`);
+        console.log(`[PaymentWorker:${this.workerId}] Expired ${expiredCount} stale payments without transaction IDs (>5 min old)`);
       }
 
       // Step 1: Acquire locks on payments ready for processing
@@ -119,7 +119,7 @@ export class PaymentWorker {
           SELECT intent_id
           FROM payment_intents
           WHERE normalized_status = $2
-            AND (locked_at IS NULL OR locked_at < CURRENT_TIMESTAMP - INTERVAL '60 seconds')
+            AND (locked_at IS NULL OR locked_at < CURRENT_TIMESTAMP - INTERVAL '30 seconds')
             AND (next_retry_at IS NULL OR next_retry_at <= CURRENT_TIMESTAMP)
           ORDER BY next_retry_at NULLS FIRST, created_at ASC
           LIMIT 10

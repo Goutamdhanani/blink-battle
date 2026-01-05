@@ -2,8 +2,30 @@ import { Request, Response } from 'express';
 import crypto from 'crypto';
 import axios from 'axios';
 import { PaymentModel, PaymentStatus } from '../models/Payment';
-import { PaymentIntentModel, NormalizedPaymentStatus } from '../models/PaymentIntent';
+import { PaymentIntentModel, NormalizedPaymentStatus, PaymentIntent } from '../models/PaymentIntent';
 import { normalizeMiniKitStatus, extractTransactionHash, extractRawStatus } from '../services/statusNormalization';
+
+// Constants
+const SPAM_PREVENTION_WINDOW_MS = 2 * 60 * 1000; // 2 minutes
+const STALE_PAYMENT_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
+
+/**
+ * Helper function to check if a payment is active (not cancelled/failed)
+ * Active payments have transaction IDs and are either confirmed or pending
+ */
+function isActivePayment(payment: PaymentIntent): boolean {
+  return payment.normalized_status === NormalizedPaymentStatus.CONFIRMED ||
+         (payment.normalized_status === NormalizedPaymentStatus.PENDING && !!payment.minikit_transaction_id);
+}
+
+/**
+ * Helper function to check if a payment is stale (pending without transaction ID for >5 min)
+ */
+function isStalePayment(payment: PaymentIntent): boolean {
+  return payment.normalized_status === NormalizedPaymentStatus.PENDING && 
+         !payment.minikit_transaction_id &&
+         (Date.now() - new Date(payment.created_at).getTime()) > STALE_PAYMENT_TIMEOUT_MS;
+}
 
 export class PaymentController {
   /**
@@ -21,32 +43,43 @@ export class PaymentController {
       }
 
       // SECURITY: Payment spam prevention - limit to 1 payment per 2 minutes
+      // Only check for confirmed or pending (with transaction ID) payments to reduce race conditions
       const recentPayments = await PaymentIntentModel.findRecentByUserId(userId, 2); // Last 2 minutes
       if (recentPayments && recentPayments.length > 0) {
-        const lastPayment = recentPayments[0];
-        const timeSinceLastPayment = Date.now() - new Date(lastPayment.created_at).getTime();
-        const twoMinutesMs = 2 * 60 * 1000;
+        // Filter for active payments using helper function
+        const activePayments = recentPayments.filter(isActivePayment);
         
-        if (timeSinceLastPayment < twoMinutesMs) {
-          const waitSeconds = Math.ceil((twoMinutesMs - timeSinceLastPayment) / 1000);
-          console.warn(`[Payment] Spam prevention triggered for user ${userId} - last payment ${Math.floor(timeSinceLastPayment / 1000)}s ago`);
+        if (activePayments.length > 0) {
+          const lastPayment = activePayments[0];
+          const timeSinceLastPayment = Date.now() - new Date(lastPayment.created_at).getTime();
           
-          // Cancel the previous pending payment if it exists
-          if (lastPayment.normalized_status === 'pending') {
-            await PaymentIntentModel.updateStatus(
-              lastPayment.payment_reference,
-              NormalizedPaymentStatus.CANCELLED,
-              'cancelled_by_new_payment'
-            );
-            console.log(`[Payment] Cancelled previous pending payment ${lastPayment.payment_reference} for user ${userId}`);
-          } else {
-            // Don't allow new payment if last one is not pending
+          if (timeSinceLastPayment < SPAM_PREVENTION_WINDOW_MS) {
+            const waitSeconds = Math.ceil((SPAM_PREVENTION_WINDOW_MS - timeSinceLastPayment) / 1000);
+            console.warn(`[Payment] Spam prevention triggered for user ${userId} - last active payment ${Math.floor(timeSinceLastPayment / 1000)}s ago (status: ${lastPayment.normalized_status})`);
+            
             return res.status(429).json({ 
               error: 'Too many payment requests',
               details: `Please wait ${waitSeconds} seconds before creating another payment`,
-              waitSeconds
+              waitSeconds,
+              existingPaymentReference: lastPayment.payment_reference
             });
           }
+        }
+        
+        // Clean up old stale pending payments without transaction IDs (>5 minutes old)
+        const stalePendingPayments = recentPayments.filter(isStalePayment);
+        
+        // Batch database operations for better performance
+        if (stalePendingPayments.length > 0) {
+          await Promise.all(stalePendingPayments.map(async (stalePayment) => {
+            await PaymentIntentModel.updateStatus(
+              stalePayment.payment_reference,
+              NormalizedPaymentStatus.CANCELLED,
+              'cancelled_stale_no_transaction_id'
+            );
+            await PaymentIntentModel.releaseLock(stalePayment.payment_reference);
+            console.log(`[Payment] Cancelled stale pending payment ${stalePayment.payment_reference} for user ${userId} (no transaction ID after 5 minutes)`);
+          }));
         }
       }
 

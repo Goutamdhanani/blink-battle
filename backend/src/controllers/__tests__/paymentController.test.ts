@@ -32,6 +32,8 @@ jest.mock('../../models/PaymentIntent', () => ({
     create: jest.fn(),
     findByReference: jest.fn(),
     updateStatus: jest.fn(),
+    findRecentByUserId: jest.fn(),
+    releaseLock: jest.fn(),
   },
 }));
 
@@ -79,6 +81,9 @@ describe('PaymentController', () => {
       
       mockRequest.body = { amount };
       (mockRequest as any).userId = userId;
+
+      // Mock no recent payments (spam prevention check)
+      (PaymentIntentModel.findRecentByUserId as jest.Mock).mockResolvedValue([]);
 
       const mockPayment = {
         payment_id: 'payment-uuid',
@@ -135,6 +140,9 @@ describe('PaymentController', () => {
       mockRequest.body = { amount };
       (mockRequest as any).userId = userId;
 
+      // Mock no recent payments (spam prevention check)
+      (PaymentIntentModel.findRecentByUserId as jest.Mock).mockResolvedValue([]);
+
       const existingPayment = {
         payment_id: 'existing-payment',
         reference: 'existing-ref',
@@ -146,6 +154,16 @@ describe('PaymentController', () => {
       };
 
       (PaymentModel.create as jest.Mock).mockResolvedValue(existingPayment);
+      (PaymentIntentModel.create as jest.Mock).mockResolvedValue({
+        intent_id: 'intent-uuid',
+        payment_reference: existingPayment.reference,
+        user_id: userId,
+        amount,
+        normalized_status: NormalizedPaymentStatus.PENDING,
+        retry_count: 0,
+        created_at: new Date(),
+        updated_at: new Date(),
+      });
 
       await PaymentController.initiatePayment(
         mockRequest as Request,

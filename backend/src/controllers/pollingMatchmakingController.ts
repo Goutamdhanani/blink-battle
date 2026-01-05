@@ -315,18 +315,23 @@ export class PollingMatchmakingController {
         // Find the most recent confirmed payment for this stake without a match
         const refundDeadline = new Date(Date.now() + REFUND_DEADLINE_HOURS * 60 * 60 * 1000);
         
+        // PostgreSQL UPDATE doesn't support ORDER BY/LIMIT directly - use subquery
         await client.query(
           `UPDATE payment_intents 
            SET refund_status = 'eligible',
                refund_reason = 'matchmaking_cancelled',
                refund_deadline = $1
-           WHERE user_id = $2
-             AND amount = $3
-             AND normalized_status = 'confirmed'
-             AND match_id IS NULL
-             AND refund_status IS NULL
-           ORDER BY created_at DESC
-           LIMIT 1`,
+           WHERE payment_reference = (
+             SELECT payment_reference
+             FROM payment_intents
+             WHERE user_id = $2
+               AND amount = $3
+               AND normalized_status = 'confirmed'
+               AND match_id IS NULL
+               AND refund_status IS NULL
+             ORDER BY created_at DESC
+             LIMIT 1
+           )`,
           [refundDeadline, userId, stake]
         );
         
