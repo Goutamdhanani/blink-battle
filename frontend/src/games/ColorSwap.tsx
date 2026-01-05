@@ -71,6 +71,7 @@ const ColorSwap: React.FC<ColorSwapProps> = ({ onGameComplete, onExit }) => {
   };
 
   const startGame = () => {
+    console.log('[ColorSwap] Starting game - Level', level);
     setGamePhase('playing');
     setScore(0);
     setRound(0);

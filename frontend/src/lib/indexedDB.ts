@@ -41,12 +41,12 @@ const RANK_THRESHOLDS = [
   { minXP: 0, rank: 'Bronze' },           // New players
 ];
 
-// Reaction time constants (in milliseconds)
-const MIN_VALID_REACTION_TIME = 80;      // Below this is likely cheating
-const AVG_REACTION_TIME = 225;           // Average human reaction
-const GOOD_REACTION_TIME = 175;          // Good reaction
-const EXCELLENT_REACTION_TIME = 125;     // Excellent reaction
-const PROFESSIONAL_REACTION_TIME = 100;  // Professional level
+// Reaction time constants (in milliseconds) - exported for use in games
+export const MIN_VALID_REACTION_TIME = 80;      // Below this is likely cheating
+export const AVG_REACTION_TIME = 225;           // Average human reaction
+export const GOOD_REACTION_TIME = 175;          // Good reaction
+export const EXCELLENT_REACTION_TIME = 125;     // Excellent reaction
+export const PROFESSIONAL_REACTION_TIME = 100;  // Professional level
 
 let dbInstance: IDBDatabase | null = null;
 
@@ -155,8 +155,9 @@ function calculateGameXP(score: number, accuracy: number, level: number): number
 
 /**
  * Validate reaction time to prevent cheating
+ * Exported for use in reflex games
  */
-function isValidReactionTime(reactionMs: number): boolean {
+export function isValidReactionTime(reactionMs: number): boolean {
   return reactionMs >= MIN_VALID_REACTION_TIME && reactionMs < 10000;
 }
 

@@ -48,7 +48,10 @@ const GamesPage: React.FC<GamesPageProps> = ({ onBack, onGameSelect, profile }) 
           
           <div className="game-cards">
             {/* Original 3 Games */}
-            <div className="game-card game-card-memory" onClick={() => onGameSelect('memory')}>
+            <div className="game-card game-card-memory" onClick={() => {
+              console.log('[GamesPage] Selecting Memory Match game');
+              onGameSelect('memory');
+            }}>
               <div className="game-card-glow"></div>
               <div className="game-card-content">
                 <div className="game-icon">🧠</div>
@@ -61,7 +64,10 @@ const GamesPage: React.FC<GamesPageProps> = ({ onBack, onGameSelect, profile }) 
               </div>
             </div>
 
-            <div className="game-card game-card-attention" onClick={() => onGameSelect('attention')}>
+            <div className="game-card game-card-attention" onClick={() => {
+              console.log('[GamesPage] Selecting Focus Test game');
+              onGameSelect('attention');
+            }}>
               <div className="game-card-glow"></div>
               <div className="game-card-content">
                 <div className="game-icon">👁️</div>
