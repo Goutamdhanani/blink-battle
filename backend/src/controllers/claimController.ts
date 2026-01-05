@@ -72,10 +72,64 @@ export class ClaimController {
         return;
       }
 
-      // Verify user is the winner
+      // Determine which player is claiming
+      const isPlayer1 = match.player1_id === userId;
+      const isPlayer2 = match.player2_id === userId;
+      
+      if (!isPlayer1 && !isPlayer2) {
+        await client.query('ROLLBACK');
+        res.status(403).json({ error: 'Not a participant in this match' });
+        return;
+      }
+
+      // Get player's match result and payout state
+      const playerMatchResult = isPlayer1 ? match.player1_match_result : match.player2_match_result;
+      const playerPayoutState = isPlayer1 ? match.player1_payout_state : match.player2_payout_state;
+
+      // Handle edge case where match_result fields are not set (legacy matches)
+      if (!playerMatchResult) {
+        await client.query('ROLLBACK');
+        res.status(500).json({ 
+          error: 'Match result not set',
+          details: 'This match does not have result information. Please contact support.',
+        });
+        return;
+      }
+
+      // CRITICAL SECURITY: Validate match result - only WIN can claim
+      if (playerMatchResult !== 'WIN') {
+        await client.query('ROLLBACK');
+        
+        // Return appropriate error based on result
+        if (playerMatchResult === 'LOSS') {
+          res.status(403).json({ 
+            error: 'Not the winner of this match',
+            details: 'Only winners can claim rewards. You lost this match.',
+            matchResult: playerMatchResult
+          });
+        } else if (playerMatchResult === 'DRAW') {
+          res.status(403).json({ 
+            error: 'Cannot claim - match ended in a draw',
+            details: 'Draw matches are refunded, not claimed. Check refund eligibility.',
+            matchResult: playerMatchResult
+          });
+        } else {
+          res.status(403).json({ 
+            error: 'Cannot claim - invalid match result',
+            details: 'This match does not have a valid result for claiming.',
+            matchResult: playerMatchResult
+          });
+        }
+        return;
+      }
+
+      // Verify user is the winner (double-check for consistency)
       if (match.winner_id !== userId) {
         await client.query('ROLLBACK');
-        res.status(403).json({ error: 'Not the winner of this match' });
+        res.status(403).json({ 
+          error: 'Winner ID mismatch',
+          details: 'Match result shows WIN but winner_id does not match. Contact support.'
+        });
         return;
       }
 
@@ -90,7 +144,36 @@ export class ClaimController {
         return;
       }
 
-      // Check if already claimed
+      // IDEMPOTENCY CHECK: If already paid, return success with existing claim
+      if (playerPayoutState === 'PAID') {
+        await client.query('ROLLBACK');
+        
+        // Get existing claim to return transaction details (use pool, not client since we rolled back)
+        const existingClaimResult = await pool.query(
+          'SELECT * FROM claims WHERE match_id = $1',
+          [matchId]
+        );
+        
+        if (existingClaimResult.rows.length > 0) {
+          const existingClaim = existingClaimResult.rows[0];
+          res.status(400).json({ 
+            error: 'Winnings already claimed',
+            details: 'This claim has already been processed and paid',
+            txHash: existingClaim.claim_transaction_hash || existingClaim.tx_hash,
+            alreadyClaimed: true
+          });
+        } else {
+          // Edge case: payout_state is PAID but no claim record found
+          res.status(400).json({ 
+            error: 'Winnings already claimed',
+            details: 'Payout state indicates this has been paid',
+            alreadyClaimed: true
+          });
+        }
+        return;
+      }
+
+      // Legacy check for backward compatibility
       if (match.claim_status === 'claimed') {
         await client.query('ROLLBACK');
         res.status(400).json({ error: 'Winnings already claimed' });
@@ -301,13 +384,26 @@ export class ClaimController {
         
         // SECURITY: Also update matches.total_claimed_amount for double verification
         // BUG FIX: Now we mark match as claimed ONLY after successful payout
-        await pool.query(`
-          UPDATE matches 
-          SET claim_status = $1,
-              total_claimed_amount = total_claimed_amount + $2,
-              claim_transaction_hash = $3
-          WHERE match_id = $4
-        `, ['claimed', netPayout, txHash, matchId]);
+        // Also update payout_state to PAID for the winner
+        if (isPlayer1) {
+          await pool.query(`
+            UPDATE matches 
+            SET claim_status = $1,
+                total_claimed_amount = total_claimed_amount + $2,
+                claim_transaction_hash = $3,
+                player1_payout_state = 'PAID'
+            WHERE match_id = $4
+          `, ['claimed', netPayout, txHash, matchId]);
+        } else {
+          await pool.query(`
+            UPDATE matches 
+            SET claim_status = $1,
+                total_claimed_amount = total_claimed_amount + $2,
+                claim_transaction_hash = $3,
+                player2_payout_state = 'PAID'
+            WHERE match_id = $4
+          `, ['claimed', netPayout, txHash, matchId]);
+        }
 
         console.log(`[Claim] Successfully paid out ${netPayout} wei to ${claimingWallet}, tx: ${txHash}`);
 

@@ -1,5 +1,5 @@
 import pool from '../config/database';
-import { Match, MatchStatus, GameResult } from './types';
+import { Match, MatchStatus, GameResult, MatchResult } from './types';
 
 export class MatchModel {
   /**
@@ -124,8 +124,25 @@ export class MatchModel {
     const totalPot = match.stake * 2;
     const fee = totalPot * (platformFeePercent / 100);
 
+    // Determine match results for each player
+    let player1MatchResult: MatchResult;
+    let player2MatchResult: MatchResult;
+    
+    if (result.winnerId === match.player1_id) {
+      player1MatchResult = MatchResult.WIN;
+      player2MatchResult = MatchResult.LOSS;
+    } else if (result.winnerId === match.player2_id) {
+      player1MatchResult = MatchResult.LOSS;
+      player2MatchResult = MatchResult.WIN;
+    } else {
+      // No winner - either draw or no match
+      player1MatchResult = result.reason === 'tie' ? MatchResult.DRAW : MatchResult.NO_MATCH;
+      player2MatchResult = result.reason === 'tie' ? MatchResult.DRAW : MatchResult.NO_MATCH;
+    }
+
     // CRITICAL: Always set result_type to ensure match decisions are saved
     // This prevents "orphan matches" with missing result data
+    // Also set match_result and payout_state for proper claim validation
     await pool.query(
       `UPDATE matches 
        SET winner_id = $1, 
@@ -134,8 +151,12 @@ export class MatchModel {
            status = $4,
            fee = $5,
            result_type = $6,
+           player1_match_result = $7,
+           player2_match_result = $8,
+           player1_payout_state = 'NOT_PAID',
+           player2_payout_state = 'NOT_PAID',
            completed_at = CURRENT_TIMESTAMP
-       WHERE match_id = $7`,
+       WHERE match_id = $9`,
       [
         result.winnerId,
         result.player1ReactionMs,
@@ -143,6 +164,8 @@ export class MatchModel {
         MatchStatus.COMPLETED,
         fee,
         result.reason,  // result_type
+        player1MatchResult,
+        player2MatchResult,
         result.matchId,
       ]
     );
