@@ -104,6 +104,8 @@ CREATE INDEX IF NOT EXISTS idx_user_achievements_earned ON user_achievements(ear
 -- ===========================================
 
 -- Update game_type constraint to include new games
+-- NOTE: This constraint must be kept in sync with the TypeScript GameType union
+-- defined in frontend/src/games/types.ts
 ALTER TABLE game_scores DROP CONSTRAINT IF EXISTS game_scores_game_type_check;
 ALTER TABLE game_scores ADD CONSTRAINT game_scores_game_type_check 
   CHECK (game_type IN (

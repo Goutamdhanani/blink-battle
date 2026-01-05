@@ -1,6 +1,8 @@
 #!/bin/bash
 
-# This script creates the remaining 7 brain training games
+# This script creates the remaining 7 brain training games to complete
+# the total of 10 new games for Phase 2 (WordFlash, ShapeShadow, and SequenceBuilder
+# were created separately, so this script creates the remaining 7)
 
 # Game configurations (name, gameType, color1, color2, emoji)
 declare -a games=(

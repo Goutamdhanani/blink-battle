@@ -47,11 +47,16 @@ const ShapeShadow: React.FC<ShapeShadowProps> = ({ onGameComplete, onExit }) => 
 
     // Create options including the correct one
     const opts = [correct.shape];
-    const otherShapes = SHAPES.filter(s => s.shape !== correct.shape);
+    const availableShapes = SHAPES.filter(s => s.shape !== correct.shape);
     
-    while (opts.length < optionCount && otherShapes.length > 0) {
-      const randomIndex = Math.floor(Math.random() * otherShapes.length);
-      opts.push(otherShapes.splice(randomIndex, 1)[0].shape);
+    // Add random shapes without modifying the original array
+    const selectedIndices = new Set<number>();
+    while (opts.length < optionCount && selectedIndices.size < availableShapes.length) {
+      const randomIndex = Math.floor(Math.random() * availableShapes.length);
+      if (!selectedIndices.has(randomIndex)) {
+        selectedIndices.add(randomIndex);
+        opts.push(availableShapes[randomIndex].shape);
+      }
     }
 
     // Shuffle options

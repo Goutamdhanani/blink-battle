@@ -9,6 +9,9 @@ const DB_VERSION = 1;
 const SCORES_STORE = 'gameScores';
 const PROFILE_STORE = 'playerProfile';
 
+// XP and leveling constants
+const XP_BASE_MULTIPLIER = 100;
+
 let dbInstance: IDBDatabase | null = null;
 
 /**
@@ -154,7 +157,7 @@ export async function getPlayerProfile(): Promise<PlayerProfile> {
   
   // Calculate XP based on total scores
   const xp = allScores.reduce((sum, s) => sum + s.score, 0);
-  const level = Math.floor(Math.sqrt(xp / 100)) + 1;
+  const level = Math.floor(Math.sqrt(xp / XP_BASE_MULTIPLIER)) + 1;
   
   // Calculate cognitive index (0-100 scale)
   const avgAccuracy = allScores.length > 0 

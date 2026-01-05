@@ -59,8 +59,9 @@ const EnhancedProfile: React.FC<EnhancedProfileProps> = ({ onBack }) => {
   };
 
   const getProgressToNextLevel = () => {
-    const currentLevelXP = Math.pow(profile.level - 1, 2) * 100;
-    const nextLevelXP = Math.pow(profile.level, 2) * 100;
+    const XP_BASE_MULTIPLIER = 100; // Same as in indexedDB.ts
+    const currentLevelXP = Math.pow(profile.level - 1, 2) * XP_BASE_MULTIPLIER;
+    const nextLevelXP = Math.pow(profile.level, 2) * XP_BASE_MULTIPLIER;
     const progress = ((profile.xp - currentLevelXP) / (nextLevelXP - currentLevelXP)) * 100;
     return Math.min(100, Math.max(0, progress));
   };

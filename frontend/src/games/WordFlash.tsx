@@ -55,9 +55,15 @@ const WordFlash: React.FC<WordFlashProps> = ({ onGameComplete, onExit }) => {
     } else {
       // Pick from a different category
       const otherCategories = categories.filter(c => c !== randomCategory);
-      const otherCategory = otherCategories[Math.floor(Math.random() * otherCategories.length)];
-      const words = WORD_CATEGORIES[otherCategory];
-      selectedWord = words[Math.floor(Math.random() * words.length)];
+      if (otherCategories.length > 0) {
+        const otherCategory = otherCategories[Math.floor(Math.random() * otherCategories.length)];
+        const words = WORD_CATEGORIES[otherCategory];
+        selectedWord = words[Math.floor(Math.random() * words.length)];
+      } else {
+        // Fallback: if only one category exists, use it anyway
+        const words = WORD_CATEGORIES[randomCategory];
+        selectedWord = words[Math.floor(Math.random() * words.length)];
+      }
     }
 
     setCurrentWord(selectedWord);
