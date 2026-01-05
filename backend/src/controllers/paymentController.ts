@@ -60,8 +60,7 @@ export class PaymentController {
             return res.status(429).json({ 
               error: 'Too many payment requests',
               details: `Please wait ${waitSeconds} seconds before creating another payment`,
-              waitSeconds,
-              existingPaymentReference: lastPayment.payment_reference
+              waitSeconds
             });
           }
         }
