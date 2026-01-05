@@ -155,9 +155,9 @@ export class PollingMatchController {
         const lightSequence = generateF1LightSequence(); // [~500ms, ~500ms, ~500ms, ~500ms, ~500ms]
         const totalLightsTime = lightSequence.reduce((sum, interval) => sum + interval, 0);
         
-        // Random delay AFTER all 5 lights are ON (1-3 seconds)
-        const minRandomDelay = parseInt(process.env.F1_RANDOM_DELAY_MIN_MS || '1000', 10);
-        const maxRandomDelay = parseInt(process.env.F1_RANDOM_DELAY_MAX_MS || '3000', 10);
+        // Random delay AFTER all 5 lights are ON (2-5 seconds per game requirements)
+        const minRandomDelay = parseInt(process.env.SIGNAL_DELAY_MIN_MS || '2000', 10);
+        const maxRandomDelay = parseInt(process.env.SIGNAL_DELAY_MAX_MS || '5000', 10);
         const randomDelay = generateRandomDelay(minRandomDelay, maxRandomDelay);
         
         const now = Date.now();

@@ -56,7 +56,8 @@ describe('RefundController - Duplicate Claim Prevention', () => {
     expect(mockClient.query).toHaveBeenCalledWith('ROLLBACK');
     expect(mockResponse.status).toHaveBeenCalledWith(400);
     expect(mockResponse.json).toHaveBeenCalledWith({
-      error: 'Already refunded',
+      error: 'Refund already claimed',
+      message: 'Refund already claimed',
       alreadyClaimed: true,
       refundStatus: 'completed',
     });
@@ -83,6 +84,7 @@ describe('RefundController - Duplicate Claim Prevention', () => {
     expect(mockResponse.status).toHaveBeenCalledWith(400);
     expect(mockResponse.json).toHaveBeenCalledWith({
       error: 'Refund already in progress',
+      message: 'Refund already claimed',
       alreadyClaimed: true,
       refundStatus: 'processing',
     });
