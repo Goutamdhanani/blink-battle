@@ -2,7 +2,6 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useGameContext } from '../context/GameContext';
 import { GlassCard, BottomTabBar, NeonButton } from './ui';
-import PendingRefunds from './PendingRefunds';
 import { apiClient } from '../lib/api';
 import { formatReactionTime } from '../lib/formatters';
 import { claimWinnings } from '../services/claimService';
@@ -41,21 +40,10 @@ interface Match {
   resultType?: string; // tie, both_disqualified, etc.
 }
 
-interface PendingRefund {
-  paymentReference: string;
-  amount: number;
-  refundAmount: number;
-  protocolFeePercent: number;
-  createdAt: string;
-  type: string;
-  canClaimDeposit: boolean;
-}
-
 const MatchHistory: React.FC = () => {
   const navigate = useNavigate();
   const { state } = useGameContext();
   const [matches, setMatches] = useState<Match[]>([]);
-  const [pendingRefunds, setPendingRefunds] = useState<PendingRefund[]>([]);
   const [loading, setLoading] = useState(true);
   const [processingClaims, setProcessingClaims] = useState<Set<string>>(new Set());
   const [claimErrors, setClaimErrors] = useState<Map<string, string>>(new Map());
@@ -113,7 +101,7 @@ const MatchHistory: React.FC = () => {
 
       if (response.data.success) {
         setMatches(response.data.matches);
-        setPendingRefunds(response.data.pendingRefunds || []);
+        // Orphan deposits removed - only show completed matches
       }
     } catch (error) {
       console.error('Error fetching match history:', error);
@@ -192,11 +180,6 @@ const MatchHistory: React.FC = () => {
           </div>
         ) : (
           <>
-            <PendingRefunds 
-              refunds={pendingRefunds} 
-              onRefundClaimed={fetchMatchHistory}
-            />
-
             {matches.length === 0 ? (
               <GlassCard className="empty-state">
                 <p className="empty-message">No matches yet!</p>

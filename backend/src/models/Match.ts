@@ -124,6 +124,8 @@ export class MatchModel {
     const totalPot = match.stake * 2;
     const fee = totalPot * (platformFeePercent / 100);
 
+    // CRITICAL: Always set result_type to ensure match decisions are saved
+    // This prevents "orphan matches" with missing result data
     await pool.query(
       `UPDATE matches 
        SET winner_id = $1, 
@@ -131,14 +133,16 @@ export class MatchModel {
            player2_reaction_ms = $3,
            status = $4,
            fee = $5,
+           result_type = $6,
            completed_at = CURRENT_TIMESTAMP
-       WHERE match_id = $6`,
+       WHERE match_id = $7`,
       [
         result.winnerId,
         result.player1ReactionMs,
         result.player2ReactionMs,
         MatchStatus.COMPLETED,
         fee,
+        result.reason,  // result_type
         result.matchId,
       ]
     );
