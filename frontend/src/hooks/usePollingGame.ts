@@ -8,18 +8,18 @@ import { useGameContext } from '../context/GameContext';
  * 
  * NOTE: Polling rates have been adjusted to reduce excessive polling:
  * - Most phases use 1500ms-3000ms to reduce server load
- * - Countdown phase uses LOCAL timers (no polling after greenLightTime received)
+ * - Waiting phase uses LOCAL timers (no polling after greenLightTime received)
  * - Playing phase uses faster rate only for result updates
  * - Polling stops immediately when match completes
  * - Rate limiting applied via matchRateLimiter (500 req/min)
  * 
- * UPDATED: Countdown now uses local timers based on server time sync
+ * UPDATED: No countdown numbers - just waiting phase until green light
  */
 const POLLING_RATES = {
   IDLE: 5000,           // 5s - not in game
   MATCHMAKING: 2000,    // 2s - searching for match
   MATCHED: 3000,        // 3s - waiting for ready (reduced from 1000ms)
-  COUNTDOWN: 0,         // 0ms - NO POLLING during countdown (use local timers)
+  COUNTDOWN: 0,         // 0ms - NO POLLING during waiting (use local timers)
   PLAYING: 1000,        // 1s - during reaction test (reduced from 250ms)
   WAITING_RESULT: 2000, // 2s - waiting for opponent (increased from 750ms)
   RESULT: 2000          // 2s - showing results
@@ -60,6 +60,8 @@ export const usePollingGame = () => {
   /**
    * Start local countdown based on greenLightTime and server time sync
    * This eliminates the need for polling during countdown
+   * 
+   * UPDATED: No countdown numbers displayed - just waiting until green light
    */
   const startLocalCountdown = useCallback((greenLightTime: number, serverTime: number, matchId: string) => {
     // Clear any existing timers
@@ -78,8 +80,6 @@ export const usePollingGame = () => {
     
     console.log(`[LocalCountdown] Server time offset: ${serverTimeOffsetRef.current}ms`);
     console.log(`[LocalCountdown] Green light at: ${new Date(greenLightTime).toISOString()}`);
-
-    const COUNTDOWN_DURATION_MS = 3000; // Last 3 seconds show countdown numbers
 
     const updateCountdown = () => {
       const now = Date.now() + serverTimeOffsetRef.current; // Sync with server time
@@ -118,24 +118,14 @@ export const usePollingGame = () => {
           pollIntervalRef.current = setInterval(poll, POLLING_RATES.PLAYING);
           console.log('[LocalCountdown] Resumed polling at', POLLING_RATES.PLAYING, 'ms');
         }
-      } else if (timeUntilGo <= COUNTDOWN_DURATION_MS) {
-        // Countdown phase (3, 2, 1)
-        const countdown = Math.ceil(timeUntilGo / 1000);
-        setGamePhase('countdown');
-        setCountdown(countdown);
-        console.log(`[LocalCountdown] Countdown: ${countdown}`);
-        
-        // Schedule next update - use 250ms for smoother countdown updates
-        countdownTimerRef.current = setTimeout(updateCountdown, 250);
       } else {
-        // Waiting phase (before countdown)
+        // Waiting phase - no countdown numbers, just waiting for green light
         setGamePhase('waiting');
         setCountdown(null);
-        console.log(`[LocalCountdown] Waiting... ${Math.round(timeUntilGo / 1000)}s until countdown`);
+        console.log(`[LocalCountdown] Waiting for green light... ${Math.round(timeUntilGo / 1000)}s remaining`);
         
-        // Schedule next check when countdown should start
-        const delayUntilCountdown = timeUntilGo - COUNTDOWN_DURATION_MS;
-        countdownTimerRef.current = setTimeout(updateCountdown, Math.max(250, delayUntilCountdown));
+        // Schedule next check - use smaller intervals for smoother transitions
+        countdownTimerRef.current = setTimeout(updateCountdown, 250);
       }
     };
 

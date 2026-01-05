@@ -13,11 +13,12 @@ import pool from '../config/database';
  * 
  * REACTION LIGHTS GAME MECHANICS:
  * 1. 5 lights turn RED sequentially (~500ms each = ~2.5s total)
- * 2. Mandatory 2-second minimum wait with all lights RED
- * 3. Random delay (2-5s) after the minimum wait
- * 4. Lights turn GREEN → trigger moment (players react)
+ * 2. Mandatory 2-second wait with all lights RED
+ * 3. Random delay (0-5s) after the minimum wait
+ * 4. Lights turn GREEN → GO signal (players can tap after additional 2s mandatory wait)
  * 
- * Total timing: ~2.5s (lights) + 2s (min wait) + 2-5s (random) = ~6.5-9.5s
+ * Total timing: ~2.5s (lights) + 2s (min wait) + 0-5s (random) = ~4.5-9.5s before green
+ *               + 2s (mandatory wait after green) before taps are accepted
  */
 
 // Constants
@@ -162,19 +163,19 @@ export class PollingMatchController {
         // CRITICAL: Mandatory 2-second minimum wait AFTER all lights are red
         const minimumWaitMs = MINIMUM_WAIT_AFTER_RED_MS; // 2000ms
         
-        // Random delay AFTER the minimum wait (2-5 seconds)
-        const minRandomDelay = parseInt(process.env.SIGNAL_DELAY_MIN_MS || '2000', 10);
+        // Random delay AFTER the minimum wait (0-5 seconds as per requirements)
+        const minRandomDelay = parseInt(process.env.SIGNAL_DELAY_MIN_MS || '0', 10);
         const maxRandomDelay = parseInt(process.env.SIGNAL_DELAY_MAX_MS || '5000', 10);
         const randomDelay = generateRandomDelay(minRandomDelay, maxRandomDelay);
         
         const now = Date.now();
-        // TIMING FORMULA (implements 6.5-9.5 second total timing):
+        // TIMING FORMULA (updated per requirements):
         // greenLightTime = now + totalLightsTime + minimumWaitMs + randomDelay
         // Where:
         //   - totalLightsTime: ~2.5s (5 lights × ~500ms each)
         //   - minimumWaitMs: 2.0s (mandatory wait after all lights red)
-        //   - randomDelay: 2-5s (random delay after minimum wait)
-        // Total range: ~6.5s to ~9.5s
+        //   - randomDelay: 0-5s (random delay after minimum wait)
+        // Total range: ~4.5s to ~9.5s
         const greenLightTime = now + totalLightsTime + minimumWaitMs + randomDelay;
 
         await client.query(`
