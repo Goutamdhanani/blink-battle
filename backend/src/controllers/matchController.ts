@@ -154,7 +154,7 @@ export class MatchController {
       let params: any[];
 
       if (refundColumnsExist.rows.length > 0) {
-        // Use full query with refund columns
+        // Use full query with refund columns and tap_events join
         query = `
           SELECT 
             m.*,
@@ -166,11 +166,17 @@ export class MatchController {
             u1.wallet_address as player1_wallet_addr,
             u1.avg_reaction_time as player1_avg_reaction,
             u2.wallet_address as player2_wallet_addr,
-            u2.avg_reaction_time as player2_avg_reaction
+            u2.avg_reaction_time as player2_avg_reaction,
+            te1.reaction_ms as player1_tap_reaction_ms,
+            te1.is_valid as player1_tap_is_valid,
+            te2.reaction_ms as player2_tap_reaction_ms,
+            te2.is_valid as player2_tap_is_valid
           FROM matches m
           LEFT JOIN payment_intents pi ON pi.match_id = m.match_id AND pi.user_id = $1
           LEFT JOIN users u1 ON u1.user_id = m.player1_id
           LEFT JOIN users u2 ON u2.user_id = m.player2_id
+          LEFT JOIN tap_events te1 ON te1.match_id = m.match_id AND te1.user_id = m.player1_id
+          LEFT JOIN tap_events te2 ON te2.match_id = m.match_id AND te2.user_id = m.player2_id
           WHERE (m.player1_id = $1 OR m.player2_id = $1)
             AND m.status = 'completed'
             AND m.completed_at IS NOT NULL
@@ -188,11 +194,17 @@ export class MatchController {
             u1.wallet_address as player1_wallet_addr,
             u1.avg_reaction_time as player1_avg_reaction,
             u2.wallet_address as player2_wallet_addr,
-            u2.avg_reaction_time as player2_avg_reaction
+            u2.avg_reaction_time as player2_avg_reaction,
+            te1.reaction_ms as player1_tap_reaction_ms,
+            te1.is_valid as player1_tap_is_valid,
+            te2.reaction_ms as player2_tap_reaction_ms,
+            te2.is_valid as player2_tap_is_valid
           FROM matches m
           LEFT JOIN payment_intents pi ON pi.match_id = m.match_id AND pi.user_id = $1
           LEFT JOIN users u1 ON u1.user_id = m.player1_id
           LEFT JOIN users u2 ON u2.user_id = m.player2_id
+          LEFT JOIN tap_events te1 ON te1.match_id = m.match_id AND te1.user_id = m.player1_id
+          LEFT JOIN tap_events te2 ON te2.match_id = m.match_id AND te2.user_id = m.player2_id
           WHERE (m.player1_id = $1 OR m.player2_id = $1)
             AND m.status = 'completed'
             AND m.completed_at IS NOT NULL
@@ -205,7 +217,8 @@ export class MatchController {
 
       const matches = await pool.query(query, params);
 
-      // Also get orphaned payments (paid but never matched) - only if refund columns exist
+      // Also get orphaned payments (paid but never matched) or draw/cancelled matches - only if refund columns exist
+      // Exclude completed matches (win/loss) and in-progress matches
       let orphanedPayments: any = { rows: [] };
       if (refundColumnsExist.rows.length > 0) {
         orphanedPayments = await pool.query(`
@@ -215,11 +228,24 @@ export class MatchController {
             pi.created_at,
             pi.refund_status,
             pi.refund_deadline,
-            pi.refund_reason
+            pi.refund_reason,
+            m.status as match_status,
+            m.result_type,
+            m.cancelled
           FROM payment_intents pi
+          LEFT JOIN matches m ON m.match_id = pi.match_id
           WHERE pi.user_id = $1 
-            AND pi.match_id IS NULL
             AND pi.normalized_status = 'confirmed'
+            AND pi.refund_status != 'completed'
+            AND (
+              -- Orphaned deposits (no match)
+              pi.match_id IS NULL
+              OR
+              -- Draw or cancelled matches only
+              m.status = 'cancelled'
+              OR m.cancelled = true
+              OR m.result_type IN ('tie', 'both_disqualified', 'both_timeout_tie')
+            )
           ORDER BY pi.created_at DESC
           LIMIT 10
         `, [userId]);
@@ -231,9 +257,19 @@ export class MatchController {
         const opponentWallet = isPlayer1 ? m.player2_wallet_addr : m.player1_wallet_addr;
         const opponentAvgReaction = isPlayer1 ? m.player2_avg_reaction : m.player1_avg_reaction;
         
-        // SERVER AUTHORITY: Use reaction_ms from database (NOT client calculations)
-        const yourReaction = isPlayer1 ? m.player1_reaction_ms : m.player2_reaction_ms;
-        const opponentReaction = isPlayer1 ? m.player2_reaction_ms : m.player1_reaction_ms;
+        // SERVER AUTHORITY: Use reaction_ms from tap_events table (trusted source)
+        // Prefer tap_events data over matches.player*_reaction_ms
+        const yourReaction = isPlayer1 
+          ? (m.player1_tap_reaction_ms !== null ? m.player1_tap_reaction_ms : m.player1_reaction_ms)
+          : (m.player2_tap_reaction_ms !== null ? m.player2_tap_reaction_ms : m.player2_reaction_ms);
+        
+        const opponentReaction = isPlayer1 
+          ? (m.player2_tap_reaction_ms !== null ? m.player2_tap_reaction_ms : m.player2_reaction_ms)
+          : (m.player1_tap_reaction_ms !== null ? m.player1_tap_reaction_ms : m.player1_reaction_ms);
+        
+        // Get tap validity flags
+        const yourTapValid = isPlayer1 ? m.player1_tap_is_valid : m.player2_tap_is_valid;
+        const opponentTapValid = isPlayer1 ? m.player2_tap_is_valid : m.player1_tap_is_valid;
 
         // Calculate claim deadline time remaining
         let claimTimeRemaining: number | undefined;
@@ -247,6 +283,9 @@ export class MatchController {
         const outcome = getMatchOutcome(m, userId);
         const canRefund = await canClaimRefund(m, userId);
         const canClaim = await canClaimWinnings(m, userId);
+        
+        // Check if winnings have been claimed
+        const claimed = m.claim_status === 'claimed';
 
         return {
           matchId: m.match_id,
@@ -255,6 +294,8 @@ export class MatchController {
           reaction_ms: yourReaction, // Field name per spec
           yourReaction, // Keep for backward compatibility
           opponentReaction,
+          tapValid: yourTapValid, // Tap validity flag
+          opponentTapValid, // Opponent tap validity flag
           won: outcome === 'win',
           outcome, // SERVER AUTHORITY: computed server-side
           resultType: m.result_type,
@@ -267,6 +308,7 @@ export class MatchController {
           claimDeadline: m.claim_deadline || undefined,
           claimStatus: m.claim_status || undefined,
           claimTimeRemaining,
+          claimed, // Explicit claimed flag
           // SERVER AUTHORITY: canClaimWinnings from helper function
           canClaimWinnings: canClaim,
           claimable: canClaim, // Keep for backward compatibility

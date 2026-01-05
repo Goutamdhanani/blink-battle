@@ -218,10 +218,10 @@ export class ClaimController {
         true  // Mark as claimed immediately (optimistic locking)
       ]);
 
-      // Mark match as claimed
+      // Mark match as claimed and update total_claimed_amount
       await client.query(
-        'UPDATE matches SET claim_status = $1 WHERE match_id = $2',
-        ['claimed', matchId]
+        'UPDATE matches SET claim_status = $1, total_claimed_amount = total_claimed_amount + $2 WHERE match_id = $3',
+        ['claimed', netPayout, matchId]
       );
 
       await client.query('COMMIT');
@@ -243,12 +243,20 @@ export class ClaimController {
           WHERE idempotency_key = $2
         `, [txHash, idempotencyKey]);
         
-        // SECURITY: Update total_claimed_amount to track cumulative claims
+        // SECURITY: Update total_claimed_amount to track cumulative claims (both tables)
         await pool.query(`
           UPDATE payment_intents 
           SET total_claimed_amount = COALESCE(total_claimed_amount, 0) + $1 
           WHERE payment_reference = $2
         `, [netPayoutWLD, userPayment.payment_reference]);
+        
+        // SECURITY: Also update matches.total_claimed_amount for double verification
+        await pool.query(`
+          UPDATE matches 
+          SET total_claimed_amount = total_claimed_amount + $1,
+              claim_transaction_hash = $2
+          WHERE match_id = $3
+        `, [netPayout, txHash, matchId]);
 
         console.log(`[Claim] Successfully paid out ${netPayout} wei to ${claimingWallet}, tx: ${txHash}`);
 
