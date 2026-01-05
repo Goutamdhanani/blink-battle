@@ -3,6 +3,7 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import { AuthController } from './controllers/authController';
 import { BrainTrainingLeaderboardController } from './controllers/brainTrainingLeaderboardController';
+import { UserStatsController } from './controllers/userStatsController';
 import { authenticate } from './middleware/auth';
 import pool from './config/database';
 
@@ -188,6 +189,14 @@ app.get('/api/leaderboard/global', BrainTrainingLeaderboardController.getGlobalL
 app.get('/api/leaderboard/game/:gameType', BrainTrainingLeaderboardController.getGameTypeLeaderboard);
 app.get('/api/leaderboard/me', authenticate, BrainTrainingLeaderboardController.getUserGlobalRank);
 app.get('/api/leaderboard/me/:gameType', authenticate, BrainTrainingLeaderboardController.getUserGameTypeRank);
+
+// User stats routes
+app.get('/api/stats/percentile', authenticate, UserStatsController.getUserPercentile);
+app.get('/api/stats/play-style', authenticate, UserStatsController.getPlayStyle);
+app.get('/api/stats/global', UserStatsController.getGlobalStats);
+app.get('/api/stats/streaks', authenticate, UserStatsController.getStreaks);
+app.get('/api/stats/performance-trend', authenticate, UserStatsController.getPerformanceTrend);
+app.get('/api/stats/cognitive-comparison', authenticate, UserStatsController.getCognitiveComparison);
 
 // Test database connection
 pool.query('SELECT NOW()', (err, res) => {
