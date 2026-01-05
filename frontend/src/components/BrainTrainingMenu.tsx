@@ -1,14 +1,25 @@
 import React, { useState, useEffect } from 'react';
 import { getPlayerProfile } from '../lib/indexedDB';
-import { PlayerProfile } from '../games/types';
+import { PlayerProfile, GameType as GameTypeEnum } from '../games/types';
 import MemoryGame from '../games/MemoryGame';
 import AttentionGame from '../games/AttentionGame';
 import ReflexGame from '../games/ReflexGame';
+import WordFlash from '../games/WordFlash';
+import ShapeShadow from '../games/ShapeShadow';
+import SequenceBuilder from '../games/SequenceBuilder';
+import FocusFilter from '../games/FocusFilter';
+import PathMemory from '../games/PathMemory';
+import MissingNumber from '../games/MissingNumber';
+import ColorSwap from '../games/ColorSwap';
+import ReverseRecall from '../games/ReverseRecall';
+import BlinkCount from '../games/BlinkCount';
+import WordPairMatch from '../games/WordPairMatch';
 import BrainStats from './BrainStats';
+import EnhancedProfile from './EnhancedProfile';
 import { GameScore } from '../games/types';
 import './BrainTrainingMenu.css';
 
-type GameType = 'memory' | 'attention' | 'reflex' | 'stats' | null;
+type GameType = GameTypeEnum | 'stats' | 'profile' | null;
 
 const BrainTrainingMenu: React.FC = () => {
   const [currentGame, setCurrentGame] = useState<GameType>(null);
@@ -65,8 +76,52 @@ const BrainTrainingMenu: React.FC = () => {
     return <ReflexGame onGameComplete={handleGameComplete} onExit={handleGameExit} />;
   }
 
+  if (currentGame === 'word_flash') {
+    return <WordFlash onGameComplete={handleGameComplete} onExit={handleGameExit} />;
+  }
+
+  if (currentGame === 'shape_shadow') {
+    return <ShapeShadow onGameComplete={handleGameComplete} onExit={handleGameExit} />;
+  }
+
+  if (currentGame === 'sequence_builder') {
+    return <SequenceBuilder onGameComplete={handleGameComplete} onExit={handleGameExit} />;
+  }
+
+  if (currentGame === 'focus_filter') {
+    return <FocusFilter onGameComplete={handleGameComplete} onExit={handleGameExit} />;
+  }
+
+  if (currentGame === 'path_memory') {
+    return <PathMemory onGameComplete={handleGameComplete} onExit={handleGameExit} />;
+  }
+
+  if (currentGame === 'missing_number') {
+    return <MissingNumber onGameComplete={handleGameComplete} onExit={handleGameExit} />;
+  }
+
+  if (currentGame === 'color_swap') {
+    return <ColorSwap onGameComplete={handleGameComplete} onExit={handleGameExit} />;
+  }
+
+  if (currentGame === 'reverse_recall') {
+    return <ReverseRecall onGameComplete={handleGameComplete} onExit={handleGameExit} />;
+  }
+
+  if (currentGame === 'blink_count') {
+    return <BlinkCount onGameComplete={handleGameComplete} onExit={handleGameExit} />;
+  }
+
+  if (currentGame === 'word_pair_match') {
+    return <WordPairMatch onGameComplete={handleGameComplete} onExit={handleGameExit} />;
+  }
+
   if (currentGame === 'stats') {
     return <BrainStats onBack={handleGameExit} />;
+  }
+
+  if (currentGame === 'profile') {
+    return <EnhancedProfile onBack={handleGameExit} />;
   }
 
   return (
@@ -93,15 +148,15 @@ const BrainTrainingMenu: React.FC = () => {
             </div>
             <div className="quick-stat-item">
               <div className="quick-stat-icon">🏆</div>
-              <div className="quick-stat-value">{profile.achievements.length}</div>
+              <div className="quick-stat-value">{profile.achievements?.length || 0}</div>
               <div className="quick-stat-label">Badges</div>
             </div>
             <div className="quick-stat-item">
               <div className="quick-stat-icon">⚡</div>
               <div className="quick-stat-value">
-                {Math.max(profile.memoryStats.highestLevel, profile.attentionStats.highestLevel, profile.reflexStats.highestLevel)}
+                {profile.level || 1}
               </div>
-              <div className="quick-stat-label">Max Level</div>
+              <div className="quick-stat-label">Level</div>
             </div>
           </div>
         )}
@@ -111,22 +166,13 @@ const BrainTrainingMenu: React.FC = () => {
           <h2 className="section-title">Choose Your Challenge</h2>
           
           <div className="game-cards">
+            {/* Original 3 Games */}
             <div className="game-card game-card-memory" onClick={() => setCurrentGame('memory')}>
               <div className="game-card-glow"></div>
               <div className="game-card-content">
                 <div className="game-icon">🧠</div>
                 <h3 className="game-title">Memory Match</h3>
-                <p className="game-description">
-                  Test your memory by matching pairs of symbols
-                </p>
-                <div className="game-stats-preview">
-                  {profile && profile.memoryStats.gamesPlayed > 0 && (
-                    <>
-                      <span className="stat-badge">Best: {profile.memoryStats.bestScore}</span>
-                      <span className="stat-badge">Level: {profile.memoryStats.highestLevel}</span>
-                    </>
-                  )}
-                </div>
+                <p className="game-description">Match pairs of symbols</p>
                 <div className="play-btn">
                   <span>Play</span>
                   <span className="play-arrow">→</span>
@@ -139,17 +185,7 @@ const BrainTrainingMenu: React.FC = () => {
               <div className="game-card-content">
                 <div className="game-icon">👁️</div>
                 <h3 className="game-title">Focus Test</h3>
-                <p className="game-description">
-                  Train your attention by hitting targets quickly
-                </p>
-                <div className="game-stats-preview">
-                  {profile && profile.attentionStats.gamesPlayed > 0 && (
-                    <>
-                      <span className="stat-badge">Best: {profile.attentionStats.bestScore}</span>
-                      <span className="stat-badge">Level: {profile.attentionStats.highestLevel}</span>
-                    </>
-                  )}
-                </div>
+                <p className="game-description">Hit targets quickly</p>
                 <div className="play-btn">
                   <span>Play</span>
                   <span className="play-arrow">→</span>
@@ -162,17 +198,138 @@ const BrainTrainingMenu: React.FC = () => {
               <div className="game-card-content">
                 <div className="game-icon">⚡</div>
                 <h3 className="game-title">Reflex Rush</h3>
-                <p className="game-description">
-                  Challenge your reaction time with rapid tests
-                </p>
-                <div className="game-stats-preview">
-                  {profile && profile.reflexStats.gamesPlayed > 0 && (
-                    <>
-                      <span className="stat-badge">Best: {profile.reflexStats.bestScore}</span>
-                      <span className="stat-badge">Avg: {profile.reflexStats.averageTimeMs}ms</span>
-                    </>
-                  )}
+                <p className="game-description">Test reaction time</p>
+                <div className="play-btn">
+                  <span>Play</span>
+                  <span className="play-arrow">→</span>
                 </div>
+              </div>
+            </div>
+
+            {/* New Phase 2 Games */}
+            <div className="game-card game-card-word" onClick={() => setCurrentGame('word_flash')}>
+              <div className="game-card-glow"></div>
+              <div className="game-card-content">
+                <div className="game-icon">⚡</div>
+                <h3 className="game-title">Word Flash</h3>
+                <p className="game-description">Rapid word recognition</p>
+                <div className="play-btn">
+                  <span>Play</span>
+                  <span className="play-arrow">→</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="game-card game-card-shape" onClick={() => setCurrentGame('shape_shadow')}>
+              <div className="game-card-glow"></div>
+              <div className="game-card-content">
+                <div className="game-icon">🔲</div>
+                <h3 className="game-title">Shape Shadow</h3>
+                <p className="game-description">Match shadows to shapes</p>
+                <div className="play-btn">
+                  <span>Play</span>
+                  <span className="play-arrow">→</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="game-card game-card-sequence" onClick={() => setCurrentGame('sequence_builder')}>
+              <div className="game-card-glow"></div>
+              <div className="game-card-content">
+                <div className="game-icon">🔢</div>
+                <h3 className="game-title">Sequence Builder</h3>
+                <p className="game-description">Remember and recreate</p>
+                <div className="play-btn">
+                  <span>Play</span>
+                  <span className="play-arrow">→</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="game-card game-card-filter" onClick={() => setCurrentGame('focus_filter')}>
+              <div className="game-card-glow"></div>
+              <div className="game-card-content">
+                <div className="game-icon">🎯</div>
+                <h3 className="game-title">Focus Filter</h3>
+                <p className="game-description">Selective attention</p>
+                <div className="play-btn">
+                  <span>Play</span>
+                  <span className="play-arrow">→</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="game-card game-card-path" onClick={() => setCurrentGame('path_memory')}>
+              <div className="game-card-glow"></div>
+              <div className="game-card-content">
+                <div className="game-icon">🗺️</div>
+                <h3 className="game-title">Path Memory</h3>
+                <p className="game-description">Trace the path</p>
+                <div className="play-btn">
+                  <span>Play</span>
+                  <span className="play-arrow">→</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="game-card game-card-number" onClick={() => setCurrentGame('missing_number')}>
+              <div className="game-card-glow"></div>
+              <div className="game-card-content">
+                <div className="game-icon">🔢</div>
+                <h3 className="game-title">Missing Number</h3>
+                <p className="game-description">Find the gap</p>
+                <div className="play-btn">
+                  <span>Play</span>
+                  <span className="play-arrow">→</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="game-card game-card-color" onClick={() => setCurrentGame('color_swap')}>
+              <div className="game-card-glow"></div>
+              <div className="game-card-content">
+                <div className="game-icon">🎨</div>
+                <h3 className="game-title">Color Swap</h3>
+                <p className="game-description">Pattern matching</p>
+                <div className="play-btn">
+                  <span>Play</span>
+                  <span className="play-arrow">→</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="game-card game-card-reverse" onClick={() => setCurrentGame('reverse_recall')}>
+              <div className="game-card-glow"></div>
+              <div className="game-card-content">
+                <div className="game-icon">⏮️</div>
+                <h3 className="game-title">Reverse Recall</h3>
+                <p className="game-description">Backward memory</p>
+                <div className="play-btn">
+                  <span>Play</span>
+                  <span className="play-arrow">→</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="game-card game-card-blink" onClick={() => setCurrentGame('blink_count')}>
+              <div className="game-card-glow"></div>
+              <div className="game-card-content">
+                <div className="game-icon">👁️</div>
+                <h3 className="game-title">Blink Count</h3>
+                <p className="game-description">Count the flashes</p>
+                <div className="play-btn">
+                  <span>Play</span>
+                  <span className="play-arrow">→</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="game-card game-card-pairs" onClick={() => setCurrentGame('word_pair_match')}>
+              <div className="game-card-glow"></div>
+              <div className="game-card-content">
+                <div className="game-icon">📝</div>
+                <h3 className="game-title">Word Pair Match</h3>
+                <p className="game-description">Associate words</p>
                 <div className="play-btn">
                   <span>Play</span>
                   <span className="play-arrow">→</span>
@@ -182,11 +339,15 @@ const BrainTrainingMenu: React.FC = () => {
           </div>
         </div>
 
-        {/* Stats Button */}
+        {/* Action Buttons */}
         <div className="menu-actions">
+          <button className="stats-button" onClick={() => setCurrentGame('profile')}>
+            <span className="stats-icon">👤</span>
+            <span>Enhanced Profile</span>
+          </button>
           <button className="stats-button" onClick={() => setCurrentGame('stats')}>
             <span className="stats-icon">📊</span>
-            <span>View Detailed Stats</span>
+            <span>Detailed Stats</span>
           </button>
         </div>
 

@@ -1,0 +1,78 @@
+.sequence-builder-game {
+  min-height: 100vh;
+  background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.sequence-display, .input-area {
+  background: rgba(255, 255, 255, 0.9);
+  padding: 40px;
+  border-radius: 20px;
+  text-align: center;
+}
+
+.sequence-items, .user-sequence {
+  display: flex;
+  gap: 15px;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin: 30px 0;
+}
+
+.sequence-item, .user-item, .empty-slot {
+  font-size: 3em;
+  width: 80px;
+  height: 80px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: white;
+  border-radius: 15px;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+}
+
+.sequence-item {
+  animation: popIn 0.3s ease forwards;
+  opacity: 0;
+}
+
+@keyframes popIn {
+  to { opacity: 1; transform: scale(1); }
+  from { opacity: 0; transform: scale(0.5); }
+}
+
+.empty-slot {
+  background: rgba(0, 0, 0, 0.05);
+  color: #ccc;
+}
+
+.emoji-options {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  margin-top: 30px;
+}
+
+.emoji-btn {
+  font-size: 2em;
+  padding: 15px;
+  background: white;
+  border: 2px solid #4facfe;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.emoji-btn:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 6px 20px rgba(79, 172, 254, 0.3);
+}
+
+.instruction {
+  font-size: 1.3em;
+  color: #333;
+  margin-bottom: 20px;
+}

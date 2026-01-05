@@ -2,12 +2,15 @@
  * IndexedDB wrapper for offline game data storage
  */
 
-import { GameScore, PlayerProfile, GameStats } from '../games/types';
+import { GameScore, PlayerProfile, GameStats, GameType, Achievement } from '../games/types';
 
 const DB_NAME = 'BlinkBattleBrainTraining';
 const DB_VERSION = 1;
 const SCORES_STORE = 'gameScores';
 const PROFILE_STORE = 'playerProfile';
+
+// XP and leveling constants
+const XP_BASE_MULTIPLIER = 100;
 
 let dbInstance: IDBDatabase | null = null;
 
@@ -96,12 +99,12 @@ export async function getAllScores(): Promise<GameScore[]> {
 /**
  * Calculate stats for a game type
  */
-export async function calculateGameStats(gameType: string): Promise<GameStats> {
+export async function calculateGameStats(gameType: GameType): Promise<GameStats> {
   const scores = await getGameScores(gameType);
   
   if (scores.length === 0) {
     return {
-      gameType: gameType as 'memory' | 'attention' | 'reflex',
+      gameType,
       gamesPlayed: 0,
       bestScore: 0,
       averageScore: 0,
@@ -119,7 +122,7 @@ export async function calculateGameStats(gameType: string): Promise<GameStats> {
   const lastPlayed = Math.max(...scores.map(s => s.timestamp));
 
   return {
-    gameType: gameType as 'memory' | 'attention' | 'reflex',
+    gameType,
     gamesPlayed: scores.length,
     bestScore,
     averageScore: Math.round(averageScore),
@@ -134,58 +137,162 @@ export async function calculateGameStats(gameType: string): Promise<GameStats> {
  * Get player profile with all stats
  */
 export async function getPlayerProfile(): Promise<PlayerProfile> {
-  const memoryStats = await calculateGameStats('memory');
-  const attentionStats = await calculateGameStats('attention');
-  const reflexStats = await calculateGameStats('reflex');
-  
-  const totalGamesPlayed = memoryStats.gamesPlayed + attentionStats.gamesPlayed + reflexStats.gamesPlayed;
-  
   const allScores = await getAllScores();
+  const totalGamesPlayed = allScores.length;
+  
+  // Calculate stats for all game types
+  const gameTypes: GameType[] = [
+    'memory', 'attention', 'reflex',
+    'word_flash', 'shape_shadow', 'sequence_builder',
+    'focus_filter', 'path_memory', 'missing_number',
+    'color_swap', 'reverse_recall', 'blink_count', 'word_pair_match'
+  ];
+  
+  const gameStats: Record<GameType, GameStats> = {} as Record<GameType, GameStats>;
+  for (const gameType of gameTypes) {
+    gameStats[gameType] = await calculateGameStats(gameType);
+  }
+  
   const lastActive = allScores.length > 0 ? Math.max(...allScores.map(s => s.timestamp)) : Date.now();
   
+  // Calculate XP based on total scores
+  const xp = allScores.reduce((sum, s) => sum + s.score, 0);
+  const level = Math.floor(Math.sqrt(xp / XP_BASE_MULTIPLIER)) + 1;
+  
+  // Calculate cognitive index (0-100 scale)
+  const avgAccuracy = allScores.length > 0 
+    ? allScores.reduce((sum, s) => sum + s.accuracy, 0) / allScores.length 
+    : 0;
+  const cognitiveIndex = Math.round(avgAccuracy);
+  
+  // Calculate rank badge based on level
+  let rankBadge = 'Rookie';
+  if (level >= 10) rankBadge = 'Legend';
+  else if (level >= 7) rankBadge = 'Elite';
+  else if (level >= 4) rankBadge = 'Experienced';
+  
+  // Generate achievements
+  const achievements = calculateAchievements(gameStats, totalGamesPlayed, cognitiveIndex);
+  
   return {
+    xp,
+    level,
+    rankBadge,
     totalGamesPlayed,
-    memoryStats,
-    attentionStats,
-    reflexStats,
-    achievements: calculateAchievements(memoryStats, attentionStats, reflexStats),
+    totalSessions: totalGamesPlayed, // Simplified: each game is a session
+    currentStreak: 0, // TODO: Implement streak calculation
+    longestStreak: 0,
+    averageDailyPlayTime: 0,
+    cognitiveIndex,
+    overallAccuracy: Math.round(avgAccuracy),
+    gameStats,
+    achievements,
+    unlockedThemes: getUnlockedThemes(level),
+    currentTheme: 'Rookie',
     createdAt: Date.now(),
     lastActive,
+    joinDate: Date.now(),
   };
+}
+
+/**
+ * Get unlocked themes based on level
+ */
+function getUnlockedThemes(level: number): string[] {
+  const themes = ['Rookie'];
+  if (level >= 4) themes.push('Experienced');
+  if (level >= 7) themes.push('Elite');
+  if (level >= 10) themes.push('Hacker Mode');
+  return themes;
 }
 
 /**
  * Calculate achievements based on stats
  */
 function calculateAchievements(
-  memory: GameStats, 
-  attention: GameStats, 
-  reflex: GameStats
-): string[] {
-  const achievements: string[] = [];
+  gameStats: Record<GameType, GameStats>,
+  totalGames: number,
+  cognitiveIndex: number
+): Achievement[] {
+  const achievements: Achievement[] = [];
   
-  // First game achievements
-  if (memory.gamesPlayed > 0) achievements.push('memory_novice');
-  if (attention.gamesPlayed > 0) achievements.push('attention_novice');
-  if (reflex.gamesPlayed > 0) achievements.push('reflex_novice');
+  // Sharp Mind - 90%+ accuracy in any game
+  const hasHighAccuracy = Object.values(gameStats).some(stat => stat.averageAccuracy >= 90);
+  achievements.push({
+    id: 'sharp_mind',
+    name: 'Sharp Mind',
+    description: 'Score 90% or higher in any game',
+    icon: '🧠',
+    category: 'skill',
+    isUnlocked: hasHighAccuracy,
+  });
   
-  // Level achievements
-  if (memory.highestLevel >= 5) achievements.push('memory_master');
-  if (attention.highestLevel >= 5) achievements.push('attention_master');
-  if (reflex.highestLevel >= 5) achievements.push('reflex_master');
+  // Dedicated Trainer - 50+ total games
+  achievements.push({
+    id: 'dedicated_trainer',
+    name: 'Dedicated Trainer',
+    description: 'Play 50 total games',
+    icon: '💪',
+    category: 'volume',
+    progress: totalGames,
+    isUnlocked: totalGames >= 50,
+  });
   
-  // Accuracy achievements
-  if (memory.averageAccuracy >= 90) achievements.push('memory_perfectionist');
-  if (attention.averageAccuracy >= 90) achievements.push('attention_sharpshooter');
+  // Brain Athlete - 100+ total games
+  achievements.push({
+    id: 'brain_athlete',
+    name: 'Brain Athlete',
+    description: 'Play 100 total games',
+    icon: '🎯',
+    category: 'volume',
+    progress: totalGames,
+    isUnlocked: totalGames >= 100,
+  });
   
-  // Speed achievements
-  if (reflex.averageTimeMs > 0 && reflex.averageTimeMs < 300) achievements.push('lightning_fast');
+  // Cognitive Champion - Cognitive Index 80+
+  achievements.push({
+    id: 'cognitive_champion',
+    name: 'Cognitive Champion',
+    description: 'Reach Cognitive Index of 80',
+    icon: '👑',
+    category: 'skill',
+    progress: cognitiveIndex,
+    isUnlocked: cognitiveIndex >= 80,
+  });
   
-  // Dedication achievements
-  const totalGames = memory.gamesPlayed + attention.gamesPlayed + reflex.gamesPlayed;
-  if (totalGames >= 10) achievements.push('dedicated_trainer');
-  if (totalGames >= 50) achievements.push('brain_athlete');
-  if (totalGames >= 100) achievements.push('cognitive_champion');
+  // Completionist - Play all 13 games
+  const uniqueGamesPlayed = Object.values(gameStats).filter(stat => stat.gamesPlayed > 0).length;
+  achievements.push({
+    id: 'completionist',
+    name: 'Completionist',
+    description: 'Play all 13 brain training games',
+    icon: '🏆',
+    category: 'variety',
+    progress: uniqueGamesPlayed,
+    isUnlocked: uniqueGamesPlayed >= 13,
+  });
+  
+  // Memory Master - Level 10 in Memory Match
+  achievements.push({
+    id: 'memory_master',
+    name: 'Memory Master',
+    description: 'Reach level 10 in Memory Match',
+    icon: '🎮',
+    category: 'game',
+    progress: gameStats.memory?.highestLevel || 0,
+    isUnlocked: (gameStats.memory?.highestLevel || 0) >= 10,
+  });
+  
+  // Reflex Champion - Average reaction under 300ms
+  const reflexAvg = gameStats.reflex?.averageTimeMs || 999999;
+  achievements.push({
+    id: 'reflex_champion',
+    name: 'Reflex Champion',
+    description: 'Achieve average reaction time under 300ms',
+    icon: '⚡',
+    category: 'skill',
+    isUnlocked: reflexAvg < 300,
+  });
   
   return achievements;
 }
