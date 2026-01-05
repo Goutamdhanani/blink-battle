@@ -160,8 +160,8 @@ if (paymentData.refund_status === 'completed') {
   4. Taps validated exclusively after green light
 
 **Recent Fix**:
-- **Line 159-161**: Changed from `F1_RANDOM_DELAY_MIN_MS` (1000) to `SIGNAL_DELAY_MIN_MS` (2000)
-- **Line 159-161**: Changed from `F1_RANDOM_DELAY_MAX_MS` (3000) to `SIGNAL_DELAY_MAX_MS` (5000)
+- **Lines 159-160**: Changed from `F1_RANDOM_DELAY_MIN_MS` (1000) to `SIGNAL_DELAY_MIN_MS` (2000)
+- **Lines 159-160**: Changed from `F1_RANDOM_DELAY_MAX_MS` (3000) to `SIGNAL_DELAY_MAX_MS` (5000)
 
 **Code Reference**:
 ```typescript
@@ -397,7 +397,7 @@ PLATFORM_FEE_PERCENT=3
 
 ### 1. Timing Configuration Fix (✅ COMPLETED)
 - **File**: `backend/src/controllers/pollingMatchController.ts`
-- **Change**: Lines 159-161
+- **Change**: Lines 159-160
 - **Before**: `F1_RANDOM_DELAY_MIN_MS` (1000ms) and `F1_RANDOM_DELAY_MAX_MS` (3000ms)
 - **After**: `SIGNAL_DELAY_MIN_MS` (2000ms) and `SIGNAL_DELAY_MAX_MS` (5000ms)
 - **Reason**: Match problem statement requirement of 2-5 second random delay
