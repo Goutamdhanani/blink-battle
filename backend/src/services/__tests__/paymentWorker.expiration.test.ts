@@ -47,7 +47,7 @@ describe('PaymentWorker - Expiration Logic', () => {
       await new Promise(resolve => setTimeout(resolve, 150));
       worker.stop();
 
-      expect(PaymentIntentModel.expireStalePayments).toHaveBeenCalledWith(10);
+      expect(PaymentIntentModel.expireStalePayments).toHaveBeenCalledWith(5);
     });
 
     it('should log when payments are expired', async () => {
@@ -62,7 +62,7 @@ describe('PaymentWorker - Expiration Logic', () => {
       worker.stop();
 
       expect(consoleSpy).toHaveBeenCalledWith(
-        expect.stringContaining('Expired 3 stale payments without transaction IDs (>10 min old)')
+        expect.stringContaining('Expired 3 stale payments without transaction IDs (>5 min old)')
       );
 
       consoleSpy.mockRestore();
