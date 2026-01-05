@@ -317,8 +317,8 @@ async function runStartupMigrations(): Promise<void> {
       { name: 'cancelled', type: 'BOOLEAN DEFAULT false' },
       { name: 'cancellation_reason', type: 'VARCHAR(255)' },
       // Issue #1 fix: Add match_result and payout_state columns
-      { name: 'player1_match_result', type: 'VARCHAR(20)' },
-      { name: 'player2_match_result', type: 'VARCHAR(20)' },
+      { name: 'player1_match_result', type: "VARCHAR(20) DEFAULT 'NO_MATCH'" },
+      { name: 'player2_match_result', type: "VARCHAR(20) DEFAULT 'NO_MATCH'" },
       { name: 'player1_payout_state', type: "VARCHAR(20) DEFAULT 'NOT_PAID'" },
       { name: 'player2_payout_state', type: "VARCHAR(20) DEFAULT 'NOT_PAID'" },
     ];
@@ -337,22 +337,23 @@ async function runStartupMigrations(): Promise<void> {
     }
 
     // Add constraints for match_result and payout_state
+    // CHECK constraints allow NULL by default in PostgreSQL unless combined with NOT NULL
     const constraintChecks = [
       {
         name: 'player1_match_result_check',
-        sql: `ALTER TABLE matches ADD CONSTRAINT player1_match_result_check CHECK (player1_match_result IN ('WIN', 'LOSS', 'DRAW', 'NO_MATCH'))`
+        sql: `ALTER TABLE matches ADD CONSTRAINT player1_match_result_check CHECK (player1_match_result IS NULL OR player1_match_result IN ('WIN', 'LOSS', 'DRAW', 'NO_MATCH'))`
       },
       {
         name: 'player2_match_result_check',
-        sql: `ALTER TABLE matches ADD CONSTRAINT player2_match_result_check CHECK (player2_match_result IN ('WIN', 'LOSS', 'DRAW', 'NO_MATCH'))`
+        sql: `ALTER TABLE matches ADD CONSTRAINT player2_match_result_check CHECK (player2_match_result IS NULL OR player2_match_result IN ('WIN', 'LOSS', 'DRAW', 'NO_MATCH'))`
       },
       {
         name: 'player1_payout_state_check',
-        sql: `ALTER TABLE matches ADD CONSTRAINT player1_payout_state_check CHECK (player1_payout_state IN ('NOT_PAID', 'PAID'))`
+        sql: `ALTER TABLE matches ADD CONSTRAINT player1_payout_state_check CHECK (player1_payout_state IS NULL OR player1_payout_state IN ('NOT_PAID', 'PAID'))`
       },
       {
         name: 'player2_payout_state_check',
-        sql: `ALTER TABLE matches ADD CONSTRAINT player2_payout_state_check CHECK (player2_payout_state IN ('NOT_PAID', 'PAID'))`
+        sql: `ALTER TABLE matches ADD CONSTRAINT player2_payout_state_check CHECK (player2_payout_state IS NULL OR player2_payout_state IN ('NOT_PAID', 'PAID'))`
       },
     ];
 
@@ -376,30 +377,34 @@ async function runStartupMigrations(): Promise<void> {
     }
 
     // Backfill existing matches with match_result and payout_state
+    // This handles all matches, not just completed/cancelled ones
     await client.query(`
       UPDATE matches
       SET 
         player1_match_result = CASE
-          WHEN winner_id = player1_id THEN 'WIN'
-          WHEN winner_id = player2_id THEN 'LOSS'
-          WHEN winner_id IS NULL AND status = 'completed' THEN 'DRAW'
-          ELSE 'NO_MATCH'
+          WHEN status IN ('completed') AND winner_id = player1_id THEN 'WIN'
+          WHEN status IN ('completed') AND winner_id = player2_id THEN 'LOSS'
+          WHEN status IN ('completed') AND winner_id IS NULL THEN 'DRAW'
+          WHEN status IN ('cancelled', 'refunded') THEN 'NO_MATCH'
+          ELSE COALESCE(player1_match_result, 'NO_MATCH')
         END,
         player2_match_result = CASE
-          WHEN winner_id = player2_id THEN 'WIN'
-          WHEN winner_id = player1_id THEN 'LOSS'
-          WHEN winner_id IS NULL AND status = 'completed' THEN 'DRAW'
-          ELSE 'NO_MATCH'
+          WHEN status IN ('completed') AND winner_id = player2_id THEN 'WIN'
+          WHEN status IN ('completed') AND winner_id = player1_id THEN 'LOSS'
+          WHEN status IN ('completed') AND winner_id IS NULL THEN 'DRAW'
+          WHEN status IN ('cancelled', 'refunded') THEN 'NO_MATCH'
+          ELSE COALESCE(player2_match_result, 'NO_MATCH')
         END,
         player1_payout_state = CASE
           WHEN winner_id = player1_id AND claim_status = 'claimed' THEN 'PAID'
-          ELSE 'NOT_PAID'
+          ELSE COALESCE(player1_payout_state, 'NOT_PAID')
         END,
         player2_payout_state = CASE
           WHEN winner_id = player2_id AND claim_status = 'claimed' THEN 'PAID'
-          ELSE 'NOT_PAID'
+          ELSE COALESCE(player2_payout_state, 'NOT_PAID')
         END
-      WHERE (player1_match_result IS NULL OR player2_match_result IS NULL OR player1_payout_state IS NULL OR player2_payout_state IS NULL) AND status IN ('completed', 'cancelled')
+      WHERE player1_payout_state IS NULL OR player2_payout_state IS NULL 
+         OR player1_match_result IS NULL OR player2_match_result IS NULL
     `);
     console.log('[Migration] ✅ Backfilled match_result and payout_state for existing matches');
 
