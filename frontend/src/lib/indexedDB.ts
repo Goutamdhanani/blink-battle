@@ -9,8 +9,44 @@ const DB_VERSION = 1;
 const SCORES_STORE = 'gameScores';
 const PROFILE_STORE = 'playerProfile';
 
-// XP and leveling constants
-const XP_BASE_MULTIPLIER = 100;
+// Realistic XP and leveling constants based on real-world progression
+const LEVEL_THRESHOLDS: { [key: number]: number } = {
+  1: 0,
+  2: 100,
+  3: 250,
+  4: 500,
+  5: 1000,
+  6: 1500,
+  7: 2250,
+  8: 3000,
+  9: 4000,
+  10: 5000,
+  15: 12500,
+  20: 25000,
+  30: 62500,
+  40: 100000,
+  50: 150000,
+  75: 300000,
+  100: 500000,
+};
+
+// Rank thresholds based on total XP (realistic progression)
+const RANK_THRESHOLDS = [
+  { minXP: 500000, rank: 'Legend' },      // Top 1% - 10,000+ games
+  { minXP: 150000, rank: 'Master' },      // Top 5% - 4,000+ games
+  { minXP: 50000, rank: 'Diamond' },      // Skilled - 1,500+ games
+  { minXP: 15000, rank: 'Platinum' },     // Dedicated - 500+ games
+  { minXP: 5000, rank: 'Gold' },          // Regular - 200+ games
+  { minXP: 1000, rank: 'Silver' },        // Casual - 50+ games
+  { minXP: 0, rank: 'Bronze' },           // New players
+];
+
+// Reaction time constants (in milliseconds)
+const MIN_VALID_REACTION_TIME = 80;      // Below this is likely cheating
+const AVG_REACTION_TIME = 225;           // Average human reaction
+const GOOD_REACTION_TIME = 175;          // Good reaction
+const EXCELLENT_REACTION_TIME = 125;     // Excellent reaction
+const PROFESSIONAL_REACTION_TIME = 100;  // Professional level
 
 let dbInstance: IDBDatabase | null = null;
 
@@ -48,6 +84,80 @@ export async function initDB(): Promise<IDBDatabase> {
       }
     };
   });
+}
+
+/**
+ * Calculate level from total XP using exponential thresholds
+ */
+function calculateLevelFromXP(xp: number): number {
+  let level = 1;
+  
+  // Find the highest level the player has reached
+  const sortedLevels = Object.keys(LEVEL_THRESHOLDS)
+    .map(Number)
+    .sort((a, b) => b - a); // Sort descending
+  
+  for (const lvl of sortedLevels) {
+    if (xp >= LEVEL_THRESHOLDS[lvl]) {
+      level = lvl;
+      break;
+    }
+  }
+  
+  // For levels beyond our threshold table, use exponential formula
+  if (xp >= LEVEL_THRESHOLDS[100]) {
+    // Each level beyond 100 requires 10,000 more XP
+    level = 100 + Math.floor((xp - LEVEL_THRESHOLDS[100]) / 10000);
+  }
+  
+  return level;
+}
+
+/**
+ * Calculate rank badge from total XP
+ */
+function calculateRankFromXP(xp: number): string {
+  for (const { minXP, rank } of RANK_THRESHOLDS) {
+    if (xp >= minXP) {
+      return rank;
+    }
+  }
+  return 'Bronze';
+}
+
+/**
+ * Calculate XP earned for a game based on performance
+ * - Base XP varies by accuracy and level
+ * - Bonus for high accuracy (90%+)
+ * - Minimum XP ensures progress even on poor performance
+ */
+function calculateGameXP(score: number, accuracy: number, level: number): number {
+  // Base XP: 25-50 for good performance (70%+ accuracy)
+  // Lower XP: 5-15 for poor performance
+  let xp = 0;
+  
+  if (accuracy >= 90) {
+    xp = 45 + Math.floor(Math.random() * 6); // 45-50 XP
+  } else if (accuracy >= 70) {
+    xp = 25 + Math.floor(Math.random() * 11); // 25-35 XP
+  } else if (accuracy >= 50) {
+    xp = 15 + Math.floor(Math.random() * 11); // 15-25 XP
+  } else {
+    xp = 5 + Math.floor(Math.random() * 11); // 5-15 XP (participation)
+  }
+  
+  // Small level bonus (max +10 XP at high levels)
+  const levelBonus = Math.min(10, Math.floor(level / 10));
+  xp += levelBonus;
+  
+  return xp;
+}
+
+/**
+ * Validate reaction time to prevent cheating
+ */
+function isValidReactionTime(reactionMs: number): boolean {
+  return reactionMs >= MIN_VALID_REACTION_TIME && reactionMs < 10000;
 }
 
 /**
@@ -184,9 +294,19 @@ export async function getPlayerProfile(): Promise<PlayerProfile> {
   
   const lastActive = allScores.length > 0 ? Math.max(...allScores.map(s => s.timestamp)) : Date.now();
   
-  // Calculate XP based on total scores
-  const xp = allScores.reduce((sum, s) => sum + s.score, 0);
-  const level = Math.floor(Math.sqrt(xp / XP_BASE_MULTIPLIER)) + 1;
+  // Calculate XP using realistic progression system
+  // Each game awards XP based on performance (5-50 XP per game)
+  let totalXP = 0;
+  for (const gameScore of allScores) {
+    const gameXP = calculateGameXP(gameScore.score, gameScore.accuracy, gameScore.level);
+    totalXP += gameXP;
+  }
+  
+  // Calculate level from XP using exponential curve
+  const level = calculateLevelFromXP(totalXP);
+  
+  // Calculate rank badge from total XP (not level)
+  const rankBadge = calculateRankFromXP(totalXP);
   
   // Calculate cognitive index (0-100 scale)
   const avgAccuracy = allScores.length > 0 
@@ -194,17 +314,11 @@ export async function getPlayerProfile(): Promise<PlayerProfile> {
     : 0;
   const cognitiveIndex = Math.round(avgAccuracy);
   
-  // Calculate rank badge based on level
-  let rankBadge = 'Rookie';
-  if (level >= 10) rankBadge = 'Legend';
-  else if (level >= 7) rankBadge = 'Elite';
-  else if (level >= 4) rankBadge = 'Experienced';
-  
   // Generate achievements
   const achievements = calculateAchievements(gameStats, totalGamesPlayed, cognitiveIndex);
   
   return {
-    xp,
+    xp: totalXP,
     level,
     rankBadge,
     totalGamesPlayed,
@@ -217,7 +331,7 @@ export async function getPlayerProfile(): Promise<PlayerProfile> {
     gameStats,
     achievements,
     unlockedThemes: getUnlockedThemes(level),
-    currentTheme: 'Rookie',
+    currentTheme: 'Bronze',
     createdAt: Date.now(),
     lastActive,
     joinDate: Date.now(),
@@ -225,13 +339,15 @@ export async function getPlayerProfile(): Promise<PlayerProfile> {
 }
 
 /**
- * Get unlocked themes based on level
+ * Get unlocked themes based on level (realistic progression)
  */
 function getUnlockedThemes(level: number): string[] {
-  const themes = ['Rookie'];
-  if (level >= 4) themes.push('Experienced');
-  if (level >= 7) themes.push('Elite');
-  if (level >= 10) themes.push('Hacker Mode');
+  const themes = ['Bronze'];
+  if (level >= 10) themes.push('Silver');
+  if (level >= 25) themes.push('Gold');
+  if (level >= 50) themes.push('Platinum');
+  if (level >= 75) themes.push('Diamond');
+  if (level >= 100) themes.push('Legend');
   return themes;
 }
 

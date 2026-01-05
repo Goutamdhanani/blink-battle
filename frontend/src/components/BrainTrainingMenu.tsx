@@ -47,6 +47,15 @@ const BrainTrainingMenu: React.FC = () => {
     refresh(); // Refresh stats when exiting
   };
 
+  const handleLogout = () => {
+    // Clear all local storage and session data
+    localStorage.clear();
+    sessionStorage.clear();
+    
+    // Reload the page to reset the app state
+    window.location.reload();
+  };
+
   const handleGameSelect = (game: GameTypeEnum) => {
     setCurrentGame(game);
   };
@@ -144,6 +153,15 @@ const BrainTrainingMenu: React.FC = () => {
               <p className="app-tagline">Brain Training</p>
             </div>
           </div>
+          {token && (
+            <button 
+              className="logout-btn" 
+              onClick={handleLogout}
+              title="Logout"
+            >
+              🚪
+            </button>
+          )}
         </header>
 
         {/* Dashboard Overview */}

@@ -33,15 +33,21 @@ export function useBrainTrainingData(token?: string | null): UseBrainTrainingDat
           const streaks = await brainTrainingService.getStreaks(token);
           const cognitive = await brainTrainingService.getCognitiveComparison(token);
           
-          // Calculate total score and level once
-          const totalScore = backendProfile.memory.averageScore + backendProfile.attention.averageScore + backendProfile.reflex.averageScore;
-          const level = Math.floor(Math.sqrt(totalScore / 100)) + 1;
+          // Calculate realistic XP: estimate 30 XP average per game
+          const totalGames = backendProfile.totalGames;
+          const estimatedXP = totalGames * 30;
+          
+          // Calculate level from XP using realistic system
+          const level = calculateLevelFromXP(estimatedXP);
+          
+          // Calculate rank from XP (not level)
+          const rankBadge = calculateRankBadge(estimatedXP);
           
           // Transform backend data to PlayerProfile format
           const transformedProfile: PlayerProfile = {
-            xp: totalScore,
+            xp: estimatedXP,
             level,
-            rankBadge: calculateRankBadge(level),
+            rankBadge,
             totalGamesPlayed: backendProfile.totalGames,
             totalSessions: backendProfile.totalGames,
             currentStreak: streaks.currentStreak,
@@ -66,7 +72,7 @@ export function useBrainTrainingData(token?: string | null): UseBrainTrainingDat
             },
             achievements: [], // TODO: Calculate from backend data
             unlockedThemes: calculateUnlockedThemes(level),
-            currentTheme: 'Rookie',
+            currentTheme: 'Bronze',
             createdAt: Date.now(),
             lastActive: Date.now(),
             joinDate: Date.now(),
@@ -107,18 +113,47 @@ export function useBrainTrainingData(token?: string | null): UseBrainTrainingDat
   };
 }
 
-function calculateRankBadge(level: number): string {
-  if (level >= 10) return 'Legend';
-  if (level >= 7) return 'Elite';
-  if (level >= 4) return 'Experienced';
-  return 'Rookie';
+function calculateRankBadge(xp: number): string {
+  if (xp >= 500000) return 'Legend';      // Top 1%
+  if (xp >= 150000) return 'Master';      // Top 5%
+  if (xp >= 50000) return 'Diamond';      // Skilled
+  if (xp >= 15000) return 'Platinum';     // Dedicated
+  if (xp >= 5000) return 'Gold';          // Regular
+  if (xp >= 1000) return 'Silver';        // Casual
+  return 'Bronze';                        // New
+}
+
+function calculateLevelFromXP(xp: number): number {
+  const thresholds: { [key: number]: number } = {
+    1: 0, 2: 100, 3: 250, 4: 500, 5: 1000, 6: 1500, 7: 2250, 8: 3000,
+    9: 4000, 10: 5000, 15: 12500, 20: 25000, 30: 62500, 40: 100000,
+    50: 150000, 75: 300000, 100: 500000,
+  };
+  
+  let level = 1;
+  const sortedLevels = Object.keys(thresholds).map(Number).sort((a, b) => b - a);
+  
+  for (const lvl of sortedLevels) {
+    if (xp >= thresholds[lvl]) {
+      level = lvl;
+      break;
+    }
+  }
+  
+  if (xp >= thresholds[100]) {
+    level = 100 + Math.floor((xp - thresholds[100]) / 10000);
+  }
+  
+  return level;
 }
 
 function calculateUnlockedThemes(level: number): string[] {
-  const themes = ['Rookie'];
-  if (level >= 4) themes.push('Experienced');
-  if (level >= 7) themes.push('Elite');
-  if (level >= 10) themes.push('Hacker Mode');
+  const themes = ['Bronze'];
+  if (level >= 10) themes.push('Silver');
+  if (level >= 25) themes.push('Gold');
+  if (level >= 50) themes.push('Platinum');
+  if (level >= 75) themes.push('Diamond');
+  if (level >= 100) themes.push('Legend');
   return themes;
 }
 
