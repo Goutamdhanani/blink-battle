@@ -11,17 +11,20 @@ import pool from '../config/database';
  * HTTP Polling Match Controller
  * Handles match flow via REST polling instead of WebSockets
  * 
- * F1-STYLE GAME MECHANICS:
- * 1. 5 lights turn ON sequentially (~500ms each, with randomness)
- * 2. Random delay (1-3s) after all lights are ON
- * 3. ALL lights turn OFF → trigger moment
- * 4. Players react to lights going OFF
+ * REACTION LIGHTS GAME MECHANICS:
+ * 1. 5 lights turn RED sequentially (~500ms each = ~2.5s total)
+ * 2. Mandatory 2-second minimum wait with all lights RED
+ * 3. Random delay (2-5s) after the minimum wait
+ * 4. Lights turn GREEN → trigger moment (players react)
+ * 
+ * Total timing: ~2.5s (lights) + 2s (min wait) + 2-5s (random) = ~6.5-9.5s
  */
 
 // Constants
 const TIE_THRESHOLD_MS = 1; // Reaction time difference considered a tie
 const REFUND_DEADLINE_HOURS = 24; // Hours to claim refund after match cancellation
 const NO_REACTION_TIME = -1; // Sentinel value for missing/invalid reaction times
+const MINIMUM_WAIT_AFTER_RED_MS = 2000; // Mandatory 2-second wait after all lights turn red
 
 /**
  * Possible match result values
@@ -150,19 +153,23 @@ export class PollingMatchController {
       const bothReady = updated.rows[0].player1_ready && updated.rows[0].player2_ready;
 
       if (bothReady) {
-        // 🏎️ F1-STYLE LIGHT SEQUENCE
+        // REACTION LIGHTS SEQUENCE
         // Generate 5 lights turning on sequentially (~500ms each with variance)
         const lightSequence = generateF1LightSequence(); // [~500ms, ~500ms, ~500ms, ~500ms, ~500ms]
         const totalLightsTime = lightSequence.reduce((sum, interval) => sum + interval, 0);
         
-        // Random delay AFTER all 5 lights are ON (2-5 seconds per game requirements)
+        // CRITICAL: Mandatory 2-second minimum wait AFTER all lights are red
+        const minimumWaitMs = MINIMUM_WAIT_AFTER_RED_MS; // 2000ms
+        
+        // Random delay AFTER the minimum wait (2-5 seconds)
         const minRandomDelay = parseInt(process.env.SIGNAL_DELAY_MIN_MS || '2000', 10);
         const maxRandomDelay = parseInt(process.env.SIGNAL_DELAY_MAX_MS || '5000', 10);
         const randomDelay = generateRandomDelay(minRandomDelay, maxRandomDelay);
         
         const now = Date.now();
-        // lightsOutTime = when ALL lights turn OFF (the trigger moment)
-        const lightsOutTime = now + totalLightsTime + randomDelay;
+        // greenLightTime = when lights turn GREEN (the trigger moment)
+        // Total delay = lights turning on + mandatory wait + random delay
+        const greenLightTime = now + totalLightsTime + minimumWaitMs + randomDelay;
 
         await client.query(`
           UPDATE matches 
@@ -170,18 +177,25 @@ export class PollingMatchController {
               green_light_time = $1,
               random_delay_ms = $2
           WHERE match_id = $3
-        `, [lightsOutTime, randomDelay, matchId]);
+        `, [greenLightTime, randomDelay, matchId]);
 
-        console.log(`[Match] 🏎️ F1 Lights! Match ${matchId} → lights sequence. Lights out in ${totalLightsTime + randomDelay}ms (lights: ${totalLightsTime}ms + random: ${randomDelay}ms)`);
+        console.log(
+          `[Match] Reaction lights! Match ${matchId}\n` +
+          `  Lights sequence: ${totalLightsTime}ms\n` +
+          `  Mandatory wait: ${minimumWaitMs}ms\n` +
+          `  Random delay: ${randomDelay}ms\n` +
+          `  Total: ${totalLightsTime + minimumWaitMs + randomDelay}ms\n` +
+          `  Green light at: ${new Date(greenLightTime).toISOString()}`
+        );
 
         await client.query('COMMIT');
 
         res.json({
           success: true,
           bothReady: true,
-          lightsOutTime, // Replaces greenLightTime semantically
-          greenLightTime: lightsOutTime, // Keep for backward compatibility
+          greenLightTime,
           lightSequence, // [500, 520, 480, etc.] - intervals between each light
+          minimumWaitMs, // NEW: Mandatory wait after lights
           randomDelay,
           status: 'countdown'
         });
