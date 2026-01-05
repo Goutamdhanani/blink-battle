@@ -42,7 +42,7 @@ export function useBrainTrainingData(token?: string | null): UseBrainTrainingDat
           const level = calculateLevelFromXP(estimatedXP);
           
           // Calculate rank from XP (not level)
-          const rankBadge = calculateRankBadge(estimatedXP);
+          const rankBadge = calculateRankFromXP(estimatedXP);
           
           // Transform backend data to PlayerProfile format
           const transformedProfile: PlayerProfile = {

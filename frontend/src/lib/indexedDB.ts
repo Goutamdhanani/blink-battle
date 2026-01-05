@@ -4,8 +4,6 @@
 
 import { GameScore, PlayerProfile, GameStats, GameType, Achievement } from '../games/types';
 import { 
-  LEVEL_THRESHOLDS, 
-  RANK_THRESHOLDS, 
   calculateLevelFromXP, 
   calculateRankFromXP,
   getUnlockedThemes as getUnlockedThemesHelper
@@ -67,7 +65,7 @@ export async function initDB(): Promise<IDBDatabase> {
  * - Bonus for high accuracy (90%+)
  * - Minimum XP ensures progress even on poor performance
  */
-function calculateGameXP(score: number, accuracy: number, level: number): number {
+function calculateGameXP(accuracy: number, level: number): number {
   // Base XP: deterministic based on accuracy brackets
   let xp = 0;
   
@@ -242,7 +240,7 @@ export async function getPlayerProfile(): Promise<PlayerProfile> {
   // Each game awards XP based on performance (5-50 XP per game)
   let totalXP = 0;
   for (const gameScore of allScores) {
-    const gameXP = calculateGameXP(gameScore.score, gameScore.accuracy, gameScore.level);
+    const gameXP = calculateGameXP(gameScore.accuracy, gameScore.level);
     totalXP += gameXP;
   }
   
