@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import { AuthController } from './controllers/authController';
+import { BrainTrainingLeaderboardController } from './controllers/brainTrainingLeaderboardController';
 import { authenticate } from './middleware/auth';
 import pool from './config/database';
 
@@ -179,6 +180,12 @@ app.get('/api/games/profile', authenticate, async (req, res) => {
     res.status(500).json({ error: 'Failed to fetch profile' });
   }
 });
+
+// Leaderboard routes
+app.get('/api/leaderboard/global', BrainTrainingLeaderboardController.getGlobalLeaderboard);
+app.get('/api/leaderboard/game/:gameType', BrainTrainingLeaderboardController.getGameTypeLeaderboard);
+app.get('/api/leaderboard/me', authenticate, BrainTrainingLeaderboardController.getUserGlobalRank);
+app.get('/api/leaderboard/me/:gameType', authenticate, BrainTrainingLeaderboardController.getUserGameTypeRank);
 
 // Test database connection
 pool.query('SELECT NOW()', (err, res) => {

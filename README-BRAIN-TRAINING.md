@@ -259,6 +259,19 @@ vercel deploy
 - `GET /api/games/stats/:gameType` - Get game stats
 - `GET /api/games/profile` - Get full player profile
 
+### Leaderboards
+- `GET /api/leaderboard/global` - Get global leaderboard across all games
+  - Query params: `limit` (default: 20), `offset` (default: 0)
+  - Returns: Ranked list of users by total score
+- `GET /api/leaderboard/game/:gameType` - Get game-specific leaderboard
+  - Supported game types: `memory`, `attention`, `reflex`
+  - Query params: `limit` (default: 20), `offset` (default: 0)
+  - Returns: Ranked list of users for specific game
+- `GET /api/leaderboard/me` - Get current user's global rank (requires auth)
+  - Returns: User's rank and stats across all games
+- `GET /api/leaderboard/me/:gameType` - Get user's rank for specific game (requires auth)
+  - Returns: User's rank and stats for the specified game type
+
 ## 🎨 Customization
 
 ### Themes
