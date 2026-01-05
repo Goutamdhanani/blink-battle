@@ -15,10 +15,11 @@ import ReverseRecall from '../games/ReverseRecall';
 import BlinkCount from '../games/BlinkCount';
 import WordPairMatch from '../games/WordPairMatch';
 import BrainStats from './BrainStats';
+import EnhancedProfile from './EnhancedProfile';
 import { GameScore } from '../games/types';
 import './BrainTrainingMenu.css';
 
-type GameType = GameTypeEnum | 'stats' | null;
+type GameType = GameTypeEnum | 'stats' | 'profile' | null;
 
 const BrainTrainingMenu: React.FC = () => {
   const [currentGame, setCurrentGame] = useState<GameType>(null);
@@ -117,6 +118,10 @@ const BrainTrainingMenu: React.FC = () => {
 
   if (currentGame === 'stats') {
     return <BrainStats onBack={handleGameExit} />;
+  }
+
+  if (currentGame === 'profile') {
+    return <EnhancedProfile onBack={handleGameExit} />;
   }
 
   return (
@@ -334,11 +339,15 @@ const BrainTrainingMenu: React.FC = () => {
           </div>
         </div>
 
-        {/* Stats Button */}
+        {/* Action Buttons */}
         <div className="menu-actions">
+          <button className="stats-button" onClick={() => setCurrentGame('profile')}>
+            <span className="stats-icon">👤</span>
+            <span>Enhanced Profile</span>
+          </button>
           <button className="stats-button" onClick={() => setCurrentGame('stats')}>
             <span className="stats-icon">📊</span>
-            <span>View Detailed Stats</span>
+            <span>Detailed Stats</span>
           </button>
         </div>
 

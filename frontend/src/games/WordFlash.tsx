@@ -39,7 +39,7 @@ const WordFlash: React.FC<WordFlashProps> = ({ onGameComplete, onExit }) => {
     }
   }, [round, gamePhase]);
 
-  const presentNextWord() => {
+  const presentNextWord = () => {
     // Select random category
     const categories = Object.keys(WORD_CATEGORIES) as Array<keyof typeof WORD_CATEGORIES>;
     const randomCategory = categories[Math.floor(Math.random() * categories.length)];
