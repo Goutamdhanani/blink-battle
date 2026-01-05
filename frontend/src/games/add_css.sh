@@ -1,4 +1,8 @@
-.color_swap-game {
+#!/bin/bash
+
+# PathMemory.css
+cat > PathMemory.css << 'EOF'
+.path_memory-game {
   min-height: 100vh;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   display: flex;
@@ -94,7 +98,7 @@
   background: rgba(255, 255, 255, 0.95);
   padding: 20px;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
-  z-index: var(--z-elevated);
+  z-index: 1000;
 }
 
 .game-info {
@@ -114,27 +118,98 @@
   padding: 40px;
 }
 
-.game-content {
-  background: rgba(255, 255, 255, 0.9);
-  padding: 40px;
-  border-radius: 20px;
+.instruction-text {
+  font-size: 1.5em;
+  font-weight: bold;
+  color: white;
+  margin-bottom: 30px;
   text-align: center;
-  min-width: 400px;
 }
 
-.progress-bar {
-  width: 100%;
-  height: 10px;
-  background: rgba(0, 0, 0, 0.1);
+.grid-container {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 15px;
+  max-width: 400px;
+  margin: 30px auto;
+  padding: 20px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 20px;
+}
+
+.grid-cell {
+  aspect-ratio: 1;
+  background: rgba(255, 255, 255, 0.9);
+  border: 3px solid transparent;
   border-radius: 10px;
-  overflow: hidden;
-  margin-top: 30px;
+  cursor: pointer;
+  transition: all 0.3s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5em;
+  font-weight: bold;
+  color: #667eea;
+  position: relative;
 }
 
-.progress-fill {
-  height: 100%;
-  background: linear-gradient(90deg, #667eea, #764ba2);
-  transition: width 0.3s ease;
+.grid-cell:hover {
+  background: rgba(255, 255, 255, 1);
+  transform: scale(1.05);
+}
+
+.grid-cell.highlighted {
+  background: linear-gradient(135deg, #51cf66, #40c057);
+  border-color: #2f9e44;
+  animation: pulse 0.5s;
+  color: white;
+}
+
+.grid-cell.selected {
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  border-color: #5f3dc4;
+  color: white;
+}
+
+.path-number {
+  position: absolute;
+  font-size: 0.8em;
+}
+
+.path-progress {
+  color: white;
+  font-size: 1.2em;
+  font-weight: bold;
+  margin-top: 20px;
+}
+
+.feedback {
+  font-size: 1.8em;
+  font-weight: bold;
+  margin: 30px 0;
+  padding: 20px;
+  border-radius: 15px;
+  animation: feedbackPop 0.5s ease;
+  color: white;
+}
+
+.feedback.correct {
+  background: rgba(81, 207, 102, 0.3);
+}
+
+.feedback.wrong {
+  background: rgba(255, 107, 107, 0.3);
+}
+
+@keyframes feedbackPop {
+  0% { transform: scale(0.8); opacity: 0; }
+  50% { transform: scale(1.1); }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+@keyframes pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.1); }
 }
 
 .final-stats {
@@ -169,77 +244,6 @@
   flex-wrap: wrap;
 }
 
-/* Color Swap specific styles */
-.question-text {
-  font-size: 1.8em;
-  font-weight: bold;
-  color: white;
-  margin-bottom: 30px;
-  text-align: center;
-}
-
-.color-word-display {
-  font-size: 5em;
-  font-weight: bold;
-  margin: 40px 0;
-  padding: 30px;
-  background: rgba(255, 255, 255, 0.95);
-  border-radius: 20px;
-  text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.1);
-}
-
-.color-options {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 15px;
-  max-width: 500px;
-  margin: 0 auto;
-}
-
-.color-option {
-  background: white;
-  color: #333;
-  border: 3px solid #667eea;
-  padding: 20px 30px;
-  font-size: 1.3em;
-  font-weight: bold;
-  border-radius: 15px;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.color-option:hover {
-  background: linear-gradient(135deg, #667eea, #764ba2);
-  color: white;
-  transform: translateY(-3px);
-  box-shadow: 0 10px 25px rgba(102, 126, 234, 0.4);
-}
-
-.feedback {
-  font-size: 1.8em;
-  font-weight: bold;
-  margin: 30px 0;
-  padding: 20px;
-  border-radius: 15px;
-  animation: feedbackPop 0.5s ease;
-  color: white;
-}
-
-.feedback.correct {
-  background: rgba(81, 207, 102, 0.3);
-}
-
-.feedback.wrong {
-  background: rgba(255, 107, 107, 0.3);
-}
-
-@keyframes feedbackPop {
-  0% { transform: scale(0.8); opacity: 0; }
-  50% { transform: scale(1.1); }
-  100% { transform: scale(1); opacity: 1; }
-}
-
-/* Mobile responsiveness */
 @media (max-width: 768px) {
   .game-instructions h2, .game-complete h2 {
     font-size: 1.8em;
@@ -249,26 +253,14 @@
     padding: 20px;
   }
 
-  .instructions-content p {
-    font-size: 0.95em;
+  .grid-container {
+    max-width: 300px;
+    gap: 10px;
+    padding: 15px;
   }
 
-  .color-word-display {
-    font-size: 3.5em;
-    padding: 20px;
-  }
-
-  .question-text {
-    font-size: 1.4em;
-  }
-
-  .color-options {
-    gap: 12px;
-  }
-
-  .color-option {
-    padding: 15px 20px;
-    font-size: 1.1em;
+  .grid-cell {
+    font-size: 1.2em;
   }
 
   .game-arena {
@@ -292,22 +284,19 @@
     gap: 10px;
   }
 
-  .color-word-display {
-    font-size: 2.5em;
-    padding: 15px;
-    margin: 20px 0;
+  .grid-container {
+    max-width: 250px;
+    gap: 8px;
   }
 
-  .question-text {
-    font-size: 1.2em;
-  }
-
-  .color-options {
-    grid-template-columns: 1fr;
-  }
-
-  .color-option {
-    padding: 12px 15px;
+  .grid-cell {
     font-size: 1em;
   }
+
+  .instruction-text {
+    font-size: 1.2em;
+  }
 }
+EOF
+
+echo "Created PathMemory.css"

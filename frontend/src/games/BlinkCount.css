@@ -168,3 +168,186 @@
   gap: 15px;
   flex-wrap: wrap;
 }
+
+/* Blink-specific styles */
+.instruction-text {
+  font-size: 1.5em;
+  font-weight: bold;
+  color: white;
+  margin-bottom: 40px;
+  text-align: center;
+}
+
+.blink-container {
+  min-height: 300px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.blink-circle {
+  font-size: 8em;
+  transition: opacity 0.2s;
+}
+
+.blink-circle.visible {
+  opacity: 1;
+}
+
+.blink-circle.hidden {
+  opacity: 0;
+}
+
+.answer-section {
+  background: rgba(255, 255, 255, 0.95);
+  padding: 40px;
+  border-radius: 20px;
+  max-width: 500px;
+  width: 100%;
+  text-align: center;
+}
+
+.question {
+  font-size: 1.5em;
+  font-weight: bold;
+  margin-bottom: 30px;
+  color: #333;
+}
+
+.answer-display {
+  font-size: 4em;
+  font-weight: bold;
+  color: #667eea;
+  margin: 30px 0;
+  min-height: 80px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.number-pad {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 15px;
+  margin-top: 30px;
+  max-width: 300px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.number-btn {
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  color: white;
+  border: none;
+  padding: 20px;
+  font-size: 1.5em;
+  border-radius: 15px;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-weight: bold;
+}
+
+.number-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(102, 126, 234, 0.4);
+}
+
+.number-btn.clear-btn {
+  background: linear-gradient(135deg, #ff6b6b, #ff5252);
+  font-size: 1em;
+}
+
+.number-btn.submit-btn {
+  background: linear-gradient(135deg, #51cf66, #40c057);
+  font-size: 1.2em;
+}
+
+.feedback {
+  font-size: 1.8em;
+  font-weight: bold;
+  margin: 30px 0;
+  padding: 20px;
+  border-radius: 15px;
+  animation: feedbackPop 0.5s ease;
+}
+
+.feedback.correct {
+  background: rgba(81, 207, 102, 0.2);
+  color: #2f9e44;
+}
+
+.feedback.wrong {
+  background: rgba(255, 107, 107, 0.2);
+  color: #c92a2a;
+}
+
+@keyframes feedbackPop {
+  0% { transform: scale(0.8); opacity: 0; }
+  50% { transform: scale(1.1); }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+/* Mobile responsiveness */
+@media (max-width: 768px) {
+  .game-instructions h2, .game-complete h2 {
+    font-size: 1.8em;
+  }
+
+  .game-instructions, .game-complete, .answer-section {
+    padding: 20px;
+  }
+
+  .instructions-content p {
+    font-size: 0.95em;
+  }
+
+  .blink-circle {
+    font-size: 5em;
+  }
+
+  .answer-display {
+    font-size: 3em;
+  }
+
+  .number-pad {
+    gap: 10px;
+  }
+
+  .number-btn {
+    padding: 15px;
+    font-size: 1.3em;
+  }
+
+  .game-arena {
+    padding: 20px;
+    margin-top: 80px;
+  }
+
+  .final-stats {
+    flex-direction: column;
+  }
+
+  .stat-value {
+    font-size: 2em;
+  }
+}
+
+@media (max-width: 480px) {
+  .game-info {
+    font-size: 0.9em;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .blink-circle {
+    font-size: 4em;
+  }
+
+  .answer-display {
+    font-size: 2.5em;
+  }
+
+  .question {
+    font-size: 1.2em;
+  }
+}
