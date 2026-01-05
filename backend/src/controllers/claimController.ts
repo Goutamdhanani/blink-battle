@@ -113,7 +113,26 @@ export class ClaimController {
         }
       }
 
-      // Check for existing claim (idempotency)
+      // CRITICAL SECURITY: Check for existing claim by BOTH match_id AND wallet
+      // This prevents the exploit where multiple wallets try to claim the same match
+      const existingMatchClaimResult = await client.query(
+        'SELECT * FROM claims WHERE match_id = $1 FOR UPDATE',
+        [matchId]
+      );
+
+      if (existingMatchClaimResult.rows.length > 0) {
+        const existingMatchClaim = existingMatchClaimResult.rows[0];
+        await client.query('ROLLBACK');
+        res.status(400).json({ 
+          error: 'Match already claimed',
+          details: 'This match has already been claimed',
+          claimedBy: existingMatchClaim.winner_wallet,
+          txHash: existingMatchClaim.claim_transaction_hash || existingMatchClaim.tx_hash
+        });
+        return;
+      }
+
+      // Check for existing claim (idempotency by wallet)
       const idempotencyKey = `claim:${matchId}:${claimingWallet.toLowerCase()}`;
       const existingClaimResult = await client.query(
         'SELECT * FROM claims WHERE idempotency_key = $1 FOR UPDATE',

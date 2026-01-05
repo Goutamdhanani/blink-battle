@@ -152,6 +152,23 @@ export class PollingMatchmakingController {
 
         console.log(`[HTTP Matchmaking] Instant match: ${player1.user_id} vs ${player2.user_id}, stake: ${stake}`);
 
+        // CRITICAL: Link payments to match to prevent orphaned payments
+        // Both players' payment intents must be linked to the match
+        if (stake > 0) {
+          // Link player 2's payment (we have the reference)
+          if (paymentReference) {
+            await PaymentIntentModel.linkToMatch(paymentReference, match.match_id);
+            console.log(`[HTTP Matchmaking] Linked player 2 payment ${paymentReference} to match ${match.match_id}`);
+          }
+          
+          // Link player 1's payment (find their most recent confirmed payment for this stake)
+          const player1Payment = await PaymentIntentModel.findConfirmedForUser(player1.user_id, stake);
+          if (player1Payment && !player1Payment.match_id) {
+            await PaymentIntentModel.linkToMatch(player1Payment.payment_reference, match.match_id);
+            console.log(`[HTTP Matchmaking] Linked player 1 payment ${player1Payment.payment_reference} to match ${match.match_id}`);
+          }
+        }
+
         // TREASURY ARCHITECTURE: No escrow contract calls during match creation
         // Deposits are already recorded in deposits table via payment flow
         // Payouts will be handled via claim flow after match completion

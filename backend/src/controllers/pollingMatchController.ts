@@ -11,17 +11,20 @@ import pool from '../config/database';
  * HTTP Polling Match Controller
  * Handles match flow via REST polling instead of WebSockets
  * 
- * F1-STYLE GAME MECHANICS:
- * 1. 5 lights turn ON sequentially (~500ms each, with randomness)
- * 2. Random delay (1-3s) after all lights are ON
- * 3. ALL lights turn OFF → trigger moment
- * 4. Players react to lights going OFF
+ * REACTION LIGHTS GAME MECHANICS:
+ * 1. 5 lights turn RED sequentially (~500ms each = ~2.5s total)
+ * 2. Mandatory 2-second minimum wait with all lights RED
+ * 3. Random delay (2-5s) after the minimum wait
+ * 4. Lights turn GREEN → trigger moment (players react)
+ * 
+ * Total timing: ~2.5s (lights) + 2s (min wait) + 2-5s (random) = ~6.5-9.5s
  */
 
 // Constants
 const TIE_THRESHOLD_MS = 1; // Reaction time difference considered a tie
 const REFUND_DEADLINE_HOURS = 24; // Hours to claim refund after match cancellation
 const NO_REACTION_TIME = -1; // Sentinel value for missing/invalid reaction times
+const MINIMUM_WAIT_AFTER_RED_MS = 2000; // Mandatory 2-second wait after all lights turn red
 
 /**
  * Possible match result values
@@ -150,19 +153,28 @@ export class PollingMatchController {
       const bothReady = updated.rows[0].player1_ready && updated.rows[0].player2_ready;
 
       if (bothReady) {
-        // 🏎️ F1-STYLE LIGHT SEQUENCE
+        // REACTION LIGHTS SEQUENCE
         // Generate 5 lights turning on sequentially (~500ms each with variance)
         const lightSequence = generateF1LightSequence(); // [~500ms, ~500ms, ~500ms, ~500ms, ~500ms]
         const totalLightsTime = lightSequence.reduce((sum, interval) => sum + interval, 0);
         
-        // Random delay AFTER all 5 lights are ON (2-5 seconds per game requirements)
+        // CRITICAL: Mandatory 2-second minimum wait AFTER all lights are red
+        const minimumWaitMs = MINIMUM_WAIT_AFTER_RED_MS; // 2000ms
+        
+        // Random delay AFTER the minimum wait (2-5 seconds)
         const minRandomDelay = parseInt(process.env.SIGNAL_DELAY_MIN_MS || '2000', 10);
         const maxRandomDelay = parseInt(process.env.SIGNAL_DELAY_MAX_MS || '5000', 10);
         const randomDelay = generateRandomDelay(minRandomDelay, maxRandomDelay);
         
         const now = Date.now();
-        // lightsOutTime = when ALL lights turn OFF (the trigger moment)
-        const lightsOutTime = now + totalLightsTime + randomDelay;
+        // TIMING FORMULA (implements 6.5-9.5 second total timing):
+        // greenLightTime = now + totalLightsTime + minimumWaitMs + randomDelay
+        // Where:
+        //   - totalLightsTime: ~2.5s (5 lights × ~500ms each)
+        //   - minimumWaitMs: 2.0s (mandatory wait after all lights red)
+        //   - randomDelay: 2-5s (random delay after minimum wait)
+        // Total range: ~6.5s to ~9.5s
+        const greenLightTime = now + totalLightsTime + minimumWaitMs + randomDelay;
 
         await client.query(`
           UPDATE matches 
@@ -170,18 +182,25 @@ export class PollingMatchController {
               green_light_time = $1,
               random_delay_ms = $2
           WHERE match_id = $3
-        `, [lightsOutTime, randomDelay, matchId]);
+        `, [greenLightTime, randomDelay, matchId]);
 
-        console.log(`[Match] 🏎️ F1 Lights! Match ${matchId} → lights sequence. Lights out in ${totalLightsTime + randomDelay}ms (lights: ${totalLightsTime}ms + random: ${randomDelay}ms)`);
+        console.log(
+          `[Match] Reaction lights! Match ${matchId}\n` +
+          `  Lights sequence: ${totalLightsTime}ms\n` +
+          `  Mandatory wait: ${minimumWaitMs}ms\n` +
+          `  Random delay: ${randomDelay}ms\n` +
+          `  Total: ${totalLightsTime + minimumWaitMs + randomDelay}ms\n` +
+          `  Green light at: ${new Date(greenLightTime).toISOString()}`
+        );
 
         await client.query('COMMIT');
 
         res.json({
           success: true,
           bothReady: true,
-          lightsOutTime, // Replaces greenLightTime semantically
-          greenLightTime: lightsOutTime, // Keep for backward compatibility
+          greenLightTime,
           lightSequence, // [500, 520, 480, etc.] - intervals between each light
+          minimumWaitMs, // NEW: Mandatory wait after lights
           randomDelay,
           status: 'countdown'
         });
@@ -239,42 +258,42 @@ export class PollingMatchController {
       const opponentId = isPlayer1 ? matchState.player2_id : matchState.player1_id;
 
       // Parse green_light_time - PostgreSQL BIGINT can be returned as string
-      // NOTE: This is actually "lights out time" for F1-style mechanics
-      const lightsOutTime = parseGreenLightTime(matchState.green_light_time);
+      // This is when lights turn GREEN (the GO signal)
+      const greenLightTime = parseGreenLightTime(matchState.green_light_time);
 
       // Determine state for client
       let state = 'matched';
-      let lightsOutActive = false;
+      let greenLightActive = false;
       let countdown = 0;
 
       if (matchState.status === MatchStatus.COMPLETED || matchState.status === MatchStatus.CANCELLED) {
         state = 'resolved';
-      } else if (lightsOutTime && 
-                 Number.isFinite(lightsOutTime) && 
-                 lightsOutTime > 0) {
-        const timeUntilLightsOut = lightsOutTime - now;
+      } else if (greenLightTime && 
+                 Number.isFinite(greenLightTime) && 
+                 greenLightTime > 0) {
+        const timeUntilGreenLight = greenLightTime - now;
         
-        // F1-STYLE: lightsOutTime is when all lights turn OFF (the trigger moment)
-        // Client animates 5 lights turning ON sequentially, then all turn OFF at lightsOutTime
+        // REACTION LIGHTS: greenLightTime is when lights turn GREEN (the GO signal)
+        // Client shows red lights progressively, then all turn green at greenLightTime
         
-        if (timeUntilLightsOut <= 0) {
-          // Lights are OUT! (trigger moment)
+        if (timeUntilGreenLight <= 0) {
+          // Lights are GREEN! (GO signal)
           state = 'go';
-          lightsOutActive = true;
+          greenLightActive = true;
           
-          // Transition status to IN_PROGRESS when lights out signal is active (only once)
+          // Transition status to IN_PROGRESS when green light signal is active (only once)
           if (matchState.status === MatchStatus.COUNTDOWN) {
             await MatchModel.updateStatus(matchId, MatchStatus.IN_PROGRESS);
-            console.log(`[Polling Match] 🏎️ Lights OUT! Match ${matchId} transitioning to IN_PROGRESS. Lights out time: ${new Date(lightsOutTime).toISOString()}`);
+            console.log(`[Polling Match] 🟢 GREEN LIGHT! Match ${matchId} transitioning to IN_PROGRESS. Green light time: ${new Date(greenLightTime).toISOString()}`);
           }
         } else {
-          // Lights are still turning on or waiting for lights out
+          // Lights are still turning red or waiting for green light
           // Client handles light sequence animation locally
           state = 'lights_on';
           countdown = 0;
         }
       } else if (matchState.player1_ready && matchState.player2_ready) {
-        // Both ready but lights out time not set yet (edge case)
+        // Both ready but green light time not set yet (edge case)
         state = 'ready_wait';
       } else {
         state = 'ready_wait';
@@ -285,17 +304,17 @@ export class PollingMatchController {
       const playerTap = taps.find(t => t.user_id === userId);
       const opponentTap = taps.find(t => t.user_id === opponentId);
 
-      // Use the parsed lightsOutTime for response (send as both lightsOutTime and greenLightTime for compatibility)
-      let lightsOutTimeMs = lightsOutTime;
-      let lightsOutTimeISO: string | null = null;
+      // Use the parsed greenLightTime for response
+      let greenLightTimeMs = greenLightTime;
+      let greenLightTimeISO: string | null = null;
       
-      if (lightsOutTimeMs !== null && Number.isFinite(lightsOutTimeMs)) {
+      if (greenLightTimeMs !== null && Number.isFinite(greenLightTimeMs)) {
         try {
-          lightsOutTimeISO = new Date(lightsOutTimeMs).toISOString();
+          greenLightTimeISO = new Date(greenLightTimeMs).toISOString();
         } catch (err) {
-          console.error(`[Polling Match] Invalid lights_out_time for match ${matchId}: ${lightsOutTimeMs}`, err);
-          lightsOutTimeMs = null;
-          lightsOutTimeISO = null;
+          console.error(`[Polling Match] Invalid green_light_time for match ${matchId}: ${greenLightTimeMs}`, err);
+          greenLightTimeMs = null;
+          greenLightTimeISO = null;
         }
       }
 
@@ -324,13 +343,10 @@ export class PollingMatchController {
         stake: matchState.stake,
         player1Ready: matchState.player1_ready,
         player2Ready: matchState.player2_ready,
-        // F1-STYLE: Send as both lightsOutTime and greenLightTime for compatibility
-        lightsOutTime: lightsOutTimeMs,
-        lightsOutTimeISO,
-        greenLightTime: lightsOutTimeMs, // Backward compatibility
-        greenLightTimeISO: lightsOutTimeISO,
-        lightsOutActive, // Replaces greenLightActive
-        greenLightActive: lightsOutActive, // Backward compatibility
+        // Send greenLightTime (when lights turn green)
+        greenLightTime: greenLightTimeMs,
+        greenLightTimeISO,
+        greenLightActive,
         countdown,
         playerTapped: !!playerTap,
         opponentTapped: !!opponentTap,
