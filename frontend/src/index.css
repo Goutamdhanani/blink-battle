@@ -75,6 +75,21 @@
   --text-3xl: 1.875rem;
   --text-4xl: 2.25rem;
   --text-5xl: 3rem;
+
+  /* Standardized Z-Index Scale */
+  --z-background: -1;
+  --z-base: 0;
+  --z-content: 1;
+  --z-elevated: 10;
+  --z-dropdown: 50;
+  --z-sticky: 100;
+  --z-fixed: 500;
+  --z-modal-backdrop: 1000;
+  --z-modal: 1001;
+  --z-popover: 1500;
+  --z-tooltip: 2000;
+  --z-notification: 3000;
+  --z-debug: 9999;
 }
 
 body {
@@ -102,7 +117,7 @@ body::before {
     radial-gradient(circle at 20% 20%, rgba(0, 255, 255, 0.08) 0%, transparent 50%),
     radial-gradient(circle at 80% 80%, rgba(255, 0, 255, 0.08) 0%, transparent 50%);
   pointer-events: none;
-  z-index: 0;
+  z-index: var(--z-background);
 }
 
 #root {
@@ -110,7 +125,7 @@ body::before {
   display: flex;
   flex-direction: column;
   position: relative;
-  z-index: 1;
+  z-index: var(--z-base);
 }
 
 button {

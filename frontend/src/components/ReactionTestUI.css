@@ -31,7 +31,7 @@
       rgba(0, 255, 255, 0.03) 51px
     );
   pointer-events: none;
-  z-index: 0;
+  z-index: var(--z-base);
   /* GPU acceleration */
   transform: translateZ(0);
 }
@@ -45,7 +45,7 @@
   width: 100%;
   max-width: 600px;
   position: relative;
-  z-index: 1;
+  z-index: var(--z-content);
   /* Optimize rendering */
   contain: layout style paint;
   will-change: opacity, transform;
@@ -224,7 +224,7 @@
 .reaction-tap-button-inner {
   text-align: center;
   position: relative;
-  z-index: 1;
+  z-index: var(--z-content);
 }
 
 .reaction-tap-text {
