@@ -38,6 +38,7 @@ interface ActiveMatch {
 
   // game state
   hasStarted: boolean;
+  redSequenceEndTimestamp?: number;  // BUG FIX #3: Track when red lights end and wait begins
   signalTimestamp?: number;
 
   // gameplay
@@ -45,6 +46,8 @@ interface ActiveMatch {
   player2Reaction?: number;
   player1TapTime?: number;
   player2TapTime?: number;
+  player1WaitPeriodTaps?: number;  // BUG FIX #3: Track taps during wait period for anti-spam
+  player2WaitPeriodTaps?: number;  // BUG FIX #3: Track taps during wait period for anti-spam
 
   // RECONNECTION SUPPORT
   disconnectedUsers?: Set<string>;
@@ -986,24 +989,31 @@ export class GameSocketHandler {
       this.io.to(activeMatch.player1.socketId).emit('game_start', { countdown: true });
       this.io.to(activeMatch.player2.socketId).emit('game_start', { countdown: true });
 
-      await this.sleep(1000);
-      this.io.to(activeMatch.player1.socketId).emit('countdown', { count: 3 });
-      this.io.to(activeMatch.player2.socketId).emit('countdown', { count: 3 });
+      // BUG FIX #3: Replace countdown (3, 2, 1) with F1-style red light sequence
+      // Emit 5 red lights with 0.5s intervals to build suspense
+      // These can be configured via environment variables
+      const RED_LIGHT_COUNT = parseInt(process.env.RED_LIGHT_COUNT || '5', 10);
+      const RED_LIGHT_DURATION_MS = parseInt(process.env.RED_LIGHT_DURATION_MS || '500', 10);
+      
+      for (let i = 1; i <= RED_LIGHT_COUNT; i++) {
+        await this.sleep(RED_LIGHT_DURATION_MS);
+        this.io.to(activeMatch.player1.socketId).emit('red_light', { count: i });
+        this.io.to(activeMatch.player2.socketId).emit('red_light', { count: i });
+        console.log(`[Game] Match ${activeMatch.matchId} - Red light ${i}/${RED_LIGHT_COUNT}`);
+      }
 
-      await this.sleep(1000);
-      this.io.to(activeMatch.player1.socketId).emit('countdown', { count: 2 });
-      this.io.to(activeMatch.player2.socketId).emit('countdown', { count: 2 });
+      // Track when red sequence ends - this starts the random wait period
+      activeMatch.redSequenceEndTimestamp = Date.now();
 
-      await this.sleep(1000);
-      this.io.to(activeMatch.player1.socketId).emit('countdown', { count: 1 });
-      this.io.to(activeMatch.player2.socketId).emit('countdown', { count: 1 });
-
+      // Random wait period after red lights (2-5 seconds as specified)
       const minDelay = parseInt(process.env.SIGNAL_DELAY_MIN_MS || '2000', 10);
       const maxDelay = parseInt(process.env.SIGNAL_DELAY_MAX_MS || '5000', 10);
       const randomDelay = generateRandomDelay(minDelay, maxDelay);
 
+      console.log(`[Game] Match ${activeMatch.matchId} - Random wait: ${randomDelay}ms`);
       await this.sleep(randomDelay);
 
+      // Send green signal
       const signalTimestamp = Date.now();
       activeMatch.signalTimestamp = signalTimestamp;
 
@@ -1011,6 +1021,8 @@ export class GameSocketHandler {
 
       this.io.to(activeMatch.player1.socketId).emit('signal', { timestamp: signalTimestamp });
       this.io.to(activeMatch.player2.socketId).emit('signal', { timestamp: signalTimestamp });
+
+      console.log(`[Game] Match ${activeMatch.matchId} - Green signal sent at ${signalTimestamp}`);
 
       setTimeout(() => {
         this.handleMatchTimeout(activeMatch);
@@ -1027,7 +1039,45 @@ export class GameSocketHandler {
   ) {
     try {
       const activeMatch = this.activeMatches.get(data.matchId);
-      if (!activeMatch || !activeMatch.signalTimestamp) return;
+      if (!activeMatch) return;
+
+      // BUG FIX #3: Anti-cheat - Reject taps during the wait period (after red lights, before green)
+      if (activeMatch.redSequenceEndTimestamp && !activeMatch.signalTimestamp) {
+        const isPlayer1 = activeMatch.player1.socketId === socket.id;
+        const playerId = isPlayer1 ? activeMatch.player1.userId : activeMatch.player2.userId;
+        
+        // Track wait period taps for anti-spam
+        if (isPlayer1) {
+          activeMatch.player1WaitPeriodTaps = (activeMatch.player1WaitPeriodTaps || 0) + 1;
+        } else {
+          activeMatch.player2WaitPeriodTaps = (activeMatch.player2WaitPeriodTaps || 0) + 1;
+        }
+        
+        const tapCount = isPlayer1 ? activeMatch.player1WaitPeriodTaps : activeMatch.player2WaitPeriodTaps;
+        
+        console.warn(
+          `[AntiCheat] Player ${playerId} tapped during WAIT period in match ${data.matchId}\n` +
+          `  Red sequence ended: ${activeMatch.redSequenceEndTimestamp}\n` +
+          `  Signal not yet sent (waiting for random delay)\n` +
+          `  Wait period tap count: ${tapCount}\n` +
+          `  This tap will be ignored`
+        );
+        
+        // If excessive tapping (>5 taps), could flag for review or temp penalty
+        if (tapCount && tapCount > 5) {
+          console.error(
+            `[AntiCheat] EXCESSIVE wait period tapping detected for ${playerId}\n` +
+            `  Match: ${data.matchId}\n` +
+            `  Taps during wait: ${tapCount}\n` +
+            `  Consider flagging this user for review`
+          );
+        }
+        
+        // Ignore the tap - don't record it
+        return;
+      }
+
+      if (!activeMatch.signalTimestamp) return;
 
       const serverTapTimestamp = Date.now();
       const isPlayer1 = activeMatch.player1.socketId === socket.id;

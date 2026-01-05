@@ -122,14 +122,39 @@ export class ClaimController {
 
       if (existingMatchClaimResult.rows.length > 0) {
         const existingMatchClaim = existingMatchClaimResult.rows[0];
-        await client.query('ROLLBACK');
-        res.status(400).json({ 
-          error: 'Match already claimed',
-          details: 'This match has already been claimed',
-          claimedBy: existingMatchClaim.winner_wallet,
-          txHash: existingMatchClaim.claim_transaction_hash || existingMatchClaim.tx_hash
-        });
-        return;
+        
+        // BUG FIX: Allow retry if the previous claim failed
+        // Security: Only allow retry within 24 hours and limit to reasonable attempts
+        if (existingMatchClaim.status === 'failed' && existingMatchClaim.claimed === false) {
+          const claimTimestamp = existingMatchClaim.claim_timestamp;
+          const hoursSinceFailure = claimTimestamp 
+            ? (Date.now() - new Date(claimTimestamp).getTime()) / (1000 * 60 * 60)
+            : 0;
+          
+          // Only allow retry within 24 hours of original failure
+          if (hoursSinceFailure > 24) {
+            await client.query('ROLLBACK');
+            res.status(400).json({ 
+              error: 'Claim retry window expired',
+              details: 'Failed claims can only be retried within 24 hours'
+            });
+            return;
+          }
+          
+          console.log(`[Claim] Found failed claim for match ${matchId}, allowing retry (${hoursSinceFailure.toFixed(1)}h since failure)`);
+          // Delete the failed claim to allow retry
+          await client.query('DELETE FROM claims WHERE match_id = $1 AND status = $2', [matchId, 'failed']);
+        } else {
+          // Claim succeeded or is processing - reject
+          await client.query('ROLLBACK');
+          res.status(400).json({ 
+            error: 'Match already claimed',
+            details: 'This match has already been claimed',
+            claimedBy: existingMatchClaim.winner_wallet,
+            txHash: existingMatchClaim.claim_transaction_hash || existingMatchClaim.tx_hash
+          });
+          return;
+        }
       }
 
       // Check for existing claim (idempotency by wallet)
@@ -142,8 +167,12 @@ export class ClaimController {
       if (existingClaimResult.rows.length > 0) {
         const existingClaim = existingClaimResult.rows[0];
         
-        // SECURITY: Double-check that claim hasn't been marked as claimed
-        if (existingClaim.claimed === true) {
+        // BUG FIX: If claim failed, allow retry by deleting it
+        if (existingClaim.status === 'failed' && existingClaim.claimed === false) {
+          console.log(`[Claim] Found failed claim with idempotency key ${idempotencyKey}, allowing retry`);
+          await client.query('DELETE FROM claims WHERE idempotency_key = $1 AND status = $2', [idempotencyKey, 'failed']);
+        } else if (existingClaim.claimed === true) {
+          // SECURITY: Double-check that claim hasn't been marked as claimed
           await client.query('ROLLBACK');
           res.status(400).json({ 
             error: 'Claim already processed',
@@ -151,20 +180,20 @@ export class ClaimController {
             txHash: existingClaim.claim_transaction_hash
           });
           return;
+        } else {
+          // Claim is still processing, return current status
+          await client.query('COMMIT');
+          res.json({ 
+            success: true, 
+            claim: {
+              txHash: existingClaim.tx_hash,
+              amount: existingClaim.net_payout,
+              amountFormatted: TreasuryService.formatWLD(BigInt(existingClaim.net_payout)),
+              status: existingClaim.status
+            }
+          });
+          return;
         }
-        
-        // If claim exists but not yet claimed, return existing claim info
-        await client.query('COMMIT');
-        res.json({ 
-          success: true, 
-          claim: {
-            txHash: existingClaim.tx_hash,
-            amount: existingClaim.net_payout,
-            amountFormatted: TreasuryService.formatWLD(BigInt(existingClaim.net_payout)),
-            status: existingClaim.status
-          }
-        });
-        return;
       }
 
       // Calculate payout using integer math (wei)
@@ -238,11 +267,9 @@ export class ClaimController {
         false  // Only mark as claimed after successful transaction
       ]);
 
-      // Mark match as claimed and update total_claimed_amount (wei)
-      await client.query(
-        'UPDATE matches SET claim_status = $1, total_claimed_amount = total_claimed_amount + $2 WHERE match_id = $3',
-        ['claimed', netPayout, matchId]
-      );
+      // BUG FIX: Do NOT mark match as claimed here - only after payout succeeds
+      // This prevents the bug where first attempt gets 400, second gets "Already Claimed"
+      // The claim_status will be updated after successful payout (line 278-281)
 
       await client.query('COMMIT');
 
@@ -273,12 +300,14 @@ export class ClaimController {
         `, [netPayoutWLD, userPayment.payment_reference]);
         
         // SECURITY: Also update matches.total_claimed_amount for double verification
+        // BUG FIX: Now we mark match as claimed ONLY after successful payout
         await pool.query(`
           UPDATE matches 
-          SET total_claimed_amount = total_claimed_amount + $1,
-              claim_transaction_hash = $2
-          WHERE match_id = $3
-        `, [netPayout, txHash, matchId]);
+          SET claim_status = $1,
+              total_claimed_amount = total_claimed_amount + $2,
+              claim_transaction_hash = $3
+          WHERE match_id = $4
+        `, ['claimed', netPayout, txHash, matchId]);
 
         console.log(`[Claim] Successfully paid out ${netPayout} wei to ${claimingWallet}, tx: ${txHash}`);
 
@@ -294,11 +323,8 @@ export class ClaimController {
         // Mark claim as failed (already not claimed)
         await ClaimModel.markFailed(idempotencyKey, error.message);
         
-        // Rollback match claim status
-        await pool.query(
-          'UPDATE matches SET claim_status = $1 WHERE match_id = $2',
-          ['unclaimed', matchId]
-        );
+        // BUG FIX: No need to rollback match claim_status since we never set it in the first place
+        // The match remains in its original state, allowing retry
 
         res.status(500).json({ 
           success: false,
