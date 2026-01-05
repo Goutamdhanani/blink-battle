@@ -46,6 +46,8 @@ interface ActiveMatch {
   player2Reaction?: number;
   player1TapTime?: number;
   player2TapTime?: number;
+  player1WaitPeriodTaps?: number;  // BUG FIX #3: Track taps during wait period for anti-spam
+  player2WaitPeriodTaps?: number;  // BUG FIX #3: Track taps during wait period for anti-spam
 
   // RECONNECTION SUPPORT
   disconnectedUsers?: Set<string>;
@@ -989,8 +991,9 @@ export class GameSocketHandler {
 
       // BUG FIX #3: Replace countdown (3, 2, 1) with F1-style red light sequence
       // Emit 5 red lights with 0.5s intervals to build suspense
-      const RED_LIGHT_COUNT = 5;
-      const RED_LIGHT_DURATION_MS = 500;
+      // These can be configured via environment variables
+      const RED_LIGHT_COUNT = parseInt(process.env.RED_LIGHT_COUNT || '5', 10);
+      const RED_LIGHT_DURATION_MS = parseInt(process.env.RED_LIGHT_DURATION_MS || '500', 10);
       
       for (let i = 1; i <= RED_LIGHT_COUNT; i++) {
         await this.sleep(RED_LIGHT_DURATION_MS);
@@ -1043,12 +1046,32 @@ export class GameSocketHandler {
         const isPlayer1 = activeMatch.player1.socketId === socket.id;
         const playerId = isPlayer1 ? activeMatch.player1.userId : activeMatch.player2.userId;
         
+        // Track wait period taps for anti-spam
+        if (isPlayer1) {
+          activeMatch.player1WaitPeriodTaps = (activeMatch.player1WaitPeriodTaps || 0) + 1;
+        } else {
+          activeMatch.player2WaitPeriodTaps = (activeMatch.player2WaitPeriodTaps || 0) + 1;
+        }
+        
+        const tapCount = isPlayer1 ? activeMatch.player1WaitPeriodTaps : activeMatch.player2WaitPeriodTaps;
+        
         console.warn(
           `[AntiCheat] Player ${playerId} tapped during WAIT period in match ${data.matchId}\n` +
           `  Red sequence ended: ${activeMatch.redSequenceEndTimestamp}\n` +
           `  Signal not yet sent (waiting for random delay)\n` +
+          `  Wait period tap count: ${tapCount}\n` +
           `  This tap will be ignored`
         );
+        
+        // If excessive tapping (>5 taps), could flag for review or temp penalty
+        if (tapCount && tapCount > 5) {
+          console.error(
+            `[AntiCheat] EXCESSIVE wait period tapping detected for ${playerId}\n` +
+            `  Match: ${data.matchId}\n` +
+            `  Taps during wait: ${tapCount}\n` +
+            `  Consider flagging this user for review`
+          );
+        }
         
         // Ignore the tap - don't record it
         return;

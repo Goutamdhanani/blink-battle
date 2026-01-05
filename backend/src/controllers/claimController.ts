@@ -124,8 +124,24 @@ export class ClaimController {
         const existingMatchClaim = existingMatchClaimResult.rows[0];
         
         // BUG FIX: Allow retry if the previous claim failed
+        // Security: Only allow retry within 24 hours and limit to reasonable attempts
         if (existingMatchClaim.status === 'failed' && existingMatchClaim.claimed === false) {
-          console.log(`[Claim] Found failed claim for match ${matchId}, allowing retry`);
+          const claimTimestamp = existingMatchClaim.claim_timestamp;
+          const hoursSinceFailure = claimTimestamp 
+            ? (Date.now() - new Date(claimTimestamp).getTime()) / (1000 * 60 * 60)
+            : 0;
+          
+          // Only allow retry within 24 hours of original failure
+          if (hoursSinceFailure > 24) {
+            await client.query('ROLLBACK');
+            res.status(400).json({ 
+              error: 'Claim retry window expired',
+              details: 'Failed claims can only be retried within 24 hours'
+            });
+            return;
+          }
+          
+          console.log(`[Claim] Found failed claim for match ${matchId}, allowing retry (${hoursSinceFailure.toFixed(1)}h since failure)`);
           // Delete the failed claim to allow retry
           await client.query('DELETE FROM claims WHERE match_id = $1 AND status = $2', [matchId, 'failed']);
         } else {
