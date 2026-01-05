@@ -9,6 +9,8 @@ import * as migration007 from './migrations/007_fix_claims_numeric_overflow';
 import * as migration008 from './migrations/008_add_game_randomness_columns';
 import * as migration009 from './migrations/009_refund_and_disconnect_system';
 import * as migration010 from './migrations/010_state_versioning_and_security';
+import * as migration011 from './migrations/011_claim_security_enhancements';
+import * as migration012 from './migrations/012_add_matches_total_claimed_amount';
 
 interface Migration {
   name: string;
@@ -27,6 +29,8 @@ const migrations: Migration[] = [
   { name: '008_add_game_randomness_columns', ...migration008 },
   { name: '009_refund_and_disconnect_system', ...migration009 },
   { name: '010_state_versioning_and_security', ...migration010 },
+  { name: '011_claim_security_enhancements', ...migration011 },
+  { name: '012_add_matches_total_claimed_amount', ...migration012 },
 ];
 
 /**

@@ -26,7 +26,7 @@ export class MatchQueueModel {
    * Add user to matchmaking queue
    */
   static async enqueue(userId: string, stake: number): Promise<MatchQueueEntry> {
-    const expiresAt = new Date(Date.now() + 30000); // 30 second timeout
+    const expiresAt = new Date(Date.now() + 60000); // 1 minute timeout (as per requirements)
     
     const result = await pool.query(
       `INSERT INTO match_queue (user_id, stake, status, expires_at) 
