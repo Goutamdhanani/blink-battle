@@ -15,14 +15,12 @@ interface CognitiveComparison {
 
 const PersonalizedBrainCard: React.FC<PersonalizedBrainCardProps> = ({ profile }) => {
   const [cognitiveComparison, setCognitiveComparison] = useState<CognitiveComparison | null>(null);
-  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     loadCognitiveComparison();
   }, []);
 
   const loadCognitiveComparison = async () => {
-    setLoading(true);
     try {
       // Get token from localStorage if available
       const token = localStorage.getItem('token');
@@ -36,23 +34,22 @@ const PersonalizedBrainCard: React.FC<PersonalizedBrainCardProps> = ({ profile }
           top10Threshold: data.top10Threshold,
         });
       } else {
-        // Use profile-based cognitive index when not authenticated
+        // Use estimated baseline when not authenticated
+        // Note: These are estimated values for display purposes only
         setCognitiveComparison({
           userCognitiveIndex: profile.cognitiveIndex,
-          globalAverage: profile.cognitiveIndex, // Use user's own score as baseline
-          top10Threshold: Math.max(profile.cognitiveIndex + 10, 85), // Aspirational goal
+          globalAverage: 65, // Standard baseline for comparison
+          top10Threshold: 85, // Top 10% threshold estimate
         });
       }
     } catch (error) {
       console.error('[PersonalizedBrainCard] Failed to load cognitive comparison:', error);
-      // On error, use profile-based values instead of hardcoded mock data
+      // On error, use baseline estimates for comparison
       setCognitiveComparison({
         userCognitiveIndex: profile.cognitiveIndex,
-        globalAverage: profile.cognitiveIndex,
-        top10Threshold: Math.max(profile.cognitiveIndex + 10, 85),
+        globalAverage: 65, // Standard baseline for comparison
+        top10Threshold: 85, // Top 10% threshold estimate
       });
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -271,16 +268,19 @@ const PersonalizedBrainCard: React.FC<PersonalizedBrainCardProps> = ({ profile }
 
       {/* Skill Range Analytics */}
       <div className="skill-range-analytics">
-        <h3 className="analytics-title">📊 Global Range Stats</h3>
+        <h3 className="analytics-title">
+          📊 Global Range Stats
+          {!cognitiveComparison && <span className="estimated-badge"> (Estimated)</span>}
+        </h3>
         <div className="range-visualization">
           <div className="range-item">
             <div className="range-label">
               <span>Global Average</span>
-              <span className="range-value">{cognitiveComparison?.globalAverage || 65}</span>
+              <span className="range-value">{cognitiveComparison?.globalAverage ?? 65}</span>
             </div>
             <div className="range-bar">
-              <div className="range-fill range-fill-global" style={{ width: `${cognitiveComparison?.globalAverage || 65}%` }} />
-              <div className="range-marker" style={{ left: `${cognitiveComparison?.globalAverage || 65}%` }}>
+              <div className="range-fill range-fill-global" style={{ width: `${cognitiveComparison?.globalAverage ?? 65}%` }} />
+              <div className="range-marker" style={{ left: `${cognitiveComparison?.globalAverage ?? 65}%` }}>
                 <div className="marker-dot"></div>
               </div>
             </div>
@@ -289,11 +289,11 @@ const PersonalizedBrainCard: React.FC<PersonalizedBrainCardProps> = ({ profile }
           <div className="range-item">
             <div className="range-label">
               <span>Your Score</span>
-              <span className="range-value">{cognitiveComparison?.userCognitiveIndex || profile.cognitiveIndex}</span>
+              <span className="range-value">{cognitiveComparison?.userCognitiveIndex ?? profile.cognitiveIndex}</span>
             </div>
             <div className="range-bar">
-              <div className="range-fill range-fill-yours" style={{ width: `${cognitiveComparison?.userCognitiveIndex || profile.cognitiveIndex}%` }} />
-              <div className="range-marker" style={{ left: `${cognitiveComparison?.userCognitiveIndex || profile.cognitiveIndex}%` }}>
+              <div className="range-fill range-fill-yours" style={{ width: `${cognitiveComparison?.userCognitiveIndex ?? profile.cognitiveIndex}%` }} />
+              <div className="range-marker" style={{ left: `${cognitiveComparison?.userCognitiveIndex ?? profile.cognitiveIndex}%` }}>
                 <div className="marker-dot marker-dot-you"></div>
               </div>
             </div>
@@ -302,10 +302,10 @@ const PersonalizedBrainCard: React.FC<PersonalizedBrainCardProps> = ({ profile }
           <div className="range-item">
             <div className="range-label">
               <span>Top 10%</span>
-              <span className="range-value">{cognitiveComparison?.top10Threshold || 85}</span>
+              <span className="range-value">{cognitiveComparison?.top10Threshold ?? 85}</span>
             </div>
             <div className="range-bar">
-              <div className="range-fill range-fill-top" style={{ width: `${cognitiveComparison?.top10Threshold || 85}%` }} />
+              <div className="range-fill range-fill-top" style={{ width: `${cognitiveComparison?.top10Threshold ?? 85}%` }} />
               <div className="range-marker" style={{ left: `${cognitiveComparison?.top10Threshold || 85}%` }}>
                 <div className="marker-dot marker-dot-top"></div>
               </div>

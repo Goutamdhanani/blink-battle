@@ -232,6 +232,13 @@
   color: white;
 }
 
+.estimated-badge {
+  font-size: 12px;
+  font-weight: 400;
+  color: rgba(255, 255, 255, 0.5);
+  font-style: italic;
+}
+
 .range-visualization {
   display: grid;
   gap: 20px;
