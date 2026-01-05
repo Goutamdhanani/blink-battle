@@ -34,10 +34,12 @@ export class MatchModel {
 
     const result = await pool.query(
       `INSERT INTO matches 
-        (player1_id, player2_id, stake, status, player1_wallet, player2_wallet, idempotency_key) 
-       VALUES ($1, $2, $3, $4, $5, $6, $7) 
+        (player1_id, player2_id, stake, status, player1_wallet, player2_wallet, idempotency_key,
+         player1_payout_state, player2_payout_state) 
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) 
        RETURNING *`,
-      [player1Id, player2Id, stake, MatchStatus.PENDING, player1Wallet, player2Wallet, idempotencyKey || null]
+      [player1Id, player2Id, stake, MatchStatus.PENDING, player1Wallet, player2Wallet, idempotencyKey || null,
+       'NOT_PAID', 'NOT_PAID']
     );
     return result.rows[0];
   }
