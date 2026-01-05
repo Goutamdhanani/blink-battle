@@ -440,6 +440,11 @@ const startServer = async () => {
     startMatchTimeoutJob();
     console.log(`✅ Match timeout job started - cancels abandoned matches`);
 
+    // Start matchmaking timeout job for 1-minute timeouts (Issue: Cancelled Matchmaking)
+    const { startMatchmakingTimeoutJob } = await import('./jobs/matchmakingTimeout');
+    startMatchmakingTimeoutJob();
+    console.log(`✅ Matchmaking timeout job started - handles 1-minute timeout with refund`);
+
     httpServer.listen(PORT, () => {
       console.log(`Server running on port ${PORT}`);
       console.log(`HTTP Polling endpoints enabled:`);
@@ -475,6 +480,11 @@ const shutdown = async (signal: string) => {
   const { stopMatchTimeoutJob } = await import('./jobs/matchTimeout');
   stopMatchTimeoutJob();
   console.log('Match timeout job stopped');
+  
+  // Stop matchmaking timeout job
+  const { stopMatchmakingTimeoutJob } = await import('./jobs/matchmakingTimeout');
+  stopMatchmakingTimeoutJob();
+  console.log('Matchmaking timeout job stopped');
   
   // Stop request tracking
   const { stopStatsLogging } = await import('./middleware/requestTracking');
