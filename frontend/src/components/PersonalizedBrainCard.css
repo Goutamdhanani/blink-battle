@@ -1,0 +1,366 @@
+/* Personalized Brain Card - Premium Analytics UI */
+
+.personalized-brain-card {
+  padding: 20px;
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+/* Cognitive Index Display */
+.cognitive-index-display {
+  margin-bottom: 32px;
+}
+
+.index-circle {
+  position: relative;
+  width: 240px;
+  height: 240px;
+  margin: 0 auto;
+}
+
+.index-svg {
+  width: 100%;
+  height: 100%;
+  filter: drop-shadow(0 0 20px rgba(0, 255, 255, 0.3));
+}
+
+.index-content {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+}
+
+.brain-emoji {
+  font-size: 48px;
+  margin-bottom: 8px;
+  filter: drop-shadow(0 0 10px rgba(255, 255, 255, 0.5));
+}
+
+.index-value {
+  font-size: 56px;
+  font-weight: 700;
+  background: linear-gradient(135deg, #00ffff 0%, #b45eff 50%, #ff00ff 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  line-height: 1;
+  margin-bottom: 4px;
+}
+
+.index-label {
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.7);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  font-weight: 500;
+}
+
+/* Cognitive Breakdown */
+.cognitive-breakdown {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 20px;
+  padding: 24px;
+  margin-bottom: 24px;
+  backdrop-filter: blur(10px);
+}
+
+.breakdown-title {
+  font-size: 18px;
+  font-weight: 600;
+  margin: 0 0 20px 0;
+  color: white;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.breakdown-grid {
+  display: grid;
+  gap: 16px;
+}
+
+.breakdown-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.breakdown-icon {
+  font-size: 24px;
+  width: 40px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.breakdown-info {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 80px 1fr auto;
+  gap: 12px;
+  align-items: center;
+}
+
+.breakdown-label {
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.9);
+  font-weight: 500;
+}
+
+.breakdown-bar {
+  height: 8px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.breakdown-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.8s ease;
+  box-shadow: 0 0 10px currentColor;
+}
+
+.breakdown-fill-memory {
+  background: linear-gradient(90deg, #b45eff, #ff00ff);
+}
+
+.breakdown-fill-attention {
+  background: linear-gradient(90deg, #00bfff, #0080ff);
+}
+
+.breakdown-fill-speed {
+  background: linear-gradient(90deg, #ffd700, #ffaa00);
+}
+
+.breakdown-fill-processing {
+  background: linear-gradient(90deg, #00ff7f, #00ffaa);
+}
+
+.breakdown-value {
+  font-size: 16px;
+  font-weight: 700;
+  color: white;
+  min-width: 40px;
+  text-align: right;
+}
+
+/* Reaction Labels */
+.reaction-labels {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 20px;
+  padding: 24px;
+  margin-bottom: 24px;
+  backdrop-filter: blur(10px);
+}
+
+.labels-title {
+  font-size: 18px;
+  font-weight: 600;
+  margin: 0 0 20px 0;
+  color: white;
+}
+
+.labels-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 12px;
+}
+
+@media (max-width: 768px) {
+  .labels-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.label-item {
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  padding: 12px;
+  text-align: center;
+}
+
+.label-game-name {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.6);
+  margin-bottom: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.label-badge {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border: 2px solid;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.2);
+  font-weight: 600;
+}
+
+.label-text {
+  font-size: 13px;
+}
+
+.label-score {
+  font-size: 16px;
+  font-weight: 700;
+}
+
+/* Skill Range Analytics */
+.skill-range-analytics {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 20px;
+  padding: 24px;
+  backdrop-filter: blur(10px);
+}
+
+.analytics-title {
+  font-size: 18px;
+  font-weight: 600;
+  margin: 0 0 20px 0;
+  color: white;
+}
+
+.range-visualization {
+  display: grid;
+  gap: 20px;
+  margin-bottom: 20px;
+}
+
+.range-item {
+  display: grid;
+  gap: 8px;
+}
+
+.range-label {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.8);
+  font-weight: 500;
+}
+
+.range-value {
+  font-size: 16px;
+  font-weight: 700;
+  color: white;
+}
+
+.range-bar {
+  position: relative;
+  height: 12px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  overflow: visible;
+}
+
+.range-fill {
+  height: 100%;
+  border-radius: 6px;
+  transition: width 0.8s ease;
+}
+
+.range-fill-global {
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.3), rgba(255, 255, 255, 0.5));
+}
+
+.range-fill-yours {
+  background: linear-gradient(90deg, #00ffff, #b45eff);
+  box-shadow: 0 0 15px rgba(0, 255, 255, 0.5);
+}
+
+.range-fill-top {
+  background: linear-gradient(90deg, #ffd700, #ffaa00);
+  box-shadow: 0 0 15px rgba(255, 215, 0, 0.5);
+}
+
+.range-marker {
+  position: absolute;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 2;
+}
+
+.marker-dot {
+  width: 16px;
+  height: 16px;
+  background: rgba(255, 255, 255, 0.5);
+  border: 2px solid white;
+  border-radius: 50%;
+  box-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
+}
+
+.marker-dot-you {
+  background: #00ffff;
+  border-color: #00ffff;
+  box-shadow: 0 0 15px rgba(0, 255, 255, 0.8);
+  animation: markerPulse 2s ease-in-out infinite;
+}
+
+.marker-dot-top {
+  background: #ffd700;
+  border-color: #ffd700;
+  box-shadow: 0 0 15px rgba(255, 215, 0, 0.8);
+}
+
+@keyframes markerPulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.2); }
+}
+
+/* Performance Tag */
+.performance-tag {
+  margin-top: 20px;
+}
+
+.tag {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 20px;
+  border-radius: 12px;
+  font-weight: 600;
+  font-size: 14px;
+  border: 2px solid;
+}
+
+.tag-icon {
+  font-size: 20px;
+}
+
+.tag-elite {
+  background: rgba(255, 215, 0, 0.1);
+  border-color: rgba(255, 215, 0, 0.5);
+  color: #ffd700;
+  box-shadow: 0 0 20px rgba(255, 215, 0, 0.3);
+}
+
+.tag-excellent {
+  background: rgba(0, 255, 127, 0.1);
+  border-color: rgba(0, 255, 127, 0.5);
+  color: #00ff7f;
+  box-shadow: 0 0 20px rgba(0, 255, 127, 0.3);
+}
+
+.tag-good {
+  background: rgba(0, 191, 255, 0.1);
+  border-color: rgba(0, 191, 255, 0.5);
+  color: #00bfff;
+  box-shadow: 0 0 20px rgba(0, 191, 255, 0.3);
+}
+
+.tag-growing {
+  background: rgba(180, 94, 255, 0.1);
+  border-color: rgba(180, 94, 255, 0.5);
+  color: #b45eff;
+  box-shadow: 0 0 20px rgba(180, 94, 255, 0.3);
+}

@@ -16,10 +16,11 @@ import BlinkCount from '../games/BlinkCount';
 import WordPairMatch from '../games/WordPairMatch';
 import BrainStats from './BrainStats';
 import EnhancedProfile from './EnhancedProfile';
+import GamesPage from './GamesPage';
 import { GameScore } from '../games/types';
 import './BrainTrainingMenu.css';
 
-type GameType = GameTypeEnum | 'stats' | 'profile' | null;
+type GameType = GameTypeEnum | 'stats' | 'profile' | 'games' | null;
 
 const BrainTrainingMenu: React.FC = () => {
   const [currentGame, setCurrentGame] = useState<GameType>(null);
@@ -45,6 +46,10 @@ const BrainTrainingMenu: React.FC = () => {
   const handleGameExit = () => {
     setCurrentGame(null);
     loadProfile(); // Refresh stats when exiting
+  };
+
+  const handleGameSelect = (game: GameTypeEnum) => {
+    setCurrentGame(game);
   };
 
   if (showWelcome) {
@@ -124,6 +129,10 @@ const BrainTrainingMenu: React.FC = () => {
     return <EnhancedProfile onBack={handleGameExit} />;
   }
 
+  if (currentGame === 'games') {
+    return <GamesPage onBack={handleGameExit} onGameSelect={handleGameSelect} profile={profile} />;
+  }
+
   return (
     <div className="brain-training-menu">
       <div className="menu-container">
@@ -138,217 +147,95 @@ const BrainTrainingMenu: React.FC = () => {
           </div>
         </header>
 
-        {/* Quick Stats Overview */}
-        {profile && profile.totalGamesPlayed > 0 && (
-          <div className="quick-stats">
-            <div className="quick-stat-item">
-              <div className="quick-stat-icon">🎮</div>
-              <div className="quick-stat-value">{profile.totalGamesPlayed}</div>
-              <div className="quick-stat-label">Games</div>
-            </div>
-            <div className="quick-stat-item">
-              <div className="quick-stat-icon">🏆</div>
-              <div className="quick-stat-value">{profile.achievements?.length || 0}</div>
-              <div className="quick-stat-label">Badges</div>
-            </div>
-            <div className="quick-stat-item">
-              <div className="quick-stat-icon">⚡</div>
-              <div className="quick-stat-value">
-                {profile.level || 1}
-              </div>
-              <div className="quick-stat-label">Level</div>
-            </div>
-          </div>
-        )}
-
-        {/* Game Selection Cards */}
-        <div className="games-section">
-          <h2 className="section-title">Choose Your Challenge</h2>
+        {/* Dashboard Overview */}
+        <div className="dashboard-section">
+          <h2 className="section-title">Your Progress</h2>
           
-          <div className="game-cards">
-            {/* Original 3 Games */}
-            <div className="game-card game-card-memory" onClick={() => setCurrentGame('memory')}>
-              <div className="game-card-glow"></div>
-              <div className="game-card-content">
-                <div className="game-icon">🧠</div>
-                <h3 className="game-title">Memory Match</h3>
-                <p className="game-description">Match pairs of symbols</p>
-                <div className="play-btn">
-                  <span>Play</span>
-                  <span className="play-arrow">→</span>
+          {profile && profile.totalGamesPlayed > 0 ? (
+            <>
+              {/* Quick Stats Overview */}
+              <div className="quick-stats">
+                <div className="quick-stat-item">
+                  <div className="quick-stat-icon">🎮</div>
+                  <div className="quick-stat-value">{profile.totalGamesPlayed}</div>
+                  <div className="quick-stat-label">Games</div>
+                </div>
+                <div className="quick-stat-item">
+                  <div className="quick-stat-icon">🏆</div>
+                  <div className="quick-stat-value">{profile.achievements?.filter(a => a.isUnlocked).length || 0}</div>
+                  <div className="quick-stat-label">Badges</div>
+                </div>
+                <div className="quick-stat-item">
+                  <div className="quick-stat-icon">⚡</div>
+                  <div className="quick-stat-value">{profile.level || 1}</div>
+                  <div className="quick-stat-label">Level</div>
+                </div>
+                <div className="quick-stat-item">
+                  <div className="quick-stat-icon">🧠</div>
+                  <div className="quick-stat-value">{profile.cognitiveIndex}</div>
+                  <div className="quick-stat-label">Cognitive</div>
                 </div>
               </div>
-            </div>
 
-            <div className="game-card game-card-attention" onClick={() => setCurrentGame('attention')}>
-              <div className="game-card-glow"></div>
-              <div className="game-card-content">
-                <div className="game-icon">👁️</div>
-                <h3 className="game-title">Focus Test</h3>
-                <p className="game-description">Hit targets quickly</p>
-                <div className="play-btn">
-                  <span>Play</span>
-                  <span className="play-arrow">→</span>
+              {/* Recent Performance */}
+              <div className="recent-performance glass-card">
+                <h3 className="card-title">Cognitive Overview</h3>
+                <div className="performance-grid">
+                  <div className="performance-item">
+                    <span className="perf-label">Overall Accuracy</span>
+                    <span className="perf-value">{profile.overallAccuracy}%</span>
+                  </div>
+                  <div className="performance-item">
+                    <span className="perf-label">Rank</span>
+                    <span className="perf-value">{profile.rankBadge}</span>
+                  </div>
+                  <div className="performance-item">
+                    <span className="perf-label">XP</span>
+                    <span className="perf-value">{profile.xp.toLocaleString()}</span>
+                  </div>
                 </div>
               </div>
+            </>
+          ) : (
+            <div className="empty-state glass-card">
+              <div className="empty-icon">🎮</div>
+              <h3>Start Your Brain Training Journey</h3>
+              <p>Play games to unlock insights about your cognitive abilities</p>
             </div>
-
-            <div className="game-card game-card-reflex" onClick={() => setCurrentGame('reflex')}>
-              <div className="game-card-glow"></div>
-              <div className="game-card-content">
-                <div className="game-icon">⚡</div>
-                <h3 className="game-title">Reflex Rush</h3>
-                <p className="game-description">Test reaction time</p>
-                <div className="play-btn">
-                  <span>Play</span>
-                  <span className="play-arrow">→</span>
-                </div>
-              </div>
-            </div>
-
-            {/* New Phase 2 Games */}
-            <div className="game-card game-card-word" onClick={() => setCurrentGame('word_flash')}>
-              <div className="game-card-glow"></div>
-              <div className="game-card-content">
-                <div className="game-icon">⚡</div>
-                <h3 className="game-title">Word Flash</h3>
-                <p className="game-description">Rapid word recognition</p>
-                <div className="play-btn">
-                  <span>Play</span>
-                  <span className="play-arrow">→</span>
-                </div>
-              </div>
-            </div>
-
-            <div className="game-card game-card-shape" onClick={() => setCurrentGame('shape_shadow')}>
-              <div className="game-card-glow"></div>
-              <div className="game-card-content">
-                <div className="game-icon">🔲</div>
-                <h3 className="game-title">Shape Shadow</h3>
-                <p className="game-description">Match shadows to shapes</p>
-                <div className="play-btn">
-                  <span>Play</span>
-                  <span className="play-arrow">→</span>
-                </div>
-              </div>
-            </div>
-
-            <div className="game-card game-card-sequence" onClick={() => setCurrentGame('sequence_builder')}>
-              <div className="game-card-glow"></div>
-              <div className="game-card-content">
-                <div className="game-icon">🔢</div>
-                <h3 className="game-title">Sequence Builder</h3>
-                <p className="game-description">Remember and recreate</p>
-                <div className="play-btn">
-                  <span>Play</span>
-                  <span className="play-arrow">→</span>
-                </div>
-              </div>
-            </div>
-
-            <div className="game-card game-card-filter" onClick={() => setCurrentGame('focus_filter')}>
-              <div className="game-card-glow"></div>
-              <div className="game-card-content">
-                <div className="game-icon">🎯</div>
-                <h3 className="game-title">Focus Filter</h3>
-                <p className="game-description">Selective attention</p>
-                <div className="play-btn">
-                  <span>Play</span>
-                  <span className="play-arrow">→</span>
-                </div>
-              </div>
-            </div>
-
-            <div className="game-card game-card-path" onClick={() => setCurrentGame('path_memory')}>
-              <div className="game-card-glow"></div>
-              <div className="game-card-content">
-                <div className="game-icon">🗺️</div>
-                <h3 className="game-title">Path Memory</h3>
-                <p className="game-description">Trace the path</p>
-                <div className="play-btn">
-                  <span>Play</span>
-                  <span className="play-arrow">→</span>
-                </div>
-              </div>
-            </div>
-
-            <div className="game-card game-card-number" onClick={() => setCurrentGame('missing_number')}>
-              <div className="game-card-glow"></div>
-              <div className="game-card-content">
-                <div className="game-icon">🔢</div>
-                <h3 className="game-title">Missing Number</h3>
-                <p className="game-description">Find the gap</p>
-                <div className="play-btn">
-                  <span>Play</span>
-                  <span className="play-arrow">→</span>
-                </div>
-              </div>
-            </div>
-
-            <div className="game-card game-card-color" onClick={() => setCurrentGame('color_swap')}>
-              <div className="game-card-glow"></div>
-              <div className="game-card-content">
-                <div className="game-icon">🎨</div>
-                <h3 className="game-title">Color Swap</h3>
-                <p className="game-description">Pattern matching</p>
-                <div className="play-btn">
-                  <span>Play</span>
-                  <span className="play-arrow">→</span>
-                </div>
-              </div>
-            </div>
-
-            <div className="game-card game-card-reverse" onClick={() => setCurrentGame('reverse_recall')}>
-              <div className="game-card-glow"></div>
-              <div className="game-card-content">
-                <div className="game-icon">⏮️</div>
-                <h3 className="game-title">Reverse Recall</h3>
-                <p className="game-description">Backward memory</p>
-                <div className="play-btn">
-                  <span>Play</span>
-                  <span className="play-arrow">→</span>
-                </div>
-              </div>
-            </div>
-
-            <div className="game-card game-card-blink" onClick={() => setCurrentGame('blink_count')}>
-              <div className="game-card-glow"></div>
-              <div className="game-card-content">
-                <div className="game-icon">👁️</div>
-                <h3 className="game-title">Blink Count</h3>
-                <p className="game-description">Count the flashes</p>
-                <div className="play-btn">
-                  <span>Play</span>
-                  <span className="play-arrow">→</span>
-                </div>
-              </div>
-            </div>
-
-            <div className="game-card game-card-pairs" onClick={() => setCurrentGame('word_pair_match')}>
-              <div className="game-card-glow"></div>
-              <div className="game-card-content">
-                <div className="game-icon">📝</div>
-                <h3 className="game-title">Word Pair Match</h3>
-                <p className="game-description">Associate words</p>
-                <div className="play-btn">
-                  <span>Play</span>
-                  <span className="play-arrow">→</span>
-                </div>
-              </div>
-            </div>
-          </div>
+          )}
         </div>
 
-        {/* Action Buttons */}
-        <div className="menu-actions">
-          <button className="stats-button" onClick={() => setCurrentGame('profile')}>
-            <span className="stats-icon">👤</span>
-            <span>Enhanced Profile</span>
-          </button>
-          <button className="stats-button" onClick={() => setCurrentGame('stats')}>
-            <span className="stats-icon">📊</span>
-            <span>Detailed Stats</span>
-          </button>
+        {/* Quick Actions */}
+        <div className="quick-actions-section">
+          <h2 className="section-title">Quick Actions</h2>
+          <div className="action-cards">
+            <button className="action-card action-card-games" onClick={() => setCurrentGame('games')}>
+              <div className="action-icon">🎮</div>
+              <div className="action-info">
+                <h3 className="action-title">Play Games</h3>
+                <p className="action-description">13 brain training games</p>
+              </div>
+              <div className="action-arrow">→</div>
+            </button>
+
+            <button className="action-card action-card-profile" onClick={() => setCurrentGame('profile')}>
+              <div className="action-icon">👤</div>
+              <div className="action-info">
+                <h3 className="action-title">Brain Profile</h3>
+                <p className="action-description">View detailed analytics</p>
+              </div>
+              <div className="action-arrow">→</div>
+            </button>
+
+            <button className="action-card action-card-stats" onClick={() => setCurrentGame('stats')}>
+              <div className="action-icon">📊</div>
+              <div className="action-info">
+                <h3 className="action-title">Statistics</h3>
+                <p className="action-description">Track your progress</p>
+              </div>
+              <div className="action-arrow">→</div>
+            </button>
+          </div>
         </div>
 
         {/* Footer */}
@@ -364,17 +251,17 @@ const BrainTrainingMenu: React.FC = () => {
           <span className="nav-icon">🏠</span>
           <span className="nav-label">Home</span>
         </button>
-        <button className="nav-item" onClick={() => setCurrentGame('stats')}>
-          <span className="nav-icon">📊</span>
-          <span className="nav-label">Stats</span>
-        </button>
-        <button className="nav-item">
+        <button className="nav-item" onClick={() => setCurrentGame('games')}>
           <span className="nav-icon">🎮</span>
           <span className="nav-label">Games</span>
         </button>
-        <button className="nav-item">
+        <button className="nav-item" onClick={() => setCurrentGame('profile')}>
           <span className="nav-icon">👤</span>
           <span className="nav-label">Profile</span>
+        </button>
+        <button className="nav-item" onClick={() => setCurrentGame('stats')}>
+          <span className="nav-icon">📊</span>
+          <span className="nav-label">Stats</span>
         </button>
       </nav>
     </div>

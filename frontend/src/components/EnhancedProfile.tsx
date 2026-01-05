@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { getPlayerProfile } from '../lib/indexedDB';
 import { PlayerProfile } from '../games/types';
+import PersonalizedBrainCard from './PersonalizedBrainCard';
 import './EnhancedProfile.css';
 
 interface EnhancedProfileProps {
@@ -98,6 +99,9 @@ const EnhancedProfile: React.FC<EnhancedProfileProps> = ({ onBack }) => {
             </div>
           </div>
         </div>
+
+        {/* Personalized Brain Card */}
+        <PersonalizedBrainCard profile={profile} />
 
         {/* XP Progress */}
         <div className="xp-section">
