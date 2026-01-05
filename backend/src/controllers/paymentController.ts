@@ -2,7 +2,7 @@ import { Request, Response } from 'express';
 import crypto from 'crypto';
 import axios from 'axios';
 import { PaymentModel, PaymentStatus } from '../models/Payment';
-import { PaymentIntentModel, NormalizedPaymentStatus } from '../models/PaymentIntent';
+import { PaymentIntentModel, NormalizedPaymentStatus, PaymentIntent } from '../models/PaymentIntent';
 import { normalizeMiniKitStatus, extractTransactionHash, extractRawStatus } from '../services/statusNormalization';
 
 // Constants
@@ -13,15 +13,15 @@ const STALE_PAYMENT_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
  * Helper function to check if a payment is active (not cancelled/failed)
  * Active payments have transaction IDs and are either confirmed or pending
  */
-function isActivePayment(payment: any): boolean {
+function isActivePayment(payment: PaymentIntent): boolean {
   return payment.normalized_status === NormalizedPaymentStatus.CONFIRMED ||
-         (payment.normalized_status === NormalizedPaymentStatus.PENDING && payment.minikit_transaction_id);
+         (payment.normalized_status === NormalizedPaymentStatus.PENDING && !!payment.minikit_transaction_id);
 }
 
 /**
  * Helper function to check if a payment is stale (pending without transaction ID for >5 min)
  */
-function isStalePayment(payment: any): boolean {
+function isStalePayment(payment: PaymentIntent): boolean {
   return payment.normalized_status === NormalizedPaymentStatus.PENDING && 
          !payment.minikit_transaction_id &&
          (Date.now() - new Date(payment.created_at).getTime()) > STALE_PAYMENT_TIMEOUT_MS;
