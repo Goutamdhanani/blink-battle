@@ -5,6 +5,10 @@ import { UserModel } from '../models/User';
 import { MatchStatus } from '../models/types';
 import { generateRandomDelay } from '../services/randomness';
 import { PaymentIntentModel, NormalizedPaymentStatus } from '../models/PaymentIntent';
+import pool from '../config/database';
+
+// Constants
+const REFUND_DEADLINE_HOURS = 24; // Hours to claim refund after match cancellation
 
 /**
  * HTTP Polling Matchmaking Controller
