@@ -25,6 +25,7 @@ const TIE_THRESHOLD_MS = 1; // Reaction time difference considered a tie
 const REFUND_DEADLINE_HOURS = 24; // Hours to claim refund after match cancellation
 const NO_REACTION_TIME = -1; // Sentinel value for missing/invalid reaction times
 const MINIMUM_WAIT_AFTER_RED_MS = 2000; // Mandatory 2-second wait after all lights turn red
+const MANDATORY_WAIT_AFTER_GREEN_MS = 2000; // Mandatory 2-second wait after green light before accepting taps
 
 /**
  * Possible match result values
@@ -443,6 +444,53 @@ export class PollingMatchController {
       // Server time is authority; apply tolerance for clock drift
       // Tolerance increased from 50ms to 150ms to handle network/clock sync issues
       const CLOCK_SYNC_TOLERANCE_MS = 150; // 100-150ms tolerance for clock drift (per requirements)
+      
+      // CRITICAL: Enforce 2-second mandatory wait AFTER green light appears
+      // This ensures fair start for all players as green light may render at different times
+      if (timeSinceGreenLight < MANDATORY_WAIT_AFTER_GREEN_MS) {
+        // Tap during mandatory wait period - disqualify
+        const tooEarlyMs = MANDATORY_WAIT_AFTER_GREEN_MS - timeSinceGreenLight;
+        console.log(`[Polling Match] ⚠️ TOO EARLY! User ${userId} tapped ${tooEarlyMs}ms before mandatory 2s wait completed - DISQUALIFIED`);
+        
+        // Mark player as disqualified
+        const isPlayer1 = match.player1_id === userId;
+        
+        // SECURITY: Use separate queries to avoid SQL injection via column names
+        if (isPlayer1) {
+          await pool.query(`
+            UPDATE matches 
+            SET player1_disqualified = true,
+                player1_reaction_ms = $1
+            WHERE match_id = $2
+          `, [NO_REACTION_TIME, matchId]);
+        } else {
+          await pool.query(`
+            UPDATE matches 
+            SET player2_disqualified = true,
+                player2_reaction_ms = $1
+            WHERE match_id = $2
+          `, [NO_REACTION_TIME, matchId]);
+        }
+        
+        // Record the early tap in tap_events for audit
+        await TapEventModel.create(
+          matchId,
+          userId,
+          validatedClientTimestamp || now,
+          now,
+          greenLightTime
+        );
+        
+        // Return success with disqualification
+        res.json({ 
+          success: true, 
+          disqualified: true,
+          reason: 'too_early',
+          tooEarlyByMs: tooEarlyMs,
+          message: `Please wait ${MANDATORY_WAIT_AFTER_GREEN_MS / 1000} seconds after green light before tapping! ⏱️`
+        });
+        return;
+      }
       
       if (timeSinceGreenLight < -CLOCK_SYNC_TOLERANCE_MS) {
         // Early tap beyond tolerance - disqualify but return 200 (no 400s)
