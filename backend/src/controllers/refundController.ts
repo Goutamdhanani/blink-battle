@@ -227,19 +227,32 @@ export class RefundController {
   /**
    * GET /api/refund/eligible
    * Get all payments eligible for refund for the current user
+   * Only returns orphaned deposits or cancelled/draw matches
+   * Excludes completed matches and in-progress matches
    */
   static async getEligibleRefunds(req: Request, res: Response): Promise<void> {
     try {
       const userId = (req as any).userId;
 
       const eligiblePayments = await pool.query(
-        `SELECT payment_reference, amount, refund_reason, 
-                refund_deadline, created_at
-         FROM payment_intents
-         WHERE user_id = $1
-           AND refund_status = 'eligible'
-           AND refund_deadline > NOW()
-         ORDER BY created_at DESC`,
+        `SELECT pi.payment_reference, pi.amount, pi.refund_reason, 
+                pi.refund_deadline, pi.created_at, pi.match_id,
+                m.status as match_status, m.result_type, m.cancelled
+         FROM payment_intents pi
+         LEFT JOIN matches m ON m.match_id = pi.match_id
+         WHERE pi.user_id = $1
+           AND pi.refund_status = 'eligible'
+           AND pi.refund_deadline > NOW()
+           AND (
+             -- Orphaned deposits (no match)
+             pi.match_id IS NULL
+             OR
+             -- Draw or cancelled matches only
+             m.status = 'cancelled'
+             OR m.cancelled = true
+             OR m.result_type IN ('tie', 'both_disqualified', 'both_timeout_tie')
+           )
+         ORDER BY pi.created_at DESC`,
         [userId]
       );
 
@@ -299,11 +312,41 @@ export class RefundController {
         return;
       }
 
-      // Verify payment is orphaned (no match_id and confirmed)
+      // CRITICAL SECURITY: Block refunds for payments linked to matches UNLESS draw/cancelled
+      // This prevents double-claim exploit: refund + winnings
       if (paymentData.match_id !== null) {
-        await client.query('ROLLBACK');
-        res.status(400).json({ error: 'Payment is linked to a match' });
-        return;
+        // Payment is linked to a match - check if match is eligible for refund
+        const matchResult = await client.query(
+          `SELECT status, result_type, cancelled, winner_id FROM matches WHERE match_id = $1 FOR UPDATE`,
+          [paymentData.match_id]
+        );
+        
+        if (matchResult.rows.length > 0) {
+          const match = matchResult.rows[0];
+          
+          // Only allow refunds for draw or cancelled matches
+          const isDrawOrCancelled = 
+            match.status === 'cancelled' || 
+            match.cancelled === true ||
+            match.result_type === 'tie' ||
+            match.result_type === 'both_disqualified' ||
+            match.result_type === 'both_timeout_tie';
+          
+          // Block refund if match has a winner (completed win/loss) or is in progress
+          if (!isDrawOrCancelled) {
+            await client.query('ROLLBACK');
+            console.error(`[Refund] SECURITY BLOCK: Refund attempt on completed/in-progress match`);
+            res.status(400).json({ 
+              error: 'Cannot claim refund for this match',
+              message: 'Refunds are only available for cancelled or draw matches. Use the claim winnings button if you won.',
+              matchStatus: match.status,
+              resultType: match.result_type
+            });
+            return;
+          }
+          
+          console.log(`[Refund] Match ${paymentData.match_id} is draw/cancelled, allowing refund`);
+        }
       }
 
       if (paymentData.normalized_status !== 'confirmed') {

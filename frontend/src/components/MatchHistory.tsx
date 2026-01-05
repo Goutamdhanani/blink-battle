@@ -15,6 +15,8 @@ interface Match {
   reaction_ms: number; // SERVER AUTHORITY: From tap_events table
   yourReaction: number; // Backward compatibility
   opponentReaction: number;
+  tapValid?: boolean; // Tap validity flag
+  opponentTapValid?: boolean; // Opponent tap validity flag
   won: boolean;
   outcome: 'win' | 'loss' | 'draw' | 'cancelled' | 'active' | 'pending' | 'unknown'; // SERVER AUTHORITY
   opponent: {
@@ -28,6 +30,7 @@ interface Match {
   claimTimeRemaining?: number; // seconds
   canClaimWinnings?: boolean; // SERVER AUTHORITY
   claimable?: boolean; // Backward compatibility
+  claimed?: boolean; // Explicit claimed flag
   // Refund fields - SERVER AUTHORITY
   refundStatus?: 'none' | 'eligible' | 'processing' | 'completed' | 'failed';
   refundAmount?: number;
@@ -229,15 +232,19 @@ const MatchHistory: React.FC = () => {
                     <div className="reaction-item">
                       <span className="reaction-label">You</span>
                       <span className={`reaction-value ${match.yourReaction < match.opponentReaction ? 'reaction-better' : ''}`}>
-                        {/* SERVER AUTHORITY: Use reaction_ms from server */}
-                        {match.reaction_ms >= 0 ? `${match.reaction_ms}ms` : 'N/A'}
+                        {/* SERVER AUTHORITY: Use reaction_ms from server (tap_events) */}
+                        {match.reaction_ms !== null && match.reaction_ms !== undefined && match.reaction_ms >= 0 
+                          ? `${match.reaction_ms}ms` 
+                          : 'No tap'}
                       </span>
                     </div>
                     <div className="vs-divider">VS</div>
                     <div className="reaction-item">
                       <span className="reaction-label">Opponent</span>
                       <span className={`reaction-value ${match.opponentReaction < match.yourReaction ? 'reaction-better' : ''}`}>
-                        {match.opponentReaction >= 0 ? `${match.opponentReaction}ms` : 'N/A'}
+                        {match.opponentReaction !== null && match.opponentReaction !== undefined && match.opponentReaction >= 0 
+                          ? `${match.opponentReaction}ms` 
+                          : 'No tap'}
                       </span>
                     </div>
                   </div>
@@ -254,7 +261,7 @@ const MatchHistory: React.FC = () => {
                   {/* SERVER AUTHORITY: Show claim button only when canClaimWinnings === true */}
                   {outcome === 'win' && match.stake > 0 && (
                     <div className="claim-section" style={{ marginTop: '1rem' }}>
-                      {match.claimStatus === 'claimed' && (
+                      {(match.claimed || match.claimStatus === 'claimed') && (
                         <div className="claim-status" style={{ color: '#00ff88', fontSize: '0.9rem' }}>
                           ✅ Winnings Claimed
                         </div>
