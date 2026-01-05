@@ -21,32 +21,48 @@ export class PaymentController {
       }
 
       // SECURITY: Payment spam prevention - limit to 1 payment per 2 minutes
+      // Only check for confirmed or pending (with transaction ID) payments to reduce race conditions
       const recentPayments = await PaymentIntentModel.findRecentByUserId(userId, 2); // Last 2 minutes
       if (recentPayments && recentPayments.length > 0) {
-        const lastPayment = recentPayments[0];
-        const timeSinceLastPayment = Date.now() - new Date(lastPayment.created_at).getTime();
-        const twoMinutesMs = 2 * 60 * 1000;
+        // Filter for non-cancelled/failed payments
+        const activePayments = recentPayments.filter(p => 
+          p.normalized_status === NormalizedPaymentStatus.CONFIRMED ||
+          (p.normalized_status === NormalizedPaymentStatus.PENDING && p.minikit_transaction_id)
+        );
         
-        if (timeSinceLastPayment < twoMinutesMs) {
-          const waitSeconds = Math.ceil((twoMinutesMs - timeSinceLastPayment) / 1000);
-          console.warn(`[Payment] Spam prevention triggered for user ${userId} - last payment ${Math.floor(timeSinceLastPayment / 1000)}s ago`);
+        if (activePayments.length > 0) {
+          const lastPayment = activePayments[0];
+          const timeSinceLastPayment = Date.now() - new Date(lastPayment.created_at).getTime();
+          const twoMinutesMs = 2 * 60 * 1000;
           
-          // Cancel the previous pending payment if it exists
-          if (lastPayment.normalized_status === 'pending') {
-            await PaymentIntentModel.updateStatus(
-              lastPayment.payment_reference,
-              NormalizedPaymentStatus.CANCELLED,
-              'cancelled_by_new_payment'
-            );
-            console.log(`[Payment] Cancelled previous pending payment ${lastPayment.payment_reference} for user ${userId}`);
-          } else {
-            // Don't allow new payment if last one is not pending
+          if (timeSinceLastPayment < twoMinutesMs) {
+            const waitSeconds = Math.ceil((twoMinutesMs - timeSinceLastPayment) / 1000);
+            console.warn(`[Payment] Spam prevention triggered for user ${userId} - last active payment ${Math.floor(timeSinceLastPayment / 1000)}s ago (status: ${lastPayment.normalized_status})`);
+            
             return res.status(429).json({ 
               error: 'Too many payment requests',
               details: `Please wait ${waitSeconds} seconds before creating another payment`,
-              waitSeconds
+              waitSeconds,
+              existingPaymentReference: lastPayment.payment_reference
             });
           }
+        }
+        
+        // Clean up old stale pending payments without transaction IDs (>5 minutes old)
+        const stalePendingPayments = recentPayments.filter(p => 
+          p.normalized_status === NormalizedPaymentStatus.PENDING && 
+          !p.minikit_transaction_id &&
+          (Date.now() - new Date(p.created_at).getTime()) > 5 * 60 * 1000
+        );
+        
+        for (const stalePayment of stalePendingPayments) {
+          await PaymentIntentModel.updateStatus(
+            stalePayment.payment_reference,
+            NormalizedPaymentStatus.CANCELLED,
+            'cancelled_stale_no_transaction_id'
+          );
+          await PaymentIntentModel.releaseLock(stalePayment.payment_reference);
+          console.log(`[Payment] Cancelled stale pending payment ${stalePayment.payment_reference} for user ${userId} (no transaction ID after 5 minutes)`);
         }
       }
 
