@@ -1,0 +1,193 @@
+/* Reflex Game Styles */
+
+.reflex-game {
+  min-height: 100vh;
+  background: linear-gradient(180deg, #0a0a1f 0%, #1a0f3d 50%, #2d1b4e 100%);
+  padding: 20px;
+  position: relative;
+}
+
+.reflex-arena {
+  position: relative;
+  height: calc(100vh - 220px);
+  min-height: 500px;
+  border-radius: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  margin: 20px 0;
+  border: 3px solid rgba(255, 255, 255, 0.1);
+  overflow: hidden;
+}
+
+.reflex-waiting {
+  background: linear-gradient(135deg, rgba(50, 50, 80, 0.5), rgba(30, 30, 60, 0.5));
+}
+
+.reflex-ready {
+  background: linear-gradient(135deg, rgba(255, 100, 0, 0.3), rgba(200, 50, 0, 0.3));
+  border-color: rgba(255, 100, 0, 0.5);
+  animation: readyPulse 1s ease-in-out infinite;
+}
+
+@keyframes readyPulse {
+  0%, 100% { box-shadow: 0 0 20px rgba(255, 100, 0, 0.3); }
+  50% { box-shadow: 0 0 40px rgba(255, 100, 0, 0.6); }
+}
+
+.reflex-go {
+  background: linear-gradient(135deg, rgba(0, 255, 136, 0.4), rgba(0, 200, 100, 0.4));
+  border-color: rgba(0, 255, 136, 0.8);
+  box-shadow: 0 0 60px rgba(0, 255, 136, 0.6);
+  animation: goPulse 0.5s ease-in-out;
+}
+
+@keyframes goPulse {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.02); }
+  100% { transform: scale(1); }
+}
+
+.reflex-false-start {
+  background: linear-gradient(135deg, rgba(255, 0, 68, 0.4), rgba(200, 0, 40, 0.4));
+  border-color: rgba(255, 0, 68, 0.8);
+  box-shadow: 0 0 40px rgba(255, 0, 68, 0.5);
+  animation: errorShake 0.5s ease-in-out;
+}
+
+@keyframes errorShake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-10px); }
+  75% { transform: translateX(10px); }
+}
+
+.reflex-content {
+  text-align: center;
+  z-index: 1;
+  position: relative;
+}
+
+.reflex-text {
+  font-size: 48px;
+  font-weight: 700;
+  color: #fff;
+  text-shadow: 0 0 20px rgba(255, 255, 255, 0.5);
+  margin-bottom: 16px;
+  animation: textGlow 1s ease-in-out;
+}
+
+@keyframes textGlow {
+  from {
+    opacity: 0;
+    transform: scale(0.8);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.reflex-instruction {
+  font-size: 18px;
+  color: rgba(255, 255, 255, 0.7);
+  margin: 0;
+  font-weight: 500;
+}
+
+.trial-counter {
+  background: rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 8px 16px;
+  border-radius: 20px;
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.trials-progress {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  margin-top: 20px;
+}
+
+.progress-dot {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.1);
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  transition: all 0.3s ease;
+}
+
+.progress-dot.active {
+  background: rgba(0, 255, 255, 0.3);
+  border-color: rgba(0, 255, 255, 0.8);
+  box-shadow: 0 0 16px rgba(0, 255, 255, 0.6);
+  animation: dotPulse 1s ease-in-out infinite;
+}
+
+.progress-dot.completed {
+  background: rgba(0, 255, 136, 0.5);
+  border-color: rgba(0, 255, 136, 0.8);
+  box-shadow: 0 0 12px rgba(0, 255, 136, 0.4);
+}
+
+@keyframes dotPulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.2); }
+}
+
+.trials-list {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 16px;
+  padding: 16px;
+  margin: 20px 0;
+  max-width: 300px;
+}
+
+.trial-result {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.trial-result:last-child {
+  border-bottom: none;
+}
+
+.valid-time {
+  color: #00ff88;
+  font-weight: 700;
+}
+
+.false-start {
+  color: #ff0044;
+  font-weight: 700;
+}
+
+@media (max-width: 380px) {
+  .reflex-text {
+    font-size: 36px;
+  }
+
+  .reflex-arena {
+    min-height: 400px;
+  }
+
+  .trials-progress {
+    gap: 8px;
+  }
+
+  .progress-dot {
+    width: 12px;
+    height: 12px;
+  }
+}
