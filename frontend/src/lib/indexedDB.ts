@@ -3,43 +3,18 @@
  */
 
 import { GameScore, PlayerProfile, GameStats, GameType, Achievement } from '../games/types';
+import { 
+  LEVEL_THRESHOLDS, 
+  RANK_THRESHOLDS, 
+  calculateLevelFromXP, 
+  calculateRankFromXP,
+  getUnlockedThemes as getUnlockedThemesHelper
+} from './progressionConstants';
 
 const DB_NAME = 'BlinkBattleBrainTraining';
 const DB_VERSION = 1;
 const SCORES_STORE = 'gameScores';
 const PROFILE_STORE = 'playerProfile';
-
-// Realistic XP and leveling constants based on real-world progression
-const LEVEL_THRESHOLDS: { [key: number]: number } = {
-  1: 0,
-  2: 100,
-  3: 250,
-  4: 500,
-  5: 1000,
-  6: 1500,
-  7: 2250,
-  8: 3000,
-  9: 4000,
-  10: 5000,
-  15: 12500,
-  20: 25000,
-  30: 62500,
-  40: 100000,
-  50: 150000,
-  75: 300000,
-  100: 500000,
-};
-
-// Rank thresholds based on total XP (realistic progression)
-const RANK_THRESHOLDS = [
-  { minXP: 500000, rank: 'Legend' },      // Top 1% - 10,000+ games
-  { minXP: 150000, rank: 'Master' },      // Top 5% - 4,000+ games
-  { minXP: 50000, rank: 'Diamond' },      // Skilled - 1,500+ games
-  { minXP: 15000, rank: 'Platinum' },     // Dedicated - 500+ games
-  { minXP: 5000, rank: 'Gold' },          // Regular - 200+ games
-  { minXP: 1000, rank: 'Silver' },        // Casual - 50+ games
-  { minXP: 0, rank: 'Bronze' },           // New players
-];
 
 // Reaction time constants (in milliseconds) - exported for use in games
 export const MIN_VALID_REACTION_TIME = 80;      // Below this is likely cheating
@@ -87,66 +62,34 @@ export async function initDB(): Promise<IDBDatabase> {
 }
 
 /**
- * Calculate level from total XP using exponential thresholds
- */
-function calculateLevelFromXP(xp: number): number {
-  let level = 1;
-  
-  // Find the highest level the player has reached
-  const sortedLevels = Object.keys(LEVEL_THRESHOLDS)
-    .map(Number)
-    .sort((a, b) => b - a); // Sort descending
-  
-  for (const lvl of sortedLevels) {
-    if (xp >= LEVEL_THRESHOLDS[lvl]) {
-      level = lvl;
-      break;
-    }
-  }
-  
-  // For levels beyond our threshold table, use exponential formula
-  if (xp >= LEVEL_THRESHOLDS[100]) {
-    // Each level beyond 100 requires 10,000 more XP
-    level = 100 + Math.floor((xp - LEVEL_THRESHOLDS[100]) / 10000);
-  }
-  
-  return level;
-}
-
-/**
- * Calculate rank badge from total XP
- */
-function calculateRankFromXP(xp: number): string {
-  for (const { minXP, rank } of RANK_THRESHOLDS) {
-    if (xp >= minXP) {
-      return rank;
-    }
-  }
-  return 'Bronze';
-}
-
-/**
  * Calculate XP earned for a game based on performance
- * - Base XP varies by accuracy and level
+ * - Deterministic calculation based on accuracy
  * - Bonus for high accuracy (90%+)
  * - Minimum XP ensures progress even on poor performance
  */
 function calculateGameXP(score: number, accuracy: number, level: number): number {
-  // Base XP: 25-50 for good performance (70%+ accuracy)
-  // Lower XP: 5-15 for poor performance
+  // Base XP: deterministic based on accuracy brackets
   let xp = 0;
   
-  if (accuracy >= 90) {
-    xp = 45 + Math.floor(Math.random() * 6); // 45-50 XP
+  if (accuracy >= 95) {
+    xp = 50; // Perfect/near-perfect
+  } else if (accuracy >= 90) {
+    xp = 45; // Excellent
+  } else if (accuracy >= 80) {
+    xp = 35; // Very good
   } else if (accuracy >= 70) {
-    xp = 25 + Math.floor(Math.random() * 11); // 25-35 XP
+    xp = 25; // Good
+  } else if (accuracy >= 60) {
+    xp = 20; // Above average
   } else if (accuracy >= 50) {
-    xp = 15 + Math.floor(Math.random() * 11); // 15-25 XP
+    xp = 15; // Average
+  } else if (accuracy >= 30) {
+    xp = 10; // Below average
   } else {
-    xp = 5 + Math.floor(Math.random() * 11); // 5-15 XP (participation)
+    xp = 5; // Participation reward
   }
   
-  // Small level bonus (max +10 XP at high levels)
+  // Small level bonus (max +10 XP at level 100+)
   const levelBonus = Math.min(10, Math.floor(level / 10));
   xp += levelBonus;
   
@@ -331,25 +274,12 @@ export async function getPlayerProfile(): Promise<PlayerProfile> {
     overallAccuracy: Math.round(avgAccuracy),
     gameStats,
     achievements,
-    unlockedThemes: getUnlockedThemes(level),
+    unlockedThemes: getUnlockedThemesHelper(level),
     currentTheme: 'Bronze',
     createdAt: Date.now(),
     lastActive,
     joinDate: Date.now(),
   };
-}
-
-/**
- * Get unlocked themes based on level (realistic progression)
- */
-function getUnlockedThemes(level: number): string[] {
-  const themes = ['Bronze'];
-  if (level >= 10) themes.push('Silver');
-  if (level >= 25) themes.push('Gold');
-  if (level >= 50) themes.push('Platinum');
-  if (level >= 75) themes.push('Diamond');
-  if (level >= 100) themes.push('Legend');
-  return themes;
 }
 
 /**

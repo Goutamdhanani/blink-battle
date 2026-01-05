@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { getPlayerProfile } from '../lib/indexedDB';
 import { PlayerProfile, GameStats } from '../games/types';
 import { brainTrainingService } from '../services/brainTrainingService';
+import { calculateLevelFromXP, calculateRankFromXP, getUnlockedThemes } from '../lib/progressionConstants';
 
 interface UseBrainTrainingDataResult {
   profile: PlayerProfile | null;
@@ -71,7 +72,7 @@ export function useBrainTrainingData(token?: string | null): UseBrainTrainingDat
               word_pair_match: (backendProfile.word_pair_match || createEmptyGameStats('word_pair_match')) as GameStats,
             },
             achievements: [], // TODO: Calculate from backend data
-            unlockedThemes: calculateUnlockedThemes(level),
+            unlockedThemes: getUnlockedThemes(level),
             currentTheme: 'Bronze',
             createdAt: Date.now(),
             lastActive: Date.now(),
@@ -111,50 +112,6 @@ export function useBrainTrainingData(token?: string | null): UseBrainTrainingDat
     error,
     refresh: loadProfile,
   };
-}
-
-function calculateRankBadge(xp: number): string {
-  if (xp >= 500000) return 'Legend';      // Top 1%
-  if (xp >= 150000) return 'Master';      // Top 5%
-  if (xp >= 50000) return 'Diamond';      // Skilled
-  if (xp >= 15000) return 'Platinum';     // Dedicated
-  if (xp >= 5000) return 'Gold';          // Regular
-  if (xp >= 1000) return 'Silver';        // Casual
-  return 'Bronze';                        // New
-}
-
-function calculateLevelFromXP(xp: number): number {
-  const thresholds: { [key: number]: number } = {
-    1: 0, 2: 100, 3: 250, 4: 500, 5: 1000, 6: 1500, 7: 2250, 8: 3000,
-    9: 4000, 10: 5000, 15: 12500, 20: 25000, 30: 62500, 40: 100000,
-    50: 150000, 75: 300000, 100: 500000,
-  };
-  
-  let level = 1;
-  const sortedLevels = Object.keys(thresholds).map(Number).sort((a, b) => b - a);
-  
-  for (const lvl of sortedLevels) {
-    if (xp >= thresholds[lvl]) {
-      level = lvl;
-      break;
-    }
-  }
-  
-  if (xp >= thresholds[100]) {
-    level = 100 + Math.floor((xp - thresholds[100]) / 10000);
-  }
-  
-  return level;
-}
-
-function calculateUnlockedThemes(level: number): string[] {
-  const themes = ['Bronze'];
-  if (level >= 10) themes.push('Silver');
-  if (level >= 25) themes.push('Gold');
-  if (level >= 50) themes.push('Platinum');
-  if (level >= 75) themes.push('Diamond');
-  if (level >= 100) themes.push('Legend');
-  return themes;
 }
 
 function createEmptyGameStats(gameType: string): GameStats {
