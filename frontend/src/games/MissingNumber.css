@@ -94,7 +94,7 @@
   background: rgba(255, 255, 255, 0.95);
   padding: 20px;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
-  z-index: var(--z-elevated);
+  z-index: 1000;
 }
 
 .game-info {
@@ -114,18 +114,97 @@
   padding: 40px;
 }
 
-.game-content {
-  background: rgba(255, 255, 255, 0.9);
-  padding: 40px;
-  border-radius: 20px;
+.instruction-text {
+  font-size: 1.5em;
+  font-weight: bold;
+  color: white;
+  margin-bottom: 30px;
   text-align: center;
-  min-width: 400px;
+}
+
+.sequence-display {
+  display: flex;
+  gap: 15px;
+  margin: 40px 0;
+  justify-content: center;
+  flex-wrap: wrap;
+  max-width: 600px;
+}
+
+.sequence-item {
+  background: rgba(255, 255, 255, 0.95);
+  padding: 25px 30px;
+  font-size: 2.5em;
+  font-weight: bold;
+  border-radius: 15px;
+  min-width: 80px;
+  text-align: center;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+  color: #667eea;
+}
+
+.sequence-item.missing {
+  background: rgba(255, 107, 107, 0.2);
+  color: white;
+  border: 3px dashed white;
+}
+
+.options-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 15px;
+  max-width: 400px;
+  margin: 30px auto;
+}
+
+.option-btn {
+  background: white;
+  color: #333;
+  border: 3px solid #667eea;
+  padding: 20px;
+  font-size: 1.5em;
+  font-weight: bold;
+  border-radius: 15px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.option-btn:hover {
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  color: white;
+  transform: translateY(-3px);
+  box-shadow: 0 10px 25px rgba(102, 126, 234, 0.4);
+}
+
+.feedback {
+  font-size: 1.6em;
+  font-weight: bold;
+  margin: 30px 0;
+  padding: 20px;
+  border-radius: 15px;
+  animation: feedbackPop 0.5s ease;
+  color: white;
+}
+
+.feedback.correct {
+  background: rgba(81, 207, 102, 0.3);
+}
+
+.feedback.wrong {
+  background: rgba(255, 107, 107, 0.3);
+}
+
+@keyframes feedbackPop {
+  0% { transform: scale(0.8); opacity: 0; }
+  50% { transform: scale(1.1); }
+  100% { transform: scale(1); opacity: 1; }
 }
 
 .progress-bar {
   width: 100%;
+  max-width: 600px;
   height: 10px;
-  background: rgba(0, 0, 0, 0.1);
+  background: rgba(255, 255, 255, 0.3);
   border-radius: 10px;
   overflow: hidden;
   margin-top: 30px;
@@ -133,7 +212,7 @@
 
 .progress-fill {
   height: 100%;
-  background: linear-gradient(90deg, #667eea, #764ba2);
+  background: linear-gradient(90deg, #51cf66, #40c057);
   transition: width 0.3s ease;
 }
 
@@ -167,4 +246,78 @@
   justify-content: center;
   gap: 15px;
   flex-wrap: wrap;
+}
+
+/* Mobile responsiveness */
+@media (max-width: 768px) {
+  .game-instructions h2, .game-complete h2 {
+    font-size: 1.8em;
+  }
+
+  .game-instructions, .game-complete {
+    padding: 20px;
+  }
+
+  .instructions-content p {
+    font-size: 0.95em;
+  }
+
+  .sequence-item {
+    padding: 15px 20px;
+    font-size: 2em;
+    min-width: 60px;
+  }
+
+  .options-grid {
+    gap: 12px;
+  }
+
+  .option-btn {
+    padding: 15px;
+    font-size: 1.3em;
+  }
+
+  .game-arena {
+    padding: 20px;
+    margin-top: 80px;
+  }
+
+  .final-stats {
+    flex-direction: column;
+  }
+
+  .stat-value {
+    font-size: 2em;
+  }
+}
+
+@media (max-width: 480px) {
+  .game-info {
+    font-size: 0.9em;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .sequence-display {
+    gap: 10px;
+  }
+
+  .sequence-item {
+    padding: 12px 15px;
+    font-size: 1.5em;
+    min-width: 50px;
+  }
+
+  .options-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .option-btn {
+    padding: 12px;
+    font-size: 1.2em;
+  }
+
+  .instruction-text {
+    font-size: 1.2em;
+  }
 }
