@@ -33,6 +33,40 @@ SELECT
 FROM game_scores
 GROUP BY user_id, game_type;
 
+-- Create leaderboard view for global rankings
+CREATE OR REPLACE VIEW brain_training_leaderboard AS
+SELECT 
+  u.user_id,
+  u.wallet_address,
+  COUNT(DISTINCT gs.game_type) as games_completed,
+  SUM(gs.score) as total_score,
+  COUNT(*) as total_games_played,
+  AVG(gs.accuracy)::integer as overall_accuracy,
+  MAX(gs.level) as highest_level_reached,
+  MAX(gs.created_at) as last_played
+FROM users u
+LEFT JOIN game_scores gs ON u.user_id = gs.user_id
+GROUP BY u.user_id, u.wallet_address
+HAVING COUNT(*) > 0
+ORDER BY total_score DESC, overall_accuracy DESC;
+
+-- Create game-specific leaderboard view
+CREATE OR REPLACE VIEW game_type_leaderboard AS
+SELECT 
+  u.user_id,
+  u.wallet_address,
+  gs.game_type,
+  MAX(gs.score) as best_score,
+  AVG(gs.score)::integer as average_score,
+  AVG(gs.accuracy)::integer as average_accuracy,
+  MAX(gs.level) as highest_level,
+  COUNT(*) as games_played,
+  ROW_NUMBER() OVER (PARTITION BY gs.game_type ORDER BY MAX(gs.score) DESC, AVG(gs.accuracy) DESC) as rank
+FROM users u
+JOIN game_scores gs ON u.user_id = gs.user_id
+GROUP BY u.user_id, u.wallet_address, gs.game_type
+ORDER BY gs.game_type, rank;
+
 -- Note: The users table should already exist from the original schema
 -- If it doesn't exist, create it:
 CREATE TABLE IF NOT EXISTS users (
