@@ -316,6 +316,11 @@ async function runStartupMigrations(): Promise<void> {
       { name: 'refund_processed', type: 'BOOLEAN DEFAULT false' },
       { name: 'cancelled', type: 'BOOLEAN DEFAULT false' },
       { name: 'cancellation_reason', type: 'VARCHAR(255)' },
+      // Issue #1 fix: Add match_result and payout_state columns
+      { name: 'player1_match_result', type: 'VARCHAR(20)' },
+      { name: 'player2_match_result', type: 'VARCHAR(20)' },
+      { name: 'player1_payout_state', type: "VARCHAR(20) DEFAULT 'NOT_PAID'" },
+      { name: 'player2_payout_state', type: "VARCHAR(20) DEFAULT 'NOT_PAID'" },
     ];
 
     for (const col of matchColumns) {
@@ -330,6 +335,73 @@ async function runStartupMigrations(): Promise<void> {
         console.log(`[Migration] ✅ Added matches.${col.name}`);
       }
     }
+
+    // Add constraints for match_result and payout_state
+    const constraintChecks = [
+      {
+        name: 'player1_match_result_check',
+        sql: `ALTER TABLE matches ADD CONSTRAINT player1_match_result_check CHECK (player1_match_result IN ('WIN', 'LOSS', 'DRAW', 'NO_MATCH'))`
+      },
+      {
+        name: 'player2_match_result_check',
+        sql: `ALTER TABLE matches ADD CONSTRAINT player2_match_result_check CHECK (player2_match_result IN ('WIN', 'LOSS', 'DRAW', 'NO_MATCH'))`
+      },
+      {
+        name: 'player1_payout_state_check',
+        sql: `ALTER TABLE matches ADD CONSTRAINT player1_payout_state_check CHECK (player1_payout_state IN ('NOT_PAID', 'PAID'))`
+      },
+      {
+        name: 'player2_payout_state_check',
+        sql: `ALTER TABLE matches ADD CONSTRAINT player2_payout_state_check CHECK (player2_payout_state IN ('NOT_PAID', 'PAID'))`
+      },
+    ];
+
+    for (const constraint of constraintChecks) {
+      const exists = await client.query(`
+        SELECT constraint_name FROM information_schema.table_constraints 
+        WHERE table_name = 'matches' AND constraint_name = $1
+      `, [constraint.name]);
+
+      if (exists.rows.length === 0) {
+        try {
+          await client.query(constraint.sql);
+          console.log(`[Migration] ✅ Added constraint ${constraint.name}`);
+        } catch (err: any) {
+          // Ignore if constraint already exists
+          if (!err.message.includes('already exists')) {
+            console.log(`[Migration] ⚠️  Could not add constraint ${constraint.name}: ${err.message}`);
+          }
+        }
+      }
+    }
+
+    // Backfill existing matches with match_result and payout_state
+    await client.query(`
+      UPDATE matches
+      SET 
+        player1_match_result = CASE
+          WHEN winner_id = player1_id THEN 'WIN'
+          WHEN winner_id = player2_id THEN 'LOSS'
+          WHEN winner_id IS NULL AND status = 'completed' THEN 'DRAW'
+          ELSE 'NO_MATCH'
+        END,
+        player2_match_result = CASE
+          WHEN winner_id = player2_id THEN 'WIN'
+          WHEN winner_id = player1_id THEN 'LOSS'
+          WHEN winner_id IS NULL AND status = 'completed' THEN 'DRAW'
+          ELSE 'NO_MATCH'
+        END,
+        player1_payout_state = CASE
+          WHEN winner_id = player1_id AND claim_status = 'claimed' THEN 'PAID'
+          ELSE 'NOT_PAID'
+        END,
+        player2_payout_state = CASE
+          WHEN winner_id = player2_id AND claim_status = 'claimed' THEN 'PAID'
+          ELSE 'NOT_PAID'
+        END
+      WHERE (player1_match_result IS NULL OR player2_match_result IS NULL) AND status IN ('completed', 'cancelled')
+    `);
+    console.log('[Migration] ✅ Backfilled match_result and payout_state for existing matches');
 
     // ============================================
     // PAYMENT_INTENTS TABLE - Refund columns

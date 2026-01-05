@@ -46,6 +46,29 @@ export interface Match {
   claim_deadline?: Date;
   claim_status?: 'unclaimed' | 'claimed' | 'expired';
   result_finalized_at?: Date;
+  // Match result and payout state tracking (Issue #1 fix)
+  player1_match_result?: MatchResult;
+  player2_match_result?: MatchResult;
+  player1_payout_state?: PayoutState;
+  player2_payout_state?: PayoutState;
+}
+
+/**
+ * Match result from player perspective
+ */
+export enum MatchResult {
+  WIN = 'WIN',
+  LOSS = 'LOSS',
+  DRAW = 'DRAW',
+  NO_MATCH = 'NO_MATCH'
+}
+
+/**
+ * Payout state for player
+ */
+export enum PayoutState {
+  NOT_PAID = 'NOT_PAID',
+  PAID = 'PAID'
 }
 
 export enum MatchStatus {
