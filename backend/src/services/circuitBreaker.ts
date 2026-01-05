@@ -22,6 +22,22 @@ export enum CircuitState {
   HALF_OPEN = 'HALF_OPEN'
 }
 
+/**
+ * Custom error for circuit breaker rejections
+ * Allows type-safe error detection instead of string matching
+ */
+export class CircuitBreakerError extends Error {
+  constructor(
+    message: string,
+    public readonly circuitName: string,
+    public readonly state: CircuitState
+  ) {
+    super(message);
+    this.name = 'CircuitBreakerError';
+    Object.setPrototypeOf(this, CircuitBreakerError.prototype);
+  }
+}
+
 export interface CircuitBreakerConfig {
   failureThreshold: number;
   successThreshold: number;
@@ -45,6 +61,7 @@ export class CircuitBreaker {
   private failures: number = 0;
   private successes: number = 0;
   private lastFailureTime?: number;
+  private circuitOpenedAt?: number; // Track when circuit opened for accurate timeout
   private lastStateChange: number = Date.now();
   private totalAttempts: number = 0;
   private totalFailures: number = 0;
@@ -62,7 +79,11 @@ export class CircuitBreaker {
       if (this.shouldAttemptReset()) {
         this.transitionTo(CircuitState.HALF_OPEN);
       } else {
-        throw new Error(`Circuit breaker [${this.config.name || 'default'}] is OPEN - service unavailable`);
+        throw new CircuitBreakerError(
+          `Circuit breaker is OPEN - service unavailable`,
+          this.config.name || 'default',
+          this.state
+        );
       }
     }
 
@@ -115,10 +136,11 @@ export class CircuitBreaker {
 
   /**
    * Check if we should attempt to reset from OPEN → HALF_OPEN
+   * Uses circuitOpenedAt instead of lastFailureTime for accurate timeout
    */
   private shouldAttemptReset(): boolean {
-    if (!this.lastFailureTime) return false;
-    return Date.now() - this.lastFailureTime >= this.config.timeout;
+    if (!this.circuitOpenedAt) return false;
+    return Date.now() - this.circuitOpenedAt >= this.config.timeout;
   }
 
   /**
@@ -129,10 +151,16 @@ export class CircuitBreaker {
     this.state = newState;
     this.lastStateChange = Date.now();
 
+    // Track when circuit opens for accurate timeout calculation
+    if (newState === CircuitState.OPEN) {
+      this.circuitOpenedAt = Date.now();
+    }
+
     // Reset counters on state change
     if (newState === CircuitState.CLOSED) {
       this.failures = 0;
       this.successes = 0;
+      this.circuitOpenedAt = undefined;
     } else if (newState === CircuitState.HALF_OPEN) {
       this.successes = 0;
     }

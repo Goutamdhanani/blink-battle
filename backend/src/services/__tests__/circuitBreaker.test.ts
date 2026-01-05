@@ -1,4 +1,4 @@
-import { CircuitBreaker, CircuitState, CircuitBreakerFactory } from '../circuitBreaker';
+import { CircuitBreaker, CircuitState, CircuitBreakerFactory, CircuitBreakerError } from '../circuitBreaker';
 
 describe('CircuitBreaker', () => {
   describe('State Transitions', () => {
@@ -56,7 +56,7 @@ describe('CircuitBreaker', () => {
       expect(breaker.getState()).toBe(CircuitState.OPEN);
 
       // Next call should be rejected without calling the function
-      await expect(breaker.execute(failingFn)).rejects.toThrow('Circuit breaker');
+      await expect(breaker.execute(failingFn)).rejects.toThrow(CircuitBreakerError);
       expect(failingFn).toHaveBeenCalledTimes(2); // Not called the 3rd time
     });
 

@@ -3,7 +3,7 @@ import pool from '../config/database';
 import { PaymentIntentModel, NormalizedPaymentStatus } from '../models/PaymentIntent';
 import { normalizeMiniKitStatus, extractTransactionHash, extractRawStatus } from './statusNormalization';
 import { isTerminalStatus } from './paymentUtils';
-import { CircuitBreakerFactory, CircuitBreaker } from './circuitBreaker';
+import { CircuitBreakerFactory, CircuitBreaker, CircuitBreakerError } from './circuitBreaker';
 
 /**
  * Payment Worker Service
@@ -199,8 +199,8 @@ export class PaymentWorker {
         const errorMsg = apiError.message || 'Unknown API error';
         const statusCode = apiError.response?.status;
 
-        // Check if error is from circuit breaker
-        if (errorMsg.includes('Circuit breaker')) {
+        // Check if error is from circuit breaker (type-safe detection)
+        if (apiError instanceof CircuitBreakerError) {
           console.warn(`[PaymentWorker:${this.workerId}] Circuit breaker OPEN for Developer Portal API - will retry later`);
           // Don't increment retry count for circuit breaker rejections
           // Just release lock and let it retry on next worker cycle
