@@ -373,6 +373,16 @@ async function runStartupMigrations(): Promise<void> {
             console.log(`[Migration] ⚠️  Could not add constraint ${constraint.name}: ${err.message}`);
           }
         }
+      } else {
+        // Constraint exists, but might be the old version without NULL check
+        // Drop and recreate to ensure it allows NULL
+        try {
+          await client.query(`ALTER TABLE matches DROP CONSTRAINT IF EXISTS ${constraint.name}`);
+          await client.query(constraint.sql);
+          console.log(`[Migration] ✅ Updated constraint ${constraint.name} to allow NULL`);
+        } catch (err: any) {
+          console.log(`[Migration] ⚠️  Could not update constraint ${constraint.name}: ${err.message}`);
+        }
       }
     }
 
