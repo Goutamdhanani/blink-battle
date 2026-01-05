@@ -5,6 +5,28 @@ import { PaymentModel, PaymentStatus } from '../models/Payment';
 import { PaymentIntentModel, NormalizedPaymentStatus } from '../models/PaymentIntent';
 import { normalizeMiniKitStatus, extractTransactionHash, extractRawStatus } from '../services/statusNormalization';
 
+// Constants
+const SPAM_PREVENTION_WINDOW_MS = 2 * 60 * 1000; // 2 minutes
+const STALE_PAYMENT_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
+
+/**
+ * Helper function to check if a payment is active (not cancelled/failed)
+ * Active payments have transaction IDs and are either confirmed or pending
+ */
+function isActivePayment(payment: any): boolean {
+  return payment.normalized_status === NormalizedPaymentStatus.CONFIRMED ||
+         (payment.normalized_status === NormalizedPaymentStatus.PENDING && payment.minikit_transaction_id);
+}
+
+/**
+ * Helper function to check if a payment is stale (pending without transaction ID for >5 min)
+ */
+function isStalePayment(payment: any): boolean {
+  return payment.normalized_status === NormalizedPaymentStatus.PENDING && 
+         !payment.minikit_transaction_id &&
+         (Date.now() - new Date(payment.created_at).getTime()) > STALE_PAYMENT_TIMEOUT_MS;
+}
+
 export class PaymentController {
   /**
    * Initiate a payment - generates a reference ID and stores in database
@@ -24,19 +46,15 @@ export class PaymentController {
       // Only check for confirmed or pending (with transaction ID) payments to reduce race conditions
       const recentPayments = await PaymentIntentModel.findRecentByUserId(userId, 2); // Last 2 minutes
       if (recentPayments && recentPayments.length > 0) {
-        // Filter for non-cancelled/failed payments
-        const activePayments = recentPayments.filter(p => 
-          p.normalized_status === NormalizedPaymentStatus.CONFIRMED ||
-          (p.normalized_status === NormalizedPaymentStatus.PENDING && p.minikit_transaction_id)
-        );
+        // Filter for active payments using helper function
+        const activePayments = recentPayments.filter(isActivePayment);
         
         if (activePayments.length > 0) {
           const lastPayment = activePayments[0];
           const timeSinceLastPayment = Date.now() - new Date(lastPayment.created_at).getTime();
-          const twoMinutesMs = 2 * 60 * 1000;
           
-          if (timeSinceLastPayment < twoMinutesMs) {
-            const waitSeconds = Math.ceil((twoMinutesMs - timeSinceLastPayment) / 1000);
+          if (timeSinceLastPayment < SPAM_PREVENTION_WINDOW_MS) {
+            const waitSeconds = Math.ceil((SPAM_PREVENTION_WINDOW_MS - timeSinceLastPayment) / 1000);
             console.warn(`[Payment] Spam prevention triggered for user ${userId} - last active payment ${Math.floor(timeSinceLastPayment / 1000)}s ago (status: ${lastPayment.normalized_status})`);
             
             return res.status(429).json({ 
@@ -49,20 +67,19 @@ export class PaymentController {
         }
         
         // Clean up old stale pending payments without transaction IDs (>5 minutes old)
-        const stalePendingPayments = recentPayments.filter(p => 
-          p.normalized_status === NormalizedPaymentStatus.PENDING && 
-          !p.minikit_transaction_id &&
-          (Date.now() - new Date(p.created_at).getTime()) > 5 * 60 * 1000
-        );
+        const stalePendingPayments = recentPayments.filter(isStalePayment);
         
-        for (const stalePayment of stalePendingPayments) {
-          await PaymentIntentModel.updateStatus(
-            stalePayment.payment_reference,
-            NormalizedPaymentStatus.CANCELLED,
-            'cancelled_stale_no_transaction_id'
-          );
-          await PaymentIntentModel.releaseLock(stalePayment.payment_reference);
-          console.log(`[Payment] Cancelled stale pending payment ${stalePayment.payment_reference} for user ${userId} (no transaction ID after 5 minutes)`);
+        // Batch database operations for better performance
+        if (stalePendingPayments.length > 0) {
+          await Promise.all(stalePendingPayments.map(async (stalePayment) => {
+            await PaymentIntentModel.updateStatus(
+              stalePayment.payment_reference,
+              NormalizedPaymentStatus.CANCELLED,
+              'cancelled_stale_no_transaction_id'
+            );
+            await PaymentIntentModel.releaseLock(stalePayment.payment_reference);
+            console.log(`[Payment] Cancelled stale pending payment ${stalePayment.payment_reference} for user ${userId} (no transaction ID after 5 minutes)`);
+          }));
         }
       }
 
