@@ -9,6 +9,128 @@ import pool from '../config/database';
 // Constants
 const GAS_FEE_PERCENT = 3; // Gas fee deducted from refunds (3%)
 
+/**
+ * Determine match outcome for a specific user
+ * Priority: result_type > winner_id > status
+ * 
+ * @param match - Match data from database
+ * @param userId - User ID to determine outcome for
+ * @returns Outcome type: 'win' | 'loss' | 'draw' | 'cancelled' | 'active' | 'pending' | 'unknown'
+ */
+function getMatchOutcome(match: any, userId: string): 'win' | 'loss' | 'draw' | 'cancelled' | 'active' | 'pending' | 'unknown' {
+  // Active/incomplete matches
+  if (match.status === 'in_progress' || match.status === 'countdown' || match.status === 'signal') {
+    return 'active';
+  }
+  
+  if (match.status === 'pending' || match.status === 'waiting' || match.status === 'ready' || match.status === 'matched') {
+    return 'pending';
+  }
+  
+  // Priority 1: result_type (most specific)
+  if (match.result_type === 'tie' || 
+      match.result_type === 'both_disqualified' || 
+      match.result_type === 'both_timeout_tie') {
+    return 'draw';
+  }
+  
+  // Priority 2: cancelled status
+  if (match.status === 'cancelled' || match.cancelled === true) {
+    return 'cancelled';
+  }
+  
+  // Priority 3: winner_id (for completed matches)
+  if (match.status === 'completed') {
+    if (!match.winner_id) {
+      // No winner but completed - treat as draw
+      return 'draw';
+    }
+    
+    return match.winner_id === userId ? 'win' : 'loss';
+  }
+  
+  return 'unknown';
+}
+
+/**
+ * Check if user can claim refund for this match
+ * Requires database check for completed refunds
+ * 
+ * @param match - Match data from database  
+ * @param userId - User ID to check refund eligibility for
+ * @returns true if user can claim refund, false otherwise
+ */
+async function canClaimRefund(match: any, userId: string): Promise<boolean> {
+  const outcome = getMatchOutcome(match, userId);
+  
+  // Only draw or cancelled matches are eligible
+  if (outcome !== 'draw' && outcome !== 'cancelled') {
+    return false;
+  }
+  
+  // Check if refund columns exist
+  if (!match.refund_status) {
+    return false; // No refund system available
+  }
+  
+  // Check if refund already completed
+  const result = await pool.query(
+    `SELECT refund_status FROM payment_intents 
+     WHERE match_id = $1 AND user_id = $2 AND refund_status = 'completed'
+     LIMIT 1`,
+    [match.match_id, userId]
+  );
+  
+  if (result.rows.length > 0) {
+    return false; // Already claimed
+  }
+  
+  // Check if eligible and not expired
+  if (match.refund_status !== 'eligible') {
+    return false;
+  }
+  
+  if (match.refund_deadline && new Date() > new Date(match.refund_deadline)) {
+    return false; // Expired
+  }
+  
+  return true;
+}
+
+/**
+ * Check if user can claim winnings for this match
+ * User must be the winner and no completed payout/claim exists
+ * 
+ * @param match - Match data from database
+ * @param userId - User ID to check claim eligibility for
+ * @returns true if user can claim winnings, false otherwise
+ */
+async function canClaimWinnings(match: any, userId: string): Promise<boolean> {
+  const outcome = getMatchOutcome(match, userId);
+  
+  // Only winners can claim
+  if (outcome !== 'win') {
+    return false;
+  }
+  
+  // Match must be completed
+  if (match.status !== 'completed') {
+    return false;
+  }
+  
+  // Check if already claimed
+  if (match.claim_status === 'claimed') {
+    return false;
+  }
+  
+  // Check claim deadline
+  if (match.claim_deadline && new Date() > new Date(match.claim_deadline)) {
+    return false; // Expired
+  }
+  
+  return true;
+}
+
 export class MatchController {
   /**
    * Get match history for a user
@@ -103,12 +225,13 @@ export class MatchController {
         `, [userId]);
       }
 
-      // Map matches to frontend format
-      const mappedMatches = matches.rows.map((m: any) => {
+      // Map matches to frontend format with server-authoritative data
+      const mappedMatches = await Promise.all(matches.rows.map(async (m: any) => {
         const isPlayer1 = m.player1_id === userId;
         const opponentWallet = isPlayer1 ? m.player2_wallet_addr : m.player1_wallet_addr;
         const opponentAvgReaction = isPlayer1 ? m.player2_avg_reaction : m.player1_avg_reaction;
-        const won = m.winner_id === userId;
+        
+        // SERVER AUTHORITY: Use reaction_ms from database (NOT client calculations)
         const yourReaction = isPlayer1 ? m.player1_reaction_ms : m.player2_reaction_ms;
         const opponentReaction = isPlayer1 ? m.player2_reaction_ms : m.player1_reaction_ms;
 
@@ -120,58 +243,40 @@ export class MatchController {
           claimTimeRemaining = Math.max(0, Math.floor((deadline - now) / 1000));
         }
 
-        // Determine match outcome for UI
-        // Priority: result_type (specific reason) > status/cancelled (general state)
-        let outcome: 'win' | 'loss' | 'draw' | 'cancelled' = 'loss';
-        if (m.result_type === 'tie' || m.result_type === 'both_disqualified' || m.result_type === 'both_timeout_tie') {
-          outcome = 'draw';
-        } else if (m.status === 'cancelled' || m.cancelled) {
-          outcome = 'cancelled';
-        } else if (!m.winner_id) {
-          // No winner and no specific result_type - treat as cancelled/draw
-          outcome = 'draw';
-        } else if (won) {
-          outcome = 'win';
-        }
-
-        // Determine if refund is available (draw/cancelled matches only)
-        const isRefundEligible = (outcome === 'draw' || outcome === 'cancelled') && 
-                                  m.refund_status === 'eligible' &&
-                                  m.refund_deadline && 
-                                  new Date() < new Date(m.refund_deadline);
+        // SERVER AUTHORITY: Use helper functions to determine eligibility
+        const outcome = getMatchOutcome(m, userId);
+        const canRefund = await canClaimRefund(m, userId);
+        const canClaim = await canClaimWinnings(m, userId);
 
         return {
           matchId: m.match_id,
           stake: m.stake,
-          yourReaction,
+          // SERVER AUTHORITY: reaction_ms from tap_events table (trusted source)
+          reaction_ms: yourReaction, // Field name per spec
+          yourReaction, // Keep for backward compatibility
           opponentReaction,
-          won,
-          outcome, // Add explicit outcome field
-          resultType: m.result_type, // Include result_type for detailed info
+          won: outcome === 'win',
+          outcome, // SERVER AUTHORITY: computed server-side
+          resultType: m.result_type,
           opponent: opponentWallet ? {
             wallet: opponentWallet,
             avgReaction: opponentAvgReaction || 0
           } : null,
           completedAt: m.completed_at,
-          // Claim fields for frontend (only for wins)
+          // Claim fields for frontend (only for wins) - SERVER AUTHORITY
           claimDeadline: m.claim_deadline || undefined,
           claimStatus: m.claim_status || undefined,
           claimTimeRemaining,
-          claimable: won && 
-                     outcome === 'win' &&
-                     m.claim_status === 'unclaimed' && 
-                     m.claim_deadline &&
-                     new Date() < new Date(m.claim_deadline),
+          // SERVER AUTHORITY: canClaimWinnings from helper function
+          canClaimWinnings: canClaim,
+          claimable: canClaim, // Keep for backward compatibility
           // Keep legacy fields for backward compatibility
           status: m.status,
-          isWinner: won,
-          canClaim: won && 
-                    outcome === 'win' &&
-                    m.claim_status === 'unclaimed' && 
-                    m.claim_deadline &&
-                    new Date() < new Date(m.claim_deadline),
-          // Refund fields (only for draw/cancelled)
-          canRefund: isRefundEligible,
+          isWinner: outcome === 'win',
+          canClaim: canClaim,
+          // Refund fields (only for draw/cancelled) - SERVER AUTHORITY
+          canClaimRefund: canRefund,
+          canRefund: canRefund, // Keep for backward compatibility
           refundExpired: m.refund_status === 'eligible' && 
                          m.refund_deadline && 
                          new Date() > new Date(m.refund_deadline),
@@ -183,7 +288,7 @@ export class MatchController {
           cancelled: m.cancelled,
           cancellationReason: m.cancellation_reason
         };
-      });
+      }));
 
       res.json({
         success: true, // Add success flag for frontend
