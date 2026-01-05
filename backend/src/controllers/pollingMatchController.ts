@@ -167,8 +167,13 @@ export class PollingMatchController {
         const randomDelay = generateRandomDelay(minRandomDelay, maxRandomDelay);
         
         const now = Date.now();
-        // greenLightTime = when lights turn GREEN (the trigger moment)
-        // Total delay = lights turning on + mandatory wait + random delay
+        // TIMING FORMULA (implements 6.5-9.5 second total timing):
+        // greenLightTime = now + totalLightsTime + minimumWaitMs + randomDelay
+        // Where:
+        //   - totalLightsTime: ~2.5s (5 lights × ~500ms each)
+        //   - minimumWaitMs: 2.0s (mandatory wait after all lights red)
+        //   - randomDelay: 2-5s (random delay after minimum wait)
+        // Total range: ~6.5s to ~9.5s
         const greenLightTime = now + totalLightsTime + minimumWaitMs + randomDelay;
 
         await client.query(`

@@ -64,24 +64,26 @@ describe('Reaction Light Timing Validation', () => {
   });
 
   describe('Combined timing logic', () => {
-    it('should enforce total delay of at least 4 seconds (lights + minimum random)', () => {
+    it('should enforce total delay of at least 6 seconds (lights + minimum wait + minimum random)', () => {
       const sequence = generateF1LightSequence();
       const totalLightsTime = sequence.reduce((sum, interval) => sum + interval, 0);
+      const minimumWaitMs = 2000; // MINIMUM_WAIT_AFTER_RED_MS constant
       const randomDelay = generateRandomDelay(2000, 5000);
-      const totalDelay = totalLightsTime + randomDelay;
+      const totalDelay = totalLightsTime + minimumWaitMs + randomDelay;
       
-      // Minimum: ~2000ms (lights min) + 2000ms (random min) = 4000ms
-      expect(totalDelay).toBeGreaterThanOrEqual(4000);
+      // Minimum: ~2000ms (lights min) + 2000ms (mandatory wait) + 2000ms (random min) = 6000ms
+      expect(totalDelay).toBeGreaterThanOrEqual(6000);
     });
 
-    it('should have total delay not exceeding 8 seconds (lights + maximum random)', () => {
+    it('should have total delay not exceeding 10 seconds (lights + minimum wait + maximum random)', () => {
       const sequence = generateF1LightSequence();
       const totalLightsTime = sequence.reduce((sum, interval) => sum + interval, 0);
+      const minimumWaitMs = 2000; // MINIMUM_WAIT_AFTER_RED_MS constant
       const randomDelay = generateRandomDelay(2000, 5000);
-      const totalDelay = totalLightsTime + randomDelay;
+      const totalDelay = totalLightsTime + minimumWaitMs + randomDelay;
       
-      // Maximum: ~3000ms (lights max) + 5000ms (random max) = 8000ms
-      expect(totalDelay).toBeLessThanOrEqual(8000);
+      // Maximum: ~3000ms (lights max) + 2000ms (mandatory wait) + 5000ms (random max) = 10000ms
+      expect(totalDelay).toBeLessThanOrEqual(10000);
     });
   });
 });
