@@ -1,5 +1,15 @@
 import pool from '../config/database';
-import { User } from './types';
+
+export interface User {
+  user_id: string;
+  wallet_address: string;
+  region?: string;
+  wins: number;
+  losses: number;
+  avg_reaction_time?: number;
+  created_at: Date;
+  updated_at: Date;
+}
 
 export class UserModel {
   static async create(walletAddress: string, region?: string): Promise<User> {
@@ -28,43 +38,5 @@ export class UserModel {
       [userId]
     );
     return result.rows[0] || null;
-  }
-
-  static async updateStats(
-    userId: string,
-    win: boolean,
-    reactionTime: number
-  ): Promise<void> {
-    await pool.query(
-      `UPDATE users 
-       SET wins = wins + $1, 
-           losses = losses + $2,
-           avg_reaction_time = CASE 
-             WHEN avg_reaction_time IS NULL THEN $3
-             ELSE (avg_reaction_time * (wins + losses) + $3) / (wins + losses + 1)
-           END,
-           updated_at = CURRENT_TIMESTAMP
-       WHERE user_id = $4`,
-      [win ? 1 : 0, win ? 0 : 1, reactionTime, userId]
-    );
-  }
-
-  static async getLeaderboard(limit: number = 10): Promise<User[]> {
-    const result = await pool.query(
-      `SELECT * FROM users 
-       WHERE wins > 0 OR losses > 0
-       ORDER BY 
-         wins DESC,                    -- Primary: Most wins
-         (CASE 
-           WHEN (wins + losses) > 0 
-           THEN wins::decimal / (wins + losses) 
-           ELSE 0 
-         END) DESC,                    -- Secondary: Higher win rate
-         (wins + losses) ASC,          -- Tertiary: Fewer matches (more efficient)
-         avg_reaction_time ASC         -- Quaternary: Faster reaction time
-       LIMIT $1`,
-      [limit]
-    );
-    return result.rows;
   }
 }
