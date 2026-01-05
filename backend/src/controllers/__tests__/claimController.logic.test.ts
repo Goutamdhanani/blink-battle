@@ -1,4 +1,5 @@
 import { describe, it, expect, jest } from '@jest/globals';
+import { ethers } from 'ethers';
 
 /**
  * Basic validation tests for treasury-based claim logic
@@ -118,7 +119,8 @@ describe('Treasury Architecture - Claim Logic', () => {
     it('should format wei to WLD correctly', () => {
       const amountWei = BigInt('194000000000000000'); // 0.194 WLD
       const formatWLD = (wei: bigint): string => {
-        return (Number(wei) / 1e18).toFixed(18).replace(/\.?0+$/, '');
+        // Use ethers.formatUnits for proper formatting (avoids floating-point issues)
+        return ethers.formatUnits(wei, 18);
       };
       
       const formatted = formatWLD(amountWei);
