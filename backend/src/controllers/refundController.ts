@@ -335,7 +335,7 @@ export class RefundController {
           // Block refund if match has a winner (completed win/loss) or is in progress
           if (!isDrawOrCancelled) {
             await client.query('ROLLBACK');
-            console.error(`[Refund] SECURITY BLOCK: User ${userId} attempted refund on completed/in-progress match ${paymentData.match_id}`);
+            console.error(`[Refund] SECURITY BLOCK: Refund attempt on completed/in-progress match`);
             res.status(400).json({ 
               error: 'Cannot claim refund for this match',
               message: 'Refunds are only available for cancelled or draw matches. Use the claim winnings button if you won.',

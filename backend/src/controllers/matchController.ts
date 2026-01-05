@@ -10,6 +10,14 @@ import pool from '../config/database';
 const GAS_FEE_PERCENT = 3; // Gas fee deducted from refunds (3%)
 
 /**
+ * Get reaction time with fallback
+ * Prefers tap_events data over matches table data
+ */
+function getReactionTime(tapReactionMs: number | null, fallbackReactionMs: number | null): number | null {
+  return tapReactionMs !== null ? tapReactionMs : fallbackReactionMs;
+}
+
+/**
  * Determine match outcome for a specific user
  * Priority: result_type > winner_id > status
  * 
@@ -260,12 +268,12 @@ export class MatchController {
         // SERVER AUTHORITY: Use reaction_ms from tap_events table (trusted source)
         // Prefer tap_events data over matches.player*_reaction_ms
         const yourReaction = isPlayer1 
-          ? (m.player1_tap_reaction_ms !== null ? m.player1_tap_reaction_ms : m.player1_reaction_ms)
-          : (m.player2_tap_reaction_ms !== null ? m.player2_tap_reaction_ms : m.player2_reaction_ms);
+          ? getReactionTime(m.player1_tap_reaction_ms, m.player1_reaction_ms)
+          : getReactionTime(m.player2_tap_reaction_ms, m.player2_reaction_ms);
         
         const opponentReaction = isPlayer1 
-          ? (m.player2_tap_reaction_ms !== null ? m.player2_tap_reaction_ms : m.player2_reaction_ms)
-          : (m.player1_tap_reaction_ms !== null ? m.player1_tap_reaction_ms : m.player1_reaction_ms);
+          ? getReactionTime(m.player2_tap_reaction_ms, m.player2_reaction_ms)
+          : getReactionTime(m.player1_tap_reaction_ms, m.player1_reaction_ms);
         
         // Get tap validity flags
         const yourTapValid = isPlayer1 ? m.player1_tap_is_valid : m.player2_tap_is_valid;

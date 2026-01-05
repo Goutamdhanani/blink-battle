@@ -261,7 +261,7 @@ const MatchHistory: React.FC = () => {
                   {/* SERVER AUTHORITY: Show claim button only when canClaimWinnings === true */}
                   {outcome === 'win' && match.stake > 0 && (
                     <div className="claim-section" style={{ marginTop: '1rem' }}>
-                      {(match.claimed === true || match.claimStatus === 'claimed') && (
+                      {(match.claimed || match.claimStatus === 'claimed') && (
                         <div className="claim-status" style={{ color: '#00ff88', fontSize: '0.9rem' }}>
                           ✅ Winnings Claimed
                         </div>

@@ -218,7 +218,7 @@ export class ClaimController {
         true  // Mark as claimed immediately (optimistic locking)
       ]);
 
-      // Mark match as claimed and update total_claimed_amount
+      // Mark match as claimed and update total_claimed_amount (wei)
       await client.query(
         'UPDATE matches SET claim_status = $1, total_claimed_amount = total_claimed_amount + $2 WHERE match_id = $3',
         ['claimed', netPayout, matchId]
