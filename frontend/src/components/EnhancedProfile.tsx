@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { getPlayerProfile } from '../lib/indexedDB';
-import { PlayerProfile } from '../games/types';
+import { Achievement, GameStats } from '../games/types';
+import { useBrainTrainingData } from '../hooks/useBrainTrainingData';
 import PersonalizedBrainCard from './PersonalizedBrainCard';
 import './EnhancedProfile.css';
 
@@ -9,25 +9,19 @@ interface EnhancedProfileProps {
 }
 
 const EnhancedProfile: React.FC<EnhancedProfileProps> = ({ onBack }) => {
-  const [profile, setProfile] = useState<PlayerProfile | null>(null);
-  const [loading, setLoading] = useState(true);
   const [selectedTheme, setSelectedTheme] = useState('Rookie');
+  
+  // Get token from localStorage if user is authenticated
+  const token = localStorage.getItem('token');
+  
+  // Use hook to fetch data from backend or IndexedDB
+  const { profile, loading } = useBrainTrainingData(token);
 
   useEffect(() => {
-    loadProfile();
-  }, []);
-
-  const loadProfile = async () => {
-    try {
-      const data = await getPlayerProfile();
-      setProfile(data);
-      setSelectedTheme(data.currentTheme);
-    } catch (error) {
-      console.error('Failed to load profile:', error);
-    } finally {
-      setLoading(false);
+    if (profile) {
+      setSelectedTheme(profile.currentTheme);
     }
-  };
+  }, [profile]);
 
   if (loading) {
     return (
@@ -151,10 +145,10 @@ const EnhancedProfile: React.FC<EnhancedProfileProps> = ({ onBack }) => {
         {/* Achievements Section */}
         <div className="achievements-section">
           <h3 className="section-title">
-            🏆 Achievements ({profile.achievements.filter(a => a.isUnlocked).length}/{profile.achievements.length})
+            🏆 Achievements ({profile.achievements.filter((a: Achievement) => a.isUnlocked).length}/{profile.achievements.length})
           </h3>
           <div className="achievements-grid">
-            {profile.achievements.map((achievement) => (
+            {profile.achievements.map((achievement: Achievement) => (
               <div 
                 key={achievement.id} 
                 className={`achievement-card ${achievement.isUnlocked ? 'unlocked' : 'locked'}`}
@@ -178,7 +172,7 @@ const EnhancedProfile: React.FC<EnhancedProfileProps> = ({ onBack }) => {
         <div className="theme-section">
           <h3 className="section-title">🎨 Unlocked Themes</h3>
           <div className="themes-grid">
-            {profile.unlockedThemes.map((theme) => (
+            {profile.unlockedThemes.map((theme: string) => (
               <div
                 key={theme}
                 className={`theme-card ${selectedTheme === theme ? 'selected' : ''}`}
@@ -209,26 +203,29 @@ const EnhancedProfile: React.FC<EnhancedProfileProps> = ({ onBack }) => {
           <h3 className="section-title">📈 Game Statistics</h3>
           <div className="game-stats-list">
             {Object.entries(profile.gameStats)
-              .filter(([_, stats]) => stats.gamesPlayed > 0)
-              .map(([gameType, stats]) => (
-                <div key={gameType} className="game-stat-row">
-                  <div className="game-stat-name">{gameType.replace(/_/g, ' ')}</div>
-                  <div className="game-stat-values">
-                    <span className="game-stat-item">
-                      Games: {stats.gamesPlayed}
-                    </span>
-                    <span className="game-stat-item">
-                      Best: {stats.bestScore}
-                    </span>
-                    <span className="game-stat-item">
-                      Avg: {stats.averageScore}
-                    </span>
-                    <span className="game-stat-item">
-                      Level: {stats.highestLevel}
-                    </span>
+              .filter(([_, stats]) => (stats as GameStats).gamesPlayed > 0)
+              .map(([gameType, stats]) => {
+                const typedStats = stats as GameStats;
+                return (
+                  <div key={gameType} className="game-stat-row">
+                    <div className="game-stat-name">{gameType.replace(/_/g, ' ')}</div>
+                    <div className="game-stat-values">
+                      <span className="game-stat-item">
+                        Games: {typedStats.gamesPlayed}
+                      </span>
+                      <span className="game-stat-item">
+                        Best: {typedStats.bestScore}
+                      </span>
+                      <span className="game-stat-item">
+                        Avg: {typedStats.averageScore}
+                      </span>
+                      <span className="game-stat-item">
+                        Level: {typedStats.highestLevel}
+                      </span>
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
           </div>
         </div>
 

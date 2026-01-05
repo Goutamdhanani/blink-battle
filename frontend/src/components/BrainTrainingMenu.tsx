@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { getPlayerProfile } from '../lib/indexedDB';
-import { PlayerProfile, GameType as GameTypeEnum } from '../games/types';
+import { GameType as GameTypeEnum, Achievement } from '../games/types';
+import { useBrainTrainingData } from '../hooks/useBrainTrainingData';
 import MemoryGame from '../games/MemoryGame';
 import AttentionGame from '../games/AttentionGame';
 import ReflexGame from '../games/ReflexGame';
@@ -24,28 +24,27 @@ type GameType = GameTypeEnum | 'stats' | 'profile' | 'games' | null;
 
 const BrainTrainingMenu: React.FC = () => {
   const [currentGame, setCurrentGame] = useState<GameType>(null);
-  const [profile, setProfile] = useState<PlayerProfile | null>(null);
   const [showWelcome, setShowWelcome] = useState(true);
+  
+  // Get token from localStorage if user is authenticated (from PvP auth)
+  const token = localStorage.getItem('token');
+  
+  // Use hook to fetch data from backend or IndexedDB
+  const { profile, refresh } = useBrainTrainingData(token);
 
   useEffect(() => {
-    loadProfile();
     const timer = setTimeout(() => setShowWelcome(false), 3000);
     return () => clearTimeout(timer);
   }, []);
 
-  const loadProfile = async () => {
-    const data = await getPlayerProfile();
-    setProfile(data);
-  };
-
   const handleGameComplete = (score: GameScore) => {
     console.log('Game completed:', score);
-    loadProfile(); // Refresh stats
+    refresh(); // Refresh stats
   };
 
   const handleGameExit = () => {
     setCurrentGame(null);
-    loadProfile(); // Refresh stats when exiting
+    refresh(); // Refresh stats when exiting
   };
 
   const handleGameSelect = (game: GameTypeEnum) => {
@@ -162,7 +161,7 @@ const BrainTrainingMenu: React.FC = () => {
                 </div>
                 <div className="quick-stat-item">
                   <div className="quick-stat-icon">🏆</div>
-                  <div className="quick-stat-value">{profile.achievements?.filter(a => a.isUnlocked).length || 0}</div>
+                  <div className="quick-stat-value">{profile.achievements?.filter((a: Achievement) => a.isUnlocked).length || 0}</div>
                   <div className="quick-stat-label">Badges</div>
                 </div>
                 <div className="quick-stat-item">
