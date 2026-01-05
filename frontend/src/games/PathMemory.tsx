@@ -24,6 +24,7 @@ const PathMemory: React.FC<PathMemoryProps> = ({ onGameComplete, onExit }) => {
   const TOTAL_ROUNDS = 8;
   const gridSize = 4; // 4x4 grid
   const pathLength = Math.min(3 + level, 8);
+  const PATH_STEP_DELAY = 800;
 
   useEffect(() => {
     if (gamePhase === 'memorize' && showingPath) {
@@ -34,7 +35,7 @@ const PathMemory: React.FC<PathMemoryProps> = ({ onGameComplete, onExit }) => {
           setShowingPath(false);
           setGamePhase('recall');
         }
-      }, 800);
+      }, PATH_STEP_DELAY);
       return () => clearTimeout(timer);
     }
   }, [currentPathIndex, showingPath, path, gamePhase]);

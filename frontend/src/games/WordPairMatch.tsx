@@ -42,6 +42,9 @@ const WordPairMatch: React.FC<WordPairMatchProps> = ({ onGameComplete, onExit })
   
   const TOTAL_ROUNDS = 10;
   const pairsPerRound = Math.min(3 + Math.floor(level / 2), 6);
+  const PAIR_DISPLAY_TIME = 1200;
+  const PAIR_TRANSITION_DELAY = 1500;
+  const ANSWER_FEEDBACK_DELAY = 1200;
 
   useEffect(() => {
     if (gamePhase === 'memorize' && round < TOTAL_ROUNDS) {
@@ -64,7 +67,7 @@ const WordPairMatch: React.FC<WordPairMatchProps> = ({ onGameComplete, onExit })
     setTimeout(() => {
       setShowPairs(false);
       presentQuestion(selectedPairs);
-    }, pairsPerRound * 1200 + 1500);
+    }, pairsPerRound * PAIR_DISPLAY_TIME + PAIR_TRANSITION_DELAY);
   };
 
   const presentQuestion = (pairs: [string, string][]) => {
@@ -131,7 +134,7 @@ const WordPairMatch: React.FC<WordPairMatchProps> = ({ onGameComplete, onExit })
     setTimeout(() => {
       setRound(prev => prev + 1);
       setGamePhase('memorize');
-    }, 1200);
+    }, ANSWER_FEEDBACK_DELAY);
   };
 
   if (gamePhase === 'instructions') {

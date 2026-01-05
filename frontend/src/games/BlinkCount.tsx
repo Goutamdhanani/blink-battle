@@ -57,18 +57,24 @@ const BlinkCount: React.FC<BlinkCountProps> = ({ onGameComplete, onExit }) => {
     setGamePhase('showing');
 
     let count = 0;
+    let wasBlinking = false;
     intervalRef.current = setInterval(() => {
-      setIsBlinking(prev => !prev);
-      if (!isBlinking) {
-        count++;
-        if (count >= randomBlinks) {
-          if (intervalRef.current) clearInterval(intervalRef.current);
-          setTimeout(() => {
-            setGamePhase('answering');
-          }, 500);
+      setIsBlinking(prev => {
+        const newBlinking = !prev;
+        // Count when transitioning from hidden to visible
+        if (newBlinking && !wasBlinking) {
+          count++;
+          if (count >= randomBlinks) {
+            if (intervalRef.current) clearInterval(intervalRef.current);
+            setTimeout(() => {
+              setGamePhase('answering');
+            }, 500);
+          }
         }
-      }
-    }, 400 - level * 20);
+        wasBlinking = newBlinking;
+        return newBlinking;
+      });
+    }, Math.max(200, 400 - level * 20));
   };
 
   const startGame = () => {
