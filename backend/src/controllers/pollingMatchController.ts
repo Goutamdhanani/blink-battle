@@ -253,42 +253,42 @@ export class PollingMatchController {
       const opponentId = isPlayer1 ? matchState.player2_id : matchState.player1_id;
 
       // Parse green_light_time - PostgreSQL BIGINT can be returned as string
-      // NOTE: This is actually "lights out time" for F1-style mechanics
-      const lightsOutTime = parseGreenLightTime(matchState.green_light_time);
+      // This is when lights turn GREEN (the GO signal)
+      const greenLightTime = parseGreenLightTime(matchState.green_light_time);
 
       // Determine state for client
       let state = 'matched';
-      let lightsOutActive = false;
+      let greenLightActive = false;
       let countdown = 0;
 
       if (matchState.status === MatchStatus.COMPLETED || matchState.status === MatchStatus.CANCELLED) {
         state = 'resolved';
-      } else if (lightsOutTime && 
-                 Number.isFinite(lightsOutTime) && 
-                 lightsOutTime > 0) {
-        const timeUntilLightsOut = lightsOutTime - now;
+      } else if (greenLightTime && 
+                 Number.isFinite(greenLightTime) && 
+                 greenLightTime > 0) {
+        const timeUntilGreenLight = greenLightTime - now;
         
-        // F1-STYLE: lightsOutTime is when all lights turn OFF (the trigger moment)
-        // Client animates 5 lights turning ON sequentially, then all turn OFF at lightsOutTime
+        // REACTION LIGHTS: greenLightTime is when lights turn GREEN (the GO signal)
+        // Client shows red lights progressively, then all turn green at greenLightTime
         
-        if (timeUntilLightsOut <= 0) {
-          // Lights are OUT! (trigger moment)
+        if (timeUntilGreenLight <= 0) {
+          // Lights are GREEN! (GO signal)
           state = 'go';
-          lightsOutActive = true;
+          greenLightActive = true;
           
-          // Transition status to IN_PROGRESS when lights out signal is active (only once)
+          // Transition status to IN_PROGRESS when green light signal is active (only once)
           if (matchState.status === MatchStatus.COUNTDOWN) {
             await MatchModel.updateStatus(matchId, MatchStatus.IN_PROGRESS);
-            console.log(`[Polling Match] 🏎️ Lights OUT! Match ${matchId} transitioning to IN_PROGRESS. Lights out time: ${new Date(lightsOutTime).toISOString()}`);
+            console.log(`[Polling Match] 🟢 GREEN LIGHT! Match ${matchId} transitioning to IN_PROGRESS. Green light time: ${new Date(greenLightTime).toISOString()}`);
           }
         } else {
-          // Lights are still turning on or waiting for lights out
+          // Lights are still turning red or waiting for green light
           // Client handles light sequence animation locally
           state = 'lights_on';
           countdown = 0;
         }
       } else if (matchState.player1_ready && matchState.player2_ready) {
-        // Both ready but lights out time not set yet (edge case)
+        // Both ready but green light time not set yet (edge case)
         state = 'ready_wait';
       } else {
         state = 'ready_wait';
@@ -299,17 +299,17 @@ export class PollingMatchController {
       const playerTap = taps.find(t => t.user_id === userId);
       const opponentTap = taps.find(t => t.user_id === opponentId);
 
-      // Use the parsed lightsOutTime for response (send as both lightsOutTime and greenLightTime for compatibility)
-      let lightsOutTimeMs = lightsOutTime;
-      let lightsOutTimeISO: string | null = null;
+      // Use the parsed greenLightTime for response
+      let greenLightTimeMs = greenLightTime;
+      let greenLightTimeISO: string | null = null;
       
-      if (lightsOutTimeMs !== null && Number.isFinite(lightsOutTimeMs)) {
+      if (greenLightTimeMs !== null && Number.isFinite(greenLightTimeMs)) {
         try {
-          lightsOutTimeISO = new Date(lightsOutTimeMs).toISOString();
+          greenLightTimeISO = new Date(greenLightTimeMs).toISOString();
         } catch (err) {
-          console.error(`[Polling Match] Invalid lights_out_time for match ${matchId}: ${lightsOutTimeMs}`, err);
-          lightsOutTimeMs = null;
-          lightsOutTimeISO = null;
+          console.error(`[Polling Match] Invalid green_light_time for match ${matchId}: ${greenLightTimeMs}`, err);
+          greenLightTimeMs = null;
+          greenLightTimeISO = null;
         }
       }
 
@@ -338,13 +338,10 @@ export class PollingMatchController {
         stake: matchState.stake,
         player1Ready: matchState.player1_ready,
         player2Ready: matchState.player2_ready,
-        // F1-STYLE: Send as both lightsOutTime and greenLightTime for compatibility
-        lightsOutTime: lightsOutTimeMs,
-        lightsOutTimeISO,
-        greenLightTime: lightsOutTimeMs, // Backward compatibility
-        greenLightTimeISO: lightsOutTimeISO,
-        lightsOutActive, // Replaces greenLightActive
-        greenLightActive: lightsOutActive, // Backward compatibility
+        // Send greenLightTime (when lights turn green)
+        greenLightTime: greenLightTimeMs,
+        greenLightTimeISO,
+        greenLightActive,
         countdown,
         playerTapped: !!playerTap,
         opponentTapped: !!opponentTap,
