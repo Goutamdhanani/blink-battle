@@ -505,19 +505,15 @@ export class PollingMatchController {
 
       console.log(`[Polling Match] Tap recorded - User: ${userId}, Match: ${matchId}, Reaction: ${tap.reaction_ms}ms, Valid: ${tap.is_valid}, Disqualified: ${tap.disqualified}`);
 
-      // Check for timing discrepancy between client and server (anti-cheat)
+      // Check for timing discrepancy between client and server (anti-cheat AUDIT-ONLY)
       // Only check if we have a valid client timestamp
+      // NOTE: This is audit-only and does NOT reject taps - server time is authoritative
       if (validatedClientTimestamp && Number.isFinite(validatedClientTimestamp)) {
-        try {
-          const clientReaction = validatedClientTimestamp - greenLightTime;
-          AntiCheatService.checkTimingDiscrepancy(clientReaction, tap.reaction_ms, userId);
-        } catch (error: any) {
-          console.error(`[AntiCheat] Rejecting tap due to timing discrepancy: ${error.message}`);
-          res.status(400).json({ 
-            error: 'Timing validation failed',
-            details: error.message
-          });
-          return;
+        const clientReaction = validatedClientTimestamp - greenLightTime;
+        const suspicious = AntiCheatService.checkTimingDiscrepancy(clientReaction, tap.reaction_ms, userId);
+        if (suspicious) {
+          // Log for audit but continue processing - don't block legitimate taps
+          console.warn(`[AntiCheat] Suspicious timing detected for user ${userId} but allowing tap (server time is authoritative)`);
         }
       }
 

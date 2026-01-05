@@ -53,6 +53,7 @@ const PendingRefunds: React.FC<PendingRefundsProps> = ({ refunds, onRefundClaime
       if (response.data.success) {
         minikit.sendHaptic('success');
         console.log('[PendingRefunds] Refund claimed successfully:', response.data);
+        // Refresh the parent to update the refund list
         onRefundClaimed();
       } else {
         setErrors(prev => ({ 
@@ -63,12 +64,20 @@ const PendingRefunds: React.FC<PendingRefundsProps> = ({ refunds, onRefundClaime
       }
     } catch (error: any) {
       console.error('[PendingRefunds] Error claiming refund:', error);
-      const errorMsg = error.response?.data?.error || 'Network error - please try again';
-      setErrors(prev => ({ 
-        ...prev, 
-        [refund.paymentReference]: errorMsg 
-      }));
-      minikit.sendHaptic('error');
+      // Check if already claimed
+      const errorData = error.response?.data;
+      if (errorData?.alreadyClaimed) {
+        // Hide button and refresh list
+        console.log('[PendingRefunds] Refund already claimed, refreshing list');
+        onRefundClaimed();
+      } else {
+        const errorMsg = errorData?.error || 'Network error - please try again';
+        setErrors(prev => ({ 
+          ...prev, 
+          [refund.paymentReference]: errorMsg 
+        }));
+        minikit.sendHaptic('error');
+      }
     } finally {
       setClaimingRef(null);
     }
