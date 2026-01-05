@@ -3,6 +3,7 @@ import pool from '../config/database';
 import { PaymentIntentModel, NormalizedPaymentStatus } from '../models/PaymentIntent';
 import { normalizeMiniKitStatus, extractTransactionHash, extractRawStatus } from './statusNormalization';
 import { isTerminalStatus } from './paymentUtils';
+import { CircuitBreakerFactory, CircuitBreaker, CircuitBreakerError } from './circuitBreaker';
 
 /**
  * Payment Worker Service
@@ -12,12 +13,14 @@ import { isTerminalStatus } from './paymentUtils';
  * - Exponential backoff retry
  * - Idempotent processing
  * - Worker crash safety
+ * - Circuit breaker for Developer Portal API (Issue #15)
  * 
  * CRITICAL GUARANTEES:
  * 1. One worker processes one payment at a time
  * 2. Worker crash → payment stays retriable (no open transaction during RPC)
  * 3. No duplicate payments (idempotent via payment_reference)
  * 4. No silent failures (all errors logged and tracked)
+ * 5. Circuit breaker prevents cascading failures when API is down
  */
 
 export class PaymentWorker {
@@ -26,9 +29,12 @@ export class PaymentWorker {
   private intervalId: NodeJS.Timeout | null = null;
   private pollCount: number = 0;
   private readonly LOG_EVERY_N_POLLS = 6; // Log every 6th poll (every minute instead of every 10s)
+  private circuitBreaker: CircuitBreaker;
 
   constructor(workerId?: string) {
     this.workerId = workerId || `worker-${process.pid}-${Date.now()}`;
+    // Issue #15: Circuit breaker for Developer Portal API resilience
+    this.circuitBreaker = CircuitBreakerFactory.forDeveloperPortal();
   }
 
   /**
@@ -61,6 +67,14 @@ export class PaymentWorker {
       this.intervalId = null;
     }
     console.log(`[PaymentWorker:${this.workerId}] Stopped`);
+  }
+
+  /**
+   * Get circuit breaker statistics for monitoring
+   * Issue #15: Expose circuit breaker state for observability
+   */
+  getCircuitBreakerStats() {
+    return this.circuitBreaker.getStats();
   }
 
   /**
@@ -172,15 +186,27 @@ export class PaymentWorker {
 
       let transaction;
       try {
-        const response = await axios.get(apiUrl, {
-          headers: { Authorization: `Bearer ${DEV_PORTAL_API_KEY}` },
-          timeout: 10000, // 10 second timeout
+        // Issue #15: Use circuit breaker to protect against cascading failures
+        transaction = await this.circuitBreaker.execute(async () => {
+          const response = await axios.get(apiUrl, {
+            headers: { Authorization: `Bearer ${DEV_PORTAL_API_KEY}` },
+            timeout: 10000, // 10 second timeout
+          });
+          return response.data;
         });
-        transaction = response.data;
       } catch (apiError: any) {
         // Handle API errors
         const errorMsg = apiError.message || 'Unknown API error';
         const statusCode = apiError.response?.status;
+
+        // Check if error is from circuit breaker (type-safe detection)
+        if (apiError instanceof CircuitBreakerError) {
+          console.warn(`[PaymentWorker:${this.workerId}] Circuit breaker OPEN for Developer Portal API - will retry later`);
+          // Don't increment retry count for circuit breaker rejections
+          // Just release lock and let it retry on next worker cycle
+          await PaymentIntentModel.releaseLock(intent.payment_reference);
+          return;
+        }
 
         console.error(`[PaymentWorker:${this.workerId}] API error for ${intent.payment_reference}:`, {
           status: statusCode,
@@ -305,4 +331,26 @@ export function stopPaymentWorker(): void {
   if (workerInstance) {
     workerInstance.stop();
   }
+}
+
+
+/**
+ * Get circuit breaker statistics (for monitoring endpoints)
+ * Issue #15: Expose circuit breaker stats for health checks
+ */
+export function getCircuitBreakerStats() {
+  if (!workerInstance) {
+    // Return default stats if worker not initialized yet
+    return {
+      state: 'CLOSED' as const,
+      failures: 0,
+      successes: 0,
+      lastFailureTime: undefined,
+      lastStateChange: Date.now(),
+      totalAttempts: 0,
+      totalFailures: 0,
+      totalSuccesses: 0
+    };
+  }
+  return workerInstance.getCircuitBreakerStats();
 }
