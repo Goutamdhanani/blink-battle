@@ -20,8 +20,8 @@ export class UserStatsController {
         [userId]
       );
 
-      const userTotalScore = parseInt(userScoreResult.rows[0].total_score);
-      const userAvgAccuracy = parseInt(userScoreResult.rows[0].avg_accuracy);
+      const userTotalScore = parseInt(userScoreResult.rows[0]?.total_score || '0', 10);
+      const userAvgAccuracy = parseInt(userScoreResult.rows[0]?.avg_accuracy || '0', 10);
 
       // Calculate percentile based on total score
       const percentileResult = await pool.query(
@@ -40,8 +40,8 @@ export class UserStatsController {
         [userTotalScore]
       );
 
-      const usersBelow = parseInt(percentileResult.rows[0].users_below);
-      const totalUsers = parseInt(percentileResult.rows[0].total_users);
+      const usersBelow = parseInt(percentileResult.rows[0]?.users_below || '0', 10);
+      const totalUsers = parseInt(percentileResult.rows[0]?.total_users || '0', 10);
       
       const percentile = totalUsers > 0 
         ? Math.round((usersBelow / totalUsers) * 100)
@@ -302,7 +302,8 @@ export class UserStatsController {
         [userId]
       );
 
-      const userCognitiveIndex = Math.min(100, parseInt(userResult.rows[0].avg_accuracy));
+      const avgAccuracy = parseInt(userResult.rows[0]?.avg_accuracy || '0', 10);
+      const userCognitiveIndex = Math.min(100, Math.max(0, avgAccuracy));
 
       // Get global percentiles
       const globalResult = await pool.query(

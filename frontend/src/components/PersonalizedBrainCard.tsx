@@ -41,7 +41,6 @@ const PersonalizedBrainCard: React.FC<PersonalizedBrainCardProps> = ({ profile }
     }
   };
 
-const PersonalizedBrainCard: React.FC<PersonalizedBrainCardProps> = ({ profile }) => {
   // Calculate reaction labels for each game type
   const getReactionLabel = (gameType: GameType): { label: string; score: number; color: string } => {
     const stats = profile.gameStats[gameType];

@@ -235,7 +235,7 @@ const BrainStats: React.FC<BrainStatsProps> = ({ onBack }) => {
                 <>
                   <polyline
                     points={trendData.map((point, index) => {
-                      const x = 20 + (index * (260 / (trendData.length - 1)));
+                      const x = 20 + (index * (260 / Math.max(1, trendData.length - 1)));
                       // Map accuracy (0-100) to y position (120-30)
                       const y = 120 - ((point.avgAccuracy / 100) * 90);
                       return `${x},${y}`;
@@ -249,7 +249,7 @@ const BrainStats: React.FC<BrainStatsProps> = ({ onBack }) => {
                   />
                   {/* Data points */}
                   {trendData.map((point, index) => {
-                    const x = 20 + (index * (260 / (trendData.length - 1)));
+                    const x = 20 + (index * (260 / Math.max(1, trendData.length - 1)));
                     const y = 120 - ((point.avgAccuracy / 100) * 90);
                     return (
                       <circle 
