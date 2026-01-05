@@ -138,8 +138,8 @@ export class ClaimController {
       if (playerPayoutState === 'PAID') {
         await client.query('ROLLBACK');
         
-        // Get existing claim to return transaction details
-        const existingClaimResult = await client.query(
+        // Get existing claim to return transaction details (use pool, not client since we rolled back)
+        const existingClaimResult = await pool.query(
           'SELECT * FROM claims WHERE match_id = $1',
           [matchId]
         );

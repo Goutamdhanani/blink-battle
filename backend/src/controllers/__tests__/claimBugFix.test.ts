@@ -35,8 +35,8 @@ describe('Issue #1: Buggy Reward Claim Process - Fix Validation', () => {
       release: jest.fn(),
     };
 
-    (pool as any).connect = jest.fn<any, any>().mockResolvedValue(mockClient);
-    (pool as any).query = jest.fn<any, any>();
+    (pool as any).connect = jest.fn().mockResolvedValue(mockClient);
+    (pool as any).query = jest.fn();
 
     // Mock request and response
     mockRequest = {
@@ -55,7 +55,7 @@ describe('Issue #1: Buggy Reward Claim Process - Fix Validation', () => {
       mockRequest.body = { matchId: 'match-win-123' };
 
       const mockTxHash = '0xwinning123';
-      (TreasuryService.sendPayout as any) = jest.fn<any, any>().mockResolvedValue(mockTxHash);
+      (TreasuryService.sendPayout as any) = jest.fn().mockResolvedValue(mockTxHash);
 
       // Mock user lookup
       (pool as any).query.mockResolvedValueOnce({
@@ -278,7 +278,7 @@ describe('Issue #1: Buggy Reward Claim Process - Fix Validation', () => {
       mockRequest.body = { matchId: 'match-race-123' };
 
       const mockTxHash = '0xrace123';
-      (TreasuryService.sendPayout as any) = jest.fn<any, any>().mockResolvedValue(mockTxHash);
+      (TreasuryService.sendPayout as any) = jest.fn().mockResolvedValue(mockTxHash);
 
       // Mock user lookup
       (pool as any).query.mockResolvedValueOnce({
