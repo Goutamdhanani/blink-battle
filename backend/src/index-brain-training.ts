@@ -3,7 +3,9 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import { AuthController } from './controllers/authController';
 import { BrainTrainingLeaderboardController } from './controllers/brainTrainingLeaderboardController';
+import { UserStatsController } from './controllers/userStatsController';
 import { authenticate } from './middleware/auth';
+import { statsRateLimiter } from './middleware/rateLimiter';
 import pool from './config/database';
 
 dotenv.config();
@@ -188,6 +190,14 @@ app.get('/api/leaderboard/global', BrainTrainingLeaderboardController.getGlobalL
 app.get('/api/leaderboard/game/:gameType', BrainTrainingLeaderboardController.getGameTypeLeaderboard);
 app.get('/api/leaderboard/me', authenticate, BrainTrainingLeaderboardController.getUserGlobalRank);
 app.get('/api/leaderboard/me/:gameType', authenticate, BrainTrainingLeaderboardController.getUserGameTypeRank);
+
+// User stats routes
+app.get('/api/stats/percentile', authenticate, statsRateLimiter, UserStatsController.getUserPercentile);
+app.get('/api/stats/play-style', authenticate, statsRateLimiter, UserStatsController.getPlayStyle);
+app.get('/api/stats/global', statsRateLimiter, UserStatsController.getGlobalStats);
+app.get('/api/stats/streaks', authenticate, statsRateLimiter, UserStatsController.getStreaks);
+app.get('/api/stats/performance-trend', authenticate, statsRateLimiter, UserStatsController.getPerformanceTrend);
+app.get('/api/stats/cognitive-comparison', authenticate, statsRateLimiter, UserStatsController.getCognitiveComparison);
 
 // Test database connection
 pool.query('SELECT NOW()', (err, res) => {

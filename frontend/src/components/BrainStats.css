@@ -34,6 +34,9 @@
   max-width: 480px;
   margin: 0 auto;
   padding: 20px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
 }
 
 /* Header */
@@ -41,8 +44,8 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 24px;
   animation: fadeInDown 0.6s ease-out;
+  flex-shrink: 0;
 }
 
 .back-btn {
@@ -102,8 +105,8 @@
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   gap: 12px;
-  margin-bottom: 24px;
   animation: fadeInUp 0.6s ease-out 0.1s both;
+  flex-shrink: 0;
 }
 
 .stat-pill {
@@ -194,9 +197,9 @@
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 24px;
   padding: 20px;
-  margin-bottom: 20px;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
   animation: fadeInUp 0.6s ease-out both;
+  flex-shrink: 0;
 }
 
 /* Trend Card */
@@ -227,15 +230,15 @@
 
 /* Section Headers */
 .section-header {
-  margin: 32px 0 16px;
   animation: fadeInUp 0.6s ease-out both;
+  flex-shrink: 0;
 }
 
 .section-title {
   font-size: 18px;
   font-weight: 600;
   color: #fff;
-  margin: 0 0 16px 0;
+  margin: 0;
   letter-spacing: 0.5px;
 }
 
@@ -244,8 +247,8 @@
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   gap: 12px;
-  margin-bottom: 24px;
   animation: fadeInUp 0.6s ease-out 0.3s both;
+  flex-shrink: 0;
 }
 
 .game-stat-card {
@@ -348,8 +351,8 @@
   display: flex;
   flex-direction: column;
   gap: 16px;
-  margin-bottom: 24px;
   animation: fadeInUp 0.6s ease-out 0.4s both;
+  flex-shrink: 0;
 }
 
 .radar-chart-container {

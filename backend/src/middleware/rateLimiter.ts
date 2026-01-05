@@ -32,13 +32,18 @@ const RATE_LIMITS = {
     windowMs: 60000, // 1 minute
     maxRequests: 600, // 600 requests per minute (increased from 500 for smoother gameplay, ~10 req/sec)
   },
+  // Stats endpoints (moderate frequency)
+  stats: {
+    windowMs: 60000, // 1 minute
+    maxRequests: 60, // 60 requests per minute (~1 req/sec)
+  },
 };
 
 /**
  * Create rate limiter middleware
  */
 export const createRateLimiter = (
-  type: 'matchmaking' | 'match'
+  type: 'matchmaking' | 'match' | 'stats'
 ) => {
   const config = RATE_LIMITS[type];
   
@@ -119,3 +124,4 @@ setInterval(() => {
 // Export rate limiters for different endpoint types
 export const matchmakingRateLimiter = createRateLimiter('matchmaking');
 export const matchRateLimiter = createRateLimiter('match');
+export const statsRateLimiter = createRateLimiter('stats');

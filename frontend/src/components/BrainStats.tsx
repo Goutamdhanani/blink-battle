@@ -1,18 +1,49 @@
 import React, { useEffect, useState } from 'react';
 import { getPlayerProfile } from '../lib/indexedDB';
 import { PlayerProfile } from '../games/types';
+import { apiClient } from '../lib/api';
 import './BrainStats.css';
 
 interface BrainStatsProps {
   onBack: () => void;
 }
 
+interface PerformanceData {
+  percentile: number;
+  performanceLabel: string;
+}
+
+interface PlayStyleData {
+  playStyle: string;
+}
+
+interface StreakData {
+  currentStreak: number;
+  longestStreak: number;
+  totalPlayDays: number;
+}
+
+interface TrendDataPoint {
+  date: string;
+  avgScore: number;
+  avgAccuracy: number;
+  gamesPlayed: number;
+}
+
 const BrainStats: React.FC<BrainStatsProps> = ({ onBack }) => {
   const [profile, setProfile] = useState<PlayerProfile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [performanceData, setPerformanceData] = useState<PerformanceData | null>(null);
+  const [playStyleData, setPlayStyleData] = useState<PlayStyleData | null>(null);
+  const [streakData, setStreakData] = useState<StreakData | null>(null);
+  const [trendData, setTrendData] = useState<TrendDataPoint[]>([]);
 
   useEffect(() => {
     loadProfile();
+    loadPerformanceData();
+    loadPlayStyle();
+    loadStreaks();
+    loadTrendData();
   }, []);
 
   const loadProfile = async () => {
@@ -23,6 +54,61 @@ const BrainStats: React.FC<BrainStatsProps> = ({ onBack }) => {
       console.error('Failed to load profile:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadPerformanceData = async () => {
+    try {
+      const response = await apiClient.get('/api/stats/percentile');
+      if (response.data.success) {
+        setPerformanceData({
+          percentile: response.data.percentile,
+          performanceLabel: response.data.performanceLabel,
+        });
+      }
+    } catch (error) {
+      console.error('Failed to load performance data:', error);
+    }
+  };
+
+  const loadPlayStyle = async () => {
+    try {
+      const response = await apiClient.get('/api/stats/play-style');
+      if (response.data.success) {
+        setPlayStyleData({
+          playStyle: response.data.playStyle,
+        });
+      }
+    } catch (error) {
+      console.error('Failed to load play style:', error);
+    }
+  };
+
+  const loadStreaks = async () => {
+    try {
+      const response = await apiClient.get('/api/stats/streaks');
+      if (response.data.success) {
+        setStreakData({
+          currentStreak: response.data.currentStreak,
+          longestStreak: response.data.longestStreak,
+          totalPlayDays: response.data.totalPlayDays,
+        });
+      }
+    } catch (error) {
+      console.error('Failed to load streaks:', error);
+    }
+  };
+
+  const loadTrendData = async () => {
+    try {
+      const response = await apiClient.get('/api/stats/performance-trend', {
+        params: { limit: 8 },
+      });
+      if (response.data.success) {
+        setTrendData(response.data.trendData);
+      }
+    } catch (error) {
+      console.error('Failed to load trend data:', error);
     }
   };
 
@@ -116,7 +202,7 @@ const BrainStats: React.FC<BrainStatsProps> = ({ onBack }) => {
           <div className="stat-pill stat-pill-purple">
             <div className="stat-icon">🏆</div>
             <div className="stat-content">
-              <div className="stat-value">Top 5%</div>
+              <div className="stat-value">{performanceData?.performanceLabel || 'Loading...'}</div>
               <div className="stat-label">Best Day</div>
             </div>
           </div>
@@ -144,28 +230,54 @@ const BrainStats: React.FC<BrainStatsProps> = ({ onBack }) => {
               <line x1="0" y1="30" x2="300" y2="30" stroke="rgba(255,255,255,0.1)" strokeWidth="1"/>
               <line x1="0" y1="70" x2="300" y2="70" stroke="rgba(255,255,255,0.1)" strokeWidth="1"/>
               <line x1="0" y1="110" x2="300" y2="110" stroke="rgba(255,255,255,0.1)" strokeWidth="1"/>
-              {/* Trend line */}
-              <polyline
-                points="20,120 60,110 100,90 140,85 180,75 220,60 260,45 280,35"
-                fill="none"
-                stroke="url(#lineGradient)"
-                strokeWidth="3"
-                filter="url(#glow)"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-              {/* Data points */}
-              <circle cx="20" cy="120" r="4" fill="#00ff88" filter="url(#glow)"/>
-              <circle cx="60" cy="110" r="4" fill="#00ff88" filter="url(#glow)"/>
-              <circle cx="100" cy="90" r="4" fill="#00ff88" filter="url(#glow)"/>
-              <circle cx="140" cy="85" r="4" fill="#00ff88" filter="url(#glow)"/>
-              <circle cx="180" cy="75" r="4" fill="#00ff88" filter="url(#glow)"/>
-              <circle cx="220" cy="60" r="4" fill="#00ff88" filter="url(#glow)"/>
-              <circle cx="260" cy="45" r="4" fill="#00ff88" filter="url(#glow)"/>
-              <circle cx="280" cy="35" r="4" fill="#00ff88" filter="url(#glow)"/>
+              {/* Trend line - Dynamic based on actual data */}
+              {trendData.length > 1 && (
+                <>
+                  <polyline
+                    points={trendData.map((point, index) => {
+                      const x = 20 + (index * (260 / Math.max(1, trendData.length - 1)));
+                      // Map accuracy (0-100) to y position (120-30)
+                      const y = 120 - ((point.avgAccuracy / 100) * 90);
+                      return `${x},${y}`;
+                    }).join(' ')}
+                    fill="none"
+                    stroke="url(#lineGradient)"
+                    strokeWidth="3"
+                    filter="url(#glow)"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                  {/* Data points */}
+                  {trendData.map((point, index) => {
+                    const x = 20 + (index * (260 / Math.max(1, trendData.length - 1)));
+                    const y = 120 - ((point.avgAccuracy / 100) * 90);
+                    return (
+                      <circle 
+                        key={index}
+                        cx={x} 
+                        cy={y} 
+                        r="4" 
+                        fill="#00ff88" 
+                        filter="url(#glow)"
+                      />
+                    );
+                  })}
+                </>
+              )}
+              {trendData.length === 0 && (
+                <text x="150" y="75" textAnchor="middle" fill="rgba(255,255,255,0.5)" fontSize="14">
+                  Play more games to see your trend
+                </text>
+              )}
             </svg>
           </div>
-          <p className="trend-caption">📈 On the rise! Keep it up!</p>
+          <p className="trend-caption">
+            {trendData.length > 1 && trendData[trendData.length - 1].avgAccuracy > trendData[0].avgAccuracy 
+              ? '📈 On the rise! Keep it up!' 
+              : trendData.length > 1 
+              ? '📊 Keep practicing to improve!' 
+              : '🎮 Start playing to track your progress!'}
+          </p>
         </div>
 
         {/* Game Stats Section */}
@@ -312,14 +424,14 @@ const BrainStats: React.FC<BrainStatsProps> = ({ onBack }) => {
             <div className="streak-item">
               <div className="streak-icon">🔥</div>
               <div className="streak-info">
-                <div className="streak-value">{Math.min(profile.totalGamesPlayed, 12)} days</div>
+                <div className="streak-value">{streakData?.currentStreak || 0} days</div>
                 <div className="streak-label">Current Streak</div>
               </div>
             </div>
             <div className="streak-item">
               <div className="streak-icon">⭐</div>
               <div className="streak-info">
-                <div className="streak-value">{Math.min(profile.totalGamesPlayed * 2, 25)} days</div>
+                <div className="streak-value">{streakData?.longestStreak || 0} days</div>
                 <div className="streak-label">Longest Streak</div>
               </div>
             </div>
@@ -333,7 +445,7 @@ const BrainStats: React.FC<BrainStatsProps> = ({ onBack }) => {
             <div className="streak-item">
               <div className="streak-icon">🦉</div>
               <div className="streak-info">
-                <div className="streak-value">Night Owl</div>
+                <div className="streak-value">{playStyleData?.playStyle || 'Loading...'}</div>
                 <div className="streak-label">Play Style</div>
               </div>
             </div>
