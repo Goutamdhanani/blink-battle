@@ -41,14 +41,15 @@ export class BrainTrainingLeaderboardController {
   /**
    * Get leaderboard for a specific game type
    */
-  static async getGameTypeLeaderboard(req: Request, res: Response) {
+  static async getGameTypeLeaderboard(req: Request, res: Response): Promise<void> {
     try {
       const { gameType } = req.params;
       const limit = Math.min(Math.max(parseInt(req.query.limit as string) || 20, 1), 100);
       const offset = Math.max(parseInt(req.query.offset as string) || 0, 0);
 
       if (!['memory', 'attention', 'reflex'].includes(gameType)) {
-        return res.status(400).json({ error: 'Invalid game type' });
+        res.status(400).json({ error: 'Invalid game type' });
+        return;
       }
 
       const result = await pool.query(
@@ -84,7 +85,7 @@ export class BrainTrainingLeaderboardController {
   /**
    * Get user's ranking in global leaderboard
    */
-  static async getUserGlobalRank(req: Request, res: Response) {
+  static async getUserGlobalRank(req: Request, res: Response): Promise<void> {
     try {
       const userId = (req as AuthenticatedRequest).userId;
 
@@ -110,11 +111,12 @@ export class BrainTrainingLeaderboardController {
       );
 
       if (result.rows.length === 0) {
-        return res.json({
+        res.json({
           success: true,
           rank: null,
           message: 'User has not played any games yet',
         });
+        return;
       }
 
       res.json({
@@ -131,13 +133,14 @@ export class BrainTrainingLeaderboardController {
   /**
    * Get user's ranking for a specific game type
    */
-  static async getUserGameTypeRank(req: Request, res: Response) {
+  static async getUserGameTypeRank(req: Request, res: Response): Promise<void> {
     try {
       const userId = (req as AuthenticatedRequest).userId;
       const { gameType } = req.params;
 
       if (!['memory', 'attention', 'reflex'].includes(gameType)) {
-        return res.status(400).json({ error: 'Invalid game type' });
+        res.status(400).json({ error: 'Invalid game type' });
+        return;
       }
 
       const result = await pool.query(
@@ -157,11 +160,12 @@ export class BrainTrainingLeaderboardController {
       );
 
       if (result.rows.length === 0) {
-        return res.json({
+        res.json({
           success: true,
           rank: null,
           message: `User has not played ${gameType} game yet`,
         });
+        return;
       }
 
       res.json({

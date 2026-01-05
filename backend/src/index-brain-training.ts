@@ -65,16 +65,17 @@ app.get('/health', (req, res) => {
 // Auth routes
 app.get('/api/auth/nonce', AuthController.getNonce);
 app.post('/api/auth/verify-siwe', AuthController.verifySiwe);
-app.get('/api/auth/me', authenticate, AuthController.getMe);
+app.get('/api/auth/me', authenticate, AuthController.getUser);
 
 // Game score routes
-app.post('/api/games/score', authenticate, async (req, res) => {
+app.post('/api/games/score', authenticate, async (req, res): Promise<void> => {
   try {
     const { gameType, score, accuracy, timeMs, level } = req.body;
     const userId = (req as any).user.userId;
 
     if (!['memory', 'attention', 'reflex'].includes(gameType)) {
-      return res.status(400).json({ error: 'Invalid game type' });
+      res.status(400).json({ error: 'Invalid game type' });
+      return;
     }
 
     const result = await pool.query(
@@ -91,13 +92,14 @@ app.post('/api/games/score', authenticate, async (req, res) => {
   }
 });
 
-app.get('/api/games/stats/:gameType', authenticate, async (req, res) => {
+app.get('/api/games/stats/:gameType', authenticate, async (req, res): Promise<void> => {
   try {
     const { gameType } = req.params;
     const userId = (req as any).user.userId;
 
     if (!['memory', 'attention', 'reflex'].includes(gameType)) {
-      return res.status(400).json({ error: 'Invalid game type' });
+      res.status(400).json({ error: 'Invalid game type' });
+      return;
     }
 
     const result = await pool.query(

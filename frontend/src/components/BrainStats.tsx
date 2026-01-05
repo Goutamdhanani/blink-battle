@@ -55,21 +55,26 @@ const BrainStats: React.FC<BrainStatsProps> = ({ onBack }) => {
     return minutes > 0 ? `${minutes}m ${remainingSeconds}s` : `${seconds}s`;
   };
 
-  const totalTime = (profile.memoryStats.gamesPlayed * profile.memoryStats.averageTimeMs +
-                     profile.attentionStats.gamesPlayed * profile.attentionStats.averageTimeMs +
-                     profile.reflexStats.gamesPlayed * profile.reflexStats.averageTimeMs);
+  // Get stats for the 3 original games
+  const memoryStats = profile.gameStats?.memory || { gamesPlayed: 0, averageTimeMs: 0, averageAccuracy: 0, highestLevel: 0, bestScore: 0, averageScore: 0 } as any;
+  const attentionStats = profile.gameStats?.attention || { gamesPlayed: 0, averageTimeMs: 0, averageAccuracy: 0, highestLevel: 0, bestScore: 0, averageScore: 0 } as any;
+  const reflexStats = profile.gameStats?.reflex || { gamesPlayed: 0, averageTimeMs: 0, averageAccuracy: 0, highestLevel: 0, bestScore: 0, averageScore: 0 } as any;
+
+  const totalTime = (memoryStats.gamesPlayed * memoryStats.averageTimeMs +
+                     attentionStats.gamesPlayed * attentionStats.averageTimeMs +
+                     reflexStats.gamesPlayed * reflexStats.averageTimeMs);
   
   const avgSessionTime = profile.totalGamesPlayed > 0 ? totalTime / profile.totalGamesPlayed : 0;
   const totalAccuracy = Math.round(
-    (profile.memoryStats.averageAccuracy + 
-     profile.attentionStats.averageAccuracy + 
-     profile.reflexStats.averageAccuracy) / 3
+    (memoryStats.averageAccuracy + 
+     attentionStats.averageAccuracy + 
+     reflexStats.averageAccuracy) / 3
   );
 
   // Calculate skill scores for radar chart
-  const memoryScore = Math.min(100, (profile.memoryStats.averageAccuracy + profile.memoryStats.highestLevel * 10));
-  const attentionScore = Math.min(100, (profile.attentionStats.averageAccuracy + profile.attentionStats.highestLevel * 10));
-  const reflexScore = Math.min(100, 100 - Math.min(100, profile.reflexStats.averageTimeMs / 10));
+  const memoryScore = Math.min(100, (memoryStats.averageAccuracy + memoryStats.highestLevel * 10));
+  const attentionScore = Math.min(100, (attentionStats.averageAccuracy + attentionStats.highestLevel * 10));
+  const reflexScore = Math.min(100, 100 - Math.min(100, reflexStats.averageTimeMs / 10));
   const patternScore = Math.round((memoryScore + attentionScore) / 2);
 
   return (
@@ -174,15 +179,15 @@ const BrainStats: React.FC<BrainStatsProps> = ({ onBack }) => {
             <div className="game-card-stats">
               <div className="game-stat-row">
                 <span className="stat-key">Best:</span>
-                <span className="stat-val">{profile.memoryStats.bestScore}</span>
+                <span className="stat-val">{memoryStats.bestScore}</span>
               </div>
               <div className="game-stat-row">
                 <span className="stat-key">Avg:</span>
-                <span className="stat-val">{profile.memoryStats.averageScore}</span>
+                <span className="stat-val">{memoryStats.averageScore}</span>
               </div>
             </div>
             <p className="game-card-subtext">
-              {profile.memoryStats.averageAccuracy >= 80 ? "Memory Master! 🌟" : "Keep training!"}
+              {memoryStats.averageAccuracy >= 80 ? "Memory Master! 🌟" : "Keep training!"}
             </p>
           </div>
 
@@ -192,15 +197,15 @@ const BrainStats: React.FC<BrainStatsProps> = ({ onBack }) => {
             <div className="game-card-stats">
               <div className="game-stat-row">
                 <span className="stat-key">Best:</span>
-                <span className="stat-val">{profile.attentionStats.bestScore}</span>
+                <span className="stat-val">{attentionStats.bestScore}</span>
               </div>
               <div className="game-stat-row">
                 <span className="stat-key">Avg:</span>
-                <span className="stat-val">{profile.attentionStats.averageScore}</span>
+                <span className="stat-val">{attentionStats.averageScore}</span>
               </div>
             </div>
             <p className="game-card-subtext">
-              {profile.attentionStats.averageAccuracy >= 80 ? "Eagle Eye! 🦅" : "Stay focused!"}
+              {attentionStats.averageAccuracy >= 80 ? "Eagle Eye! 🦅" : "Stay focused!"}
             </p>
           </div>
 
@@ -210,15 +215,15 @@ const BrainStats: React.FC<BrainStatsProps> = ({ onBack }) => {
             <div className="game-card-stats">
               <div className="game-stat-row">
                 <span className="stat-key">Best:</span>
-                <span className="stat-val">{profile.reflexStats.bestScore}</span>
+                <span className="stat-val">{reflexStats.bestScore}</span>
               </div>
               <div className="game-stat-row">
                 <span className="stat-key">Avg:</span>
-                <span className="stat-val">{formatTime(profile.reflexStats.averageTimeMs)}</span>
+                <span className="stat-val">{formatTime(reflexStats.averageTimeMs)}</span>
               </div>
             </div>
             <p className="game-card-subtext">
-              {profile.reflexStats.averageTimeMs < 300 ? "Lightning Fast! ⚡" : "Speed it up!"}
+              {reflexStats.averageTimeMs < 300 ? "Lightning Fast! ⚡" : "Speed it up!"}
             </p>
           </div>
 
@@ -228,7 +233,7 @@ const BrainStats: React.FC<BrainStatsProps> = ({ onBack }) => {
             <div className="game-card-stats">
               <div className="game-stat-row">
                 <span className="stat-key">Level:</span>
-                <span className="stat-val">{Math.max(profile.memoryStats.highestLevel, profile.attentionStats.highestLevel)}</span>
+                <span className="stat-val">{Math.max(memoryStats.highestLevel, attentionStats.highestLevel)}</span>
               </div>
               <div className="game-stat-row">
                 <span className="stat-key">Score:</span>
@@ -337,19 +342,17 @@ const BrainStats: React.FC<BrainStatsProps> = ({ onBack }) => {
         </div>
 
         {/* Achievements */}
-        {profile.achievements.length > 0 && (
+        {profile.achievements && profile.achievements.length > 0 && (
           <div className="glass-card achievements-card">
             <h3 className="section-title">Achievements</h3>
             <div className="achievements-list">
-              {profile.achievements.map((achievement, index) => (
+              {profile.achievements.filter(a => a.isUnlocked).map((achievement, index) => (
                 <div key={index} className="achievement-badge">
                   <span className="achievement-emoji">
-                    {achievement.includes('master') ? '🏆' : 
-                     achievement.includes('champion') ? '👑' : 
-                     achievement.includes('fast') ? '⚡' : '🌟'}
+                    {achievement.icon}
                   </span>
                   <span className="achievement-name">
-                    {achievement.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')}
+                    {achievement.name}
                   </span>
                 </div>
               ))}
