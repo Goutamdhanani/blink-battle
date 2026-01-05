@@ -50,11 +50,12 @@ export class RefundController {
         return;
       }
 
-      // EXPLOIT PREVENTION: Check if already refunded or processing
+      // CRITICAL: Check if already refunded or processing (BEFORE processing)
       if (paymentData.refund_status === 'completed') {
         await client.query('ROLLBACK');
         res.status(400).json({ 
-          error: 'Already refunded',
+          error: 'Refund already claimed',
+          message: 'Refund already claimed',
           alreadyClaimed: true,
           refundStatus: 'completed'
         });
@@ -65,13 +66,44 @@ export class RefundController {
         await client.query('ROLLBACK');
         res.status(400).json({ 
           error: 'Refund already in progress',
+          message: 'Refund already claimed',
           alreadyClaimed: true,
           refundStatus: 'processing'
         });
         return;
       }
 
-      // Check if eligible for refund
+      // CRITICAL: Validate match eligibility - only draw or cancelled allowed
+      if (paymentData.match_id) {
+        // Fetch match with locking
+        const matchResult = await client.query(
+          `SELECT status, result_type, cancelled FROM matches WHERE match_id = $1 FOR UPDATE`,
+          [paymentData.match_id]
+        );
+        
+        if (matchResult.rows.length > 0) {
+          const match = matchResult.rows[0];
+          const isDrawOrCancelled = 
+            match.status === 'cancelled' || 
+            match.cancelled === true ||
+            match.result_type === 'tie' ||
+            match.result_type === 'both_disqualified' ||
+            match.result_type === 'both_timeout_tie';
+          
+          if (!isDrawOrCancelled) {
+            await client.query('ROLLBACK');
+            res.status(400).json({ 
+              error: 'Only draw or cancelled matches are eligible for refunds',
+              message: 'Only draw or cancelled matches are eligible for refunds',
+              matchStatus: match.status,
+              resultType: match.result_type
+            });
+            return;
+          }
+        }
+      }
+
+      // Check if eligible for refund (status-based check)
       if (paymentData.refund_status !== 'eligible') {
         await client.query('ROLLBACK');
         res.status(400).json({ 
