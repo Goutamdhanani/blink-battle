@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { PlayerProfile, GameType } from '../games/types';
-import { apiClient } from '../lib/api';
+import { brainTrainingService } from '../services/brainTrainingService';
 import './PersonalizedBrainCard.css';
 
 interface PersonalizedBrainCardProps {
@@ -15,29 +15,44 @@ interface CognitiveComparison {
 
 const PersonalizedBrainCard: React.FC<PersonalizedBrainCardProps> = ({ profile }) => {
   const [cognitiveComparison, setCognitiveComparison] = useState<CognitiveComparison | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     loadCognitiveComparison();
   }, []);
 
   const loadCognitiveComparison = async () => {
+    setLoading(true);
     try {
-      const response = await apiClient.get('/api/stats/cognitive-comparison');
-      if (response.data.success) {
+      // Get token from localStorage if available
+      const token = localStorage.getItem('token');
+      
+      if (token) {
+        // Fetch from backend with authentication
+        const data = await brainTrainingService.getCognitiveComparison(token);
         setCognitiveComparison({
-          userCognitiveIndex: response.data.userCognitiveIndex,
-          globalAverage: response.data.globalAverage,
-          top10Threshold: response.data.top10Threshold,
+          userCognitiveIndex: data.userCognitiveIndex,
+          globalAverage: data.globalAverage,
+          top10Threshold: data.top10Threshold,
+        });
+      } else {
+        // Use profile-based cognitive index when not authenticated
+        setCognitiveComparison({
+          userCognitiveIndex: profile.cognitiveIndex,
+          globalAverage: profile.cognitiveIndex, // Use user's own score as baseline
+          top10Threshold: Math.max(profile.cognitiveIndex + 10, 85), // Aspirational goal
         });
       }
     } catch (error) {
-      console.error('Failed to load cognitive comparison:', error);
-      // Fallback to defaults
+      console.error('[PersonalizedBrainCard] Failed to load cognitive comparison:', error);
+      // On error, use profile-based values instead of hardcoded mock data
       setCognitiveComparison({
         userCognitiveIndex: profile.cognitiveIndex,
-        globalAverage: 65,
-        top10Threshold: 85,
+        globalAverage: profile.cognitiveIndex,
+        top10Threshold: Math.max(profile.cognitiveIndex + 10, 85),
       });
+    } finally {
+      setLoading(false);
     }
   };
 
