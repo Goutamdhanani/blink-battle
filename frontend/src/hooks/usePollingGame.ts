@@ -61,7 +61,7 @@ export const usePollingGame = () => {
    * Start local countdown based on greenLightTime and server time sync
    * This eliminates the need for polling during countdown
    */
-  const startLocalCountdown = useCallback((greenLightTime: number, serverTime: number) => {
+  const startLocalCountdown = useCallback((greenLightTime: number, serverTime: number, matchId: string) => {
     // Clear any existing timers
     if (countdownTimerRef.current) {
       clearTimeout(countdownTimerRef.current);
@@ -92,8 +92,32 @@ export const usePollingGame = () => {
         setCountdown(null);
         console.log('[LocalCountdown] 🟢 GREEN LIGHT!');
         
-        // Resume polling for result updates
-        greenLightTimeReceivedRef.current = false; // Reset flag
+        // CRITICAL: Resume polling for result updates after green light
+        greenLightTimeReceivedRef.current = false; // Reset flag to allow polling
+        
+        // Restart polling at playing rate to detect when match completes
+        if (!pollIntervalRef.current) {
+          const poll = async () => {
+            try {
+              const matchState: MatchState = await pollingService.getMatchState(matchId);
+              
+              if (matchState.state === 'resolved' || matchState.status === 'completed') {
+                if (pollIntervalRef.current) {
+                  clearInterval(pollIntervalRef.current);
+                  pollIntervalRef.current = null;
+                }
+                setMatchResult(matchState.winnerId || null, 'completed');
+                setGamePhase('result');
+              }
+            } catch (err) {
+              console.error('[LocalCountdown] Polling error:', err);
+            }
+          };
+          
+          poll();
+          pollIntervalRef.current = setInterval(poll, POLLING_RATES.PLAYING);
+          console.log('[LocalCountdown] Resumed polling at', POLLING_RATES.PLAYING, 'ms');
+        }
       } else if (timeUntilGo <= COUNTDOWN_DURATION_MS) {
         // Countdown phase (3, 2, 1)
         const countdown = Math.ceil(timeUntilGo / 1000);
@@ -117,7 +141,7 @@ export const usePollingGame = () => {
 
     // Start the countdown
     updateCountdown();
-  }, [setGamePhase, setCountdown, setSignalTimestamp]);
+  }, [setGamePhase, setCountdown, setSignalTimestamp, setMatchResult]);
 
   // Clear polling and heartbeat on unmount
   useEffect(() => {
@@ -234,7 +258,7 @@ export const usePollingGame = () => {
           console.log(`[Polling] Server time: ${matchState.serverTime}, Client time: ${Date.now()}, Offset: ${serverTimeOffsetRef.current}ms`);
           
           // Start local countdown based on greenLightTime
-          startLocalCountdown(matchState.greenLightTime, matchState.serverTime || Date.now());
+          startLocalCountdown(matchState.greenLightTime, matchState.serverTime || Date.now(), matchId);
           
           // STOP POLLING during countdown - use local timers instead
           if (pollIntervalRef.current) {
@@ -421,6 +445,7 @@ export const usePollingGame = () => {
 
   /**
    * Record tap
+   * CRITICAL FIX: Resume AGGRESSIVE polling after tap to detect match completion
    */
   const recordTap = useCallback(async (matchId: string) => {
     try {
@@ -429,10 +454,69 @@ export const usePollingGame = () => {
       
       console.log('[Polling] Tap recorded:', result);
       
-      // Continue polling to get opponent's tap and final result
-      if (!pollIntervalRef.current) {
-        startMatchStatePolling(matchId);
+      // CRITICAL: ALWAYS restart polling after tap with aggressive rate
+      // This ensures we detect when the match completes (both players tapped)
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current);
+        pollIntervalRef.current = null;
       }
+      
+      // Resume aggressive polling (500ms) to quickly detect completion
+      const AGGRESSIVE_POLL_RATE = 500;
+      currentPollingRateRef.current = AGGRESSIVE_POLL_RATE;
+      console.log('[Polling] 🔄 Resuming AGGRESSIVE polling at 500ms after tap');
+      
+      // Re-enable polling to check for match completion
+      greenLightTimeReceivedRef.current = false; // Reset flag to allow polling
+      
+      const poll = async () => {
+        try {
+          const matchState: MatchState = await pollingService.getMatchState(matchId);
+          matchStateRef.current = matchState;
+          
+          console.log(`[Polling] After tap - Match state: ${matchState.state}, status: ${matchState.status}`);
+          
+          // Check if match is complete
+          if (matchState.state === 'resolved' || matchState.status === 'completed') {
+            // Match complete! Navigate to results
+            if (heartbeatIntervalRef.current) {
+              clearInterval(heartbeatIntervalRef.current);
+              heartbeatIntervalRef.current = null;
+            }
+            if (pollIntervalRef.current) {
+              clearInterval(pollIntervalRef.current);
+              pollIntervalRef.current = null;
+            }
+            setIsPolling(false);
+            
+            setMatchResult(matchState.winnerId || null, 'completed');
+            setGamePhase('result');
+            console.log('[Polling] ✅ Match completed after tap - navigating to results');
+            return;
+          }
+        } catch (err: any) {
+          console.error('[Polling] Error polling after tap:', err);
+        }
+      };
+      
+      // Start aggressive polling immediately
+      poll();
+      pollIntervalRef.current = setInterval(poll, AGGRESSIVE_POLL_RATE);
+      
+      // Fallback: Force navigation to results after 30 seconds if still stuck
+      setTimeout(() => {
+        if (pollIntervalRef.current) {
+          console.warn('[Polling] ⚠️ 30s timeout - forcing navigation to results');
+          clearInterval(pollIntervalRef.current);
+          pollIntervalRef.current = null;
+          if (heartbeatIntervalRef.current) {
+            clearInterval(heartbeatIntervalRef.current);
+            heartbeatIntervalRef.current = null;
+          }
+          setIsPolling(false);
+          setGamePhase('result');
+        }
+      }, 30000);
       
       return result;
     } catch (err: any) {
@@ -440,7 +524,7 @@ export const usePollingGame = () => {
       setError(err.message || 'Failed to record tap');
       throw err;
     }
-  }, [startMatchStatePolling]);
+  }, [setGamePhase, setMatchResult, setIsPolling]);
 
   /**
    * Stop polling
