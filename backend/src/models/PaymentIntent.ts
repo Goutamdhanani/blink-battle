@@ -279,6 +279,24 @@ export class PaymentIntentModel {
   }
 
   /**
+   * Find confirmed payment for user with specific stake amount (not yet linked to match)
+   * Used during matchmaking to link player's payment to newly created match
+   */
+  static async findConfirmedForUser(userId: string, stake: number): Promise<PaymentIntent | null> {
+    const result = await pool.query(
+      `SELECT * FROM payment_intents 
+       WHERE user_id = $1 
+         AND normalized_status = 'confirmed'
+         AND amount = $2
+         AND match_id IS NULL
+       ORDER BY created_at DESC
+       LIMIT 1`,
+      [userId, stake]
+    );
+    return result.rows[0] || null;
+  }
+
+  /**
    * Expire stale payments without transaction IDs
    * Returns the number of payments expired
    */
