@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import pool from '../config/database';
+import { AuthenticatedRequest } from '../types/AuthenticatedRequest';
 
 export class BrainTrainingLeaderboardController {
   /**
@@ -7,8 +8,8 @@ export class BrainTrainingLeaderboardController {
    */
   static async getGlobalLeaderboard(req: Request, res: Response) {
     try {
-      const limit = parseInt(req.query.limit as string) || 20;
-      const offset = parseInt(req.query.offset as string) || 0;
+      const limit = Math.min(Math.max(parseInt(req.query.limit as string) || 20, 1), 100);
+      const offset = Math.max(parseInt(req.query.offset as string) || 0, 0);
 
       const result = await pool.query(
         `SELECT 
@@ -43,8 +44,8 @@ export class BrainTrainingLeaderboardController {
   static async getGameTypeLeaderboard(req: Request, res: Response) {
     try {
       const { gameType } = req.params;
-      const limit = parseInt(req.query.limit as string) || 20;
-      const offset = parseInt(req.query.offset as string) || 0;
+      const limit = Math.min(Math.max(parseInt(req.query.limit as string) || 20, 1), 100);
+      const offset = Math.max(parseInt(req.query.offset as string) || 0, 0);
 
       if (!['memory', 'attention', 'reflex'].includes(gameType)) {
         return res.status(400).json({ error: 'Invalid game type' });
@@ -85,7 +86,7 @@ export class BrainTrainingLeaderboardController {
    */
   static async getUserGlobalRank(req: Request, res: Response) {
     try {
-      const userId = (req as any).user.userId;
+      const userId = (req as AuthenticatedRequest).userId;
 
       const result = await pool.query(
         `SELECT 
@@ -132,7 +133,7 @@ export class BrainTrainingLeaderboardController {
    */
   static async getUserGameTypeRank(req: Request, res: Response) {
     try {
-      const userId = (req as any).user.userId;
+      const userId = (req as AuthenticatedRequest).userId;
       const { gameType } = req.params;
 
       if (!['memory', 'attention', 'reflex'].includes(gameType)) {
