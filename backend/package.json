@@ -5,9 +5,12 @@
   "main": "dist/index.js",
   "scripts": {
     "dev": "ts-node-dev --respawn --transpile-only src/index.ts",
+    "dev:brain": "ts-node-dev --respawn --transpile-only src/index-brain-training.ts",
     "build": "tsc",
     "start": "node dist/index.js",
+    "start:brain": "node dist/index-brain-training.js",
     "migrate": "node dist/config/migrate.js",
+    "migrate:brain": "ts-node src/config/migrate-brain-training.ts",
     "migrate:columns": "ts-node src/config/migrations.ts",
     "migrate:production": "ts-node src/config/productionMigrations.ts up",
     "migrate:rollback": "ts-node src/config/productionMigrations.ts down",
