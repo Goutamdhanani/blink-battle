@@ -12,25 +12,29 @@ import './MatchHistory.css';
 interface Match {
   matchId: string;
   stake: number;
-  yourReaction: number;
+  reaction_ms: number; // SERVER AUTHORITY: From tap_events table
+  yourReaction: number; // Backward compatibility
   opponentReaction: number;
   won: boolean;
-  outcome?: 'win' | 'loss' | 'draw' | 'cancelled'; // NEW: explicit outcome
+  outcome: 'win' | 'loss' | 'draw' | 'cancelled' | 'active' | 'pending' | 'unknown'; // SERVER AUTHORITY
   opponent: {
     wallet: string;
     avgReaction: number;
   } | null;
   completedAt: string;
-  // Claim fields (optional, only for staked matches where user won)
+  // Claim fields - SERVER AUTHORITY
   claimDeadline?: string;
   claimStatus?: 'unclaimed' | 'claimed' | 'expired';
   claimTimeRemaining?: number; // seconds
-  claimable?: boolean;
-  // Refund fields (for ties, both disqualified, or cancelled matches)
+  canClaimWinnings?: boolean; // SERVER AUTHORITY
+  claimable?: boolean; // Backward compatibility
+  // Refund fields - SERVER AUTHORITY
   refundStatus?: 'none' | 'eligible' | 'processing' | 'completed' | 'failed';
   refundAmount?: number;
   refundReason?: string;
   refundDeadline?: string;
+  canClaimRefund?: boolean; // SERVER AUTHORITY
+  canRefund?: boolean; // Backward compatibility
   resultType?: string; // tie, both_disqualified, etc.
 }
 
@@ -50,8 +54,8 @@ const MatchHistory: React.FC = () => {
   const [matches, setMatches] = useState<Match[]>([]);
   const [pendingRefunds, setPendingRefunds] = useState<PendingRefund[]>([]);
   const [loading, setLoading] = useState(true);
-  const [claimingMatchId, setClaimingMatchId] = useState<string | null>(null);
-  const [claimErrors, setClaimErrors] = useState<Record<string, string>>({});
+  const [processingClaims, setProcessingClaims] = useState<Set<string>>(new Set());
+  const [claimErrors, setClaimErrors] = useState<Map<string, string>>(new Map());
   const [refundMessage, setRefundMessage] = useState<string | null>(null);
 
   useEffect(() => {
@@ -116,13 +120,13 @@ const MatchHistory: React.FC = () => {
   };
 
   const handleClaimWinnings = async (matchId: string) => {
-    if (!state.token || claimingMatchId) return;
+    if (!state.token || processingClaims.has(matchId)) return;
 
-    setClaimingMatchId(matchId);
+    setProcessingClaims(prev => new Set(prev).add(matchId));
     setClaimErrors(prev => {
-      const newErrors = { ...prev };
-      delete newErrors[matchId];
-      return newErrors;
+      const newMap = new Map(prev);
+      newMap.delete(matchId);
+      return newMap;
     });
 
     try {
@@ -133,14 +137,18 @@ const MatchHistory: React.FC = () => {
         // Refresh match history to show updated claim status
         await fetchMatchHistory();
       } else {
-        setClaimErrors(prev => ({ ...prev, [matchId]: result.error || 'Failed to claim' }));
+        setClaimErrors(prev => new Map(prev).set(matchId, result.error || 'Failed to claim'));
         minikit.sendHaptic('error');
       }
     } catch (error: any) {
-      setClaimErrors(prev => ({ ...prev, [matchId]: 'Network error - please try again' }));
+      setClaimErrors(prev => new Map(prev).set(matchId, 'Network error - please try again'));
       minikit.sendHaptic('error');
     } finally {
-      setClaimingMatchId(null);
+      setProcessingClaims(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(matchId);
+        return newSet;
+      });
     }
   };
 
@@ -194,17 +202,12 @@ const MatchHistory: React.FC = () => {
             ) : (
               <div className="matches-list">
             {matches.map((match) => {
-              // Use explicit outcome field if available, otherwise derive from result
-              const outcome = match.outcome || (
-                match.won ? 'win' : 
-                (match.resultType === 'tie' || match.resultType === 'both_disqualified' || match.resultType === 'both_timeout_tie') ? 'draw' : 
-                'loss'
-              );
+              // SERVER AUTHORITY: Use outcome from server
+              const outcome = match.outcome;
               
-              // Determine display based on outcome
+              // Determine display based on server outcome
               const isDraw = outcome === 'draw';
               const isCancelled = outcome === 'cancelled';
-              const isRefundable = (isDraw || isCancelled) && match.refundStatus === 'eligible' && match.stake > 0;
               const isRefunded = match.refundStatus === 'completed';
               const isRefundProcessing = match.refundStatus === 'processing';
               
@@ -226,7 +229,8 @@ const MatchHistory: React.FC = () => {
                     <div className="reaction-item">
                       <span className="reaction-label">You</span>
                       <span className={`reaction-value ${match.yourReaction < match.opponentReaction ? 'reaction-better' : ''}`}>
-                        {match.yourReaction >= 0 ? `${match.yourReaction}ms` : 'N/A'}
+                        {/* SERVER AUTHORITY: Use reaction_ms from server */}
+                        {match.reaction_ms >= 0 ? `${match.reaction_ms}ms` : 'N/A'}
                       </span>
                     </div>
                     <div className="vs-divider">VS</div>
@@ -247,7 +251,7 @@ const MatchHistory: React.FC = () => {
                     </div>
                   )}
 
-                  {/* FIXED: Show claim button with timer for unclaimed wins */}
+                  {/* SERVER AUTHORITY: Show claim button only when canClaimWinnings === true */}
                   {outcome === 'win' && match.stake > 0 && (
                     <div className="claim-section" style={{ marginTop: '1rem' }}>
                       {match.claimStatus === 'claimed' && (
@@ -256,16 +260,17 @@ const MatchHistory: React.FC = () => {
                         </div>
                       )}
                       
-                      {match.claimStatus === 'unclaimed' && match.claimable && (
+                      {/* SERVER AUTHORITY: Use canClaimWinnings from server */}
+                      {match.canClaimWinnings === true && (
                         <>
                           <NeonButton
                             variant="primary"
                             size="small"
                             fullWidth
                             onClick={() => handleClaimWinnings(match.matchId)}
-                            disabled={claimingMatchId === match.matchId}
+                            disabled={processingClaims.has(match.matchId)}
                           >
-                            {claimingMatchId === match.matchId ? '⏳ Claiming...' : '💰 Claim Winnings'}
+                            {processingClaims.has(match.matchId) ? '⏳ Claiming...' : '💰 Claim Winnings'}
                           </NeonButton>
                           {match.claimTimeRemaining !== undefined && match.claimTimeRemaining >= 0 && (
                             <div style={{ marginTop: '0.5rem', fontSize: '0.85rem', opacity: 0.8, color: '#ffaa00' }}>
@@ -275,21 +280,21 @@ const MatchHistory: React.FC = () => {
                         </>
                       )}
                       
-                      {match.claimStatus === 'unclaimed' && !match.claimable && (
+                      {match.canClaimWinnings === false && match.claimStatus === 'unclaimed' && (
                         <div className="claim-status" style={{ color: '#ff0088', fontSize: '0.9rem' }}>
                           ❌ Reward Expired
                         </div>
                       )}
 
-                      {claimErrors[match.matchId] && (
+                      {claimErrors.has(match.matchId) && (
                         <div style={{ marginTop: '0.5rem', color: '#ff0088', fontSize: '0.85rem' }}>
-                          ⚠️ {claimErrors[match.matchId]}
+                          ⚠️ {claimErrors.get(match.matchId)}
                         </div>
                       )}
                     </div>
                   )}
 
-                  {/* Show refund section for draw/cancelled matches */}
+                  {/* SERVER AUTHORITY: Show refund section only when canClaimRefund is true */}
                   {(isDraw || isCancelled) && match.stake > 0 && (
                     <div className="refund-section" style={{ marginTop: '1rem' }}>
                       {isRefunded && (
@@ -304,7 +309,8 @@ const MatchHistory: React.FC = () => {
                         </div>
                       )}
                       
-                      {isRefundable && !isRefundProcessing && (
+                      {/* SERVER AUTHORITY: Use canClaimRefund from server */}
+                      {match.canClaimRefund === true && !isRefundProcessing && (
                         <>
                           <div style={{ 
                             background: 'rgba(255, 170, 0, 0.1)', 
