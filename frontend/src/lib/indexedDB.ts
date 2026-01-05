@@ -78,6 +78,7 @@ export async function saveGameScoreWithSync(score: GameScore): Promise<void> {
     const token = localStorage.getItem('token');
     if (token) {
       const { brainTrainingService } = await import('../services/brainTrainingService');
+      // Backend generates its own timestamp, so we don't send the local one
       await brainTrainingService.saveGameScore(token, {
         gameType: score.gameType,
         score: score.score,
