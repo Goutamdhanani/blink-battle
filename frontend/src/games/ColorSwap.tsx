@@ -116,8 +116,8 @@ const ColorSwap: React.FC<ColorSwapProps> = ({ onGameComplete, onExit }) => {
           <div className="instructions-content">
             <p>👁️ See a word displayed in color</p>
             <p>🧠 Answer based on the question:</p>
-            <p>📝 "What WORD?" - select the word you read</p>
-            <p>🎨 "What COLOR?" - select the color you see</p>
+            <p>📝 &quot;What WORD?&quot; - select the word you read</p>
+            <p>🎨 &quot;What COLOR?&quot; - select the color you see</p>
             <p>⚡ Test your focus and avoid distractions!</p>
             <p>🎯 {TOTAL_ROUNDS} rounds per level</p>
           </div>
