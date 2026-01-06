@@ -201,9 +201,9 @@
                0 0 30px rgba(0, 255, 255, 0.4);
   /* Gradient text for supporting browsers */
   background: linear-gradient(135deg, #00ffff 0%, #ff00ff 100%);
+  background-clip: text;
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
-  background-clip: text;
 }
 
 .completion-stats {

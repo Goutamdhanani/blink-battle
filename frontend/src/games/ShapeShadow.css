@@ -27,9 +27,9 @@
   color: #1a1a2e !important;
   /* Gradient text for supporting browsers */
   background: linear-gradient(135deg, #f093fb, #f5576c);
+  background-clip: text;
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
-  background-clip: text;
   /* Add subtle shadow for gradient text visibility */
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
 }
