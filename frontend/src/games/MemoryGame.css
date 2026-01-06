@@ -1,6 +1,10 @@
 /* Memory Game Styles */
 
 .memory-game {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
   min-height: 100vh;
   background: linear-gradient(180deg, #0a0a1f 0%, #1a0f3d 50%, #2d1b4e 100%);
   padding: var(--space-lg); /* Changed from 20px */
@@ -27,6 +31,8 @@
   position: relative;
   z-index: var(--z-content);
   gap: var(--space-md);
+  width: 100%;
+  max-width: 500px;
 }
 
 .exit-btn {
@@ -78,9 +84,11 @@
 .cards-grid {
   display: grid;
   gap: var(--space-md);
-  max-width: 400px;
-  margin: 0 auto;
-  position: relative;
+  max-width: 500px;
+  width: 100%;
+  margin-top: var(--space-lg);
+  position: relative; /* NOT absolute */
+  top: 0; /* NOT negative */
   z-index: var(--z-content);
   padding: 0;
   justify-items: center;

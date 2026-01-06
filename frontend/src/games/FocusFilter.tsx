@@ -87,7 +87,12 @@ const FocusFilter: React.FC<FocusFilterProps> = ({ onGameComplete, onExit }) => 
     onGameComplete(gameScore);
   };
 
-  const startGame = () => {
+  const startGame = (e?: React.MouseEvent | React.TouchEvent) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    console.log('[FocusFilter] Game starting...');
     setGamePhase('playing');
     setScore(0);
     setRound(0);
@@ -132,7 +137,11 @@ const FocusFilter: React.FC<FocusFilterProps> = ({ onGameComplete, onExit }) => 
             <p>⚡ Speed and accuracy both count!</p>
             <p>🎮 {TOTAL_ROUNDS} rounds per level</p>
           </div>
-          <button className="start-btn" onClick={startGame}>
+          <button 
+            className="start-btn" 
+            onClick={startGame}
+            onTouchEnd={(e) => { e.preventDefault(); startGame(e); }}
+          >
             Start Level {level}
           </button>
         </div>
