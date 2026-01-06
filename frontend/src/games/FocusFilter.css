@@ -1,11 +1,93 @@
 .focus_filter-game {
-  display: flex;
-  justify-content: center;
-  align-items: center;
+  width: 100vw;
   min-height: 100vh;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  padding: 20px;
+  padding: 16px;
   font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.game-header {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  background: #667eea; /* Visible gradient background */
+  padding: 16px 20px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+  z-index: var(--z-elevated);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.game-info {
+  display: flex;
+  justify-content: space-around;
+  max-width: 600px;
+  margin: 0 auto;
+  font-weight: bold;
+  font-size: 18px; /* Readable on mobile */
+  color: #ffffff; /* White text */
+  gap: 12px;
+}
+
+.game-arena {
+  margin-top: 100px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 16px;
+  width: 100%;
+}
+
+.target-display {
+  font-size: 64px; /* Large target preview for mobile */
+  padding: 20px;
+  margin-bottom: 16px;
+  background: rgba(255, 255, 255, 0.95);
+  border-radius: 15px;
+  text-align: center;
+  font-weight: bold;
+}
+
+.symbols-grid {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px; /* Consistent spacing */
+  padding: 16px;
+  width: 100%;
+  max-width: 100%;
+}
+
+.focus-symbol {
+  /* Container should match visual size */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0; /* NO extra padding */
+  margin: 4px; /* Small margin for spacing */
+  font-size: 36px; /* Mobile-friendly size */
+  width: 48px; /* Exact width */
+  height: 48px; /* Exact height */
+  line-height: 1;
+  cursor: pointer;
+  touch-action: manipulation;
+  user-select: none;
+  
+  /* CRITICAL: Click area matches visual */
+  position: relative;
+  overflow: visible;
+}
+
+/* Remove any invisible padding/margins causing larger tap area */
+.focus-symbol::before,
+.focus-symbol::after {
+  display: none; /* Remove pseudo-elements that expand hit area */
 }
 
 .game-instructions, .game-complete {
@@ -17,6 +99,23 @@
   text-align: center;
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
   position: relative;
+}
+
+.exit-btn {
+  background: rgba(255, 255, 255, 0.2);
+  border: none;
+  color: #ffffff; /* White text */
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.exit-btn:hover {
+  background: rgba(255, 255, 255, 0.3);
+  box-shadow: 0 0 20px rgba(255, 255, 255, 0.2);
 }
 
 .game-instructions h2, .game-complete h2 {
@@ -63,6 +162,7 @@
   position: relative;
   z-index: 10; /* Ensure clickable */
   pointer-events: all; /* ENSURE clickable */
+  touch-action: manipulation;
 }
 
 .start-btn:hover, .next-level-btn:hover {
@@ -76,55 +176,6 @@
 
 .menu-btn {
   background: linear-gradient(135deg, #868e96, #495057);
-}
-
-.exit-btn {
-  position: absolute;
-  top: 16px;
-  right: 16px;
-  background: transparent;
-  border: none;
-  color: #718096; /* Visible gray */
-  font-size: 24px;
-  cursor: pointer;
-  padding: 8px;
-  transition: all 0.2s;
-  z-index: 20; /* Above other elements */
-}
-
-.exit-btn:hover {
-  background: #ff6b6b;
-  color: white;
-  transform: rotate(90deg);
-}
-
-.game-header {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  background: rgba(255, 255, 255, 0.95);
-  padding: 20px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
-  z-index: var(--z-elevated);
-}
-
-.game-info {
-  display: flex;
-  justify-content: space-around;
-  max-width: 600px;
-  margin: 0 auto;
-  font-weight: bold;
-  font-size: 1.1em;
-  color: #1a1a2e; /* Dark text for visibility on white background */
-}
-
-.game-arena {
-  margin-top: 100px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 40px;
 }
 
 .game-content {
@@ -183,16 +234,6 @@
 }
 
 /* Focus Filter specific styles */
-.target-display {
-  background: rgba(255, 255, 255, 0.95);
-  padding: 20px;
-  border-radius: 15px;
-  margin-bottom: 30px;
-  font-size: 1.5em;
-  font-weight: bold;
-  text-align: center;
-}
-
 .target-symbol {
   font-size: 2em;
   color: #667eea;
@@ -217,11 +258,17 @@
 
 .floating-item {
   position: absolute;
-  font-size: 3em;
+  font-size: 36px; /* Mobile-friendly size */
   cursor: pointer;
   transition: all 0.2s;
-  padding: 10px;
+  padding: 4px;
   user-select: none;
+  touch-action: manipulation;
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .floating-item:hover {

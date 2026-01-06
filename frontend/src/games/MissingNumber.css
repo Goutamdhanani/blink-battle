@@ -1,11 +1,133 @@
 .missing_number-game {
+  width: 100vw;
   min-height: 100vh;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 20px;
+  padding: 16px;
   font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  overflow-y: auto;
+}
+
+.game-header {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  background: #667eea; /* Visible gradient background */
+  padding: 16px 20px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+  z-index: 1000;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.game-info {
+  display: flex;
+  justify-content: space-around;
+  max-width: 600px;
+  margin: 0 auto;
+  font-weight: bold;
+  font-size: 18px; /* Readable on mobile */
+  color: #ffffff; /* White text */
+  gap: 12px;
+}
+
+.game-arena {
+  margin-top: 100px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 16px;
+  width: 100%;
+}
+
+.instruction-text {
+  font-size: 1.5em;
+  font-weight: bold;
+  color: white;
+  margin-bottom: 24px;
+  text-align: center;
+}
+
+.sequence-display {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr); /* 5 columns - organized grid */
+  gap: 12px;
+  width: 100%;
+  max-width: 400px;
+  margin: 24px auto;
+  padding: 16px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.sequence-item {
+  aspect-ratio: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.9);
+  border-radius: 12px;
+  font-size: 24px; /* Large, readable */
+  font-weight: 700;
+  color: #1a1a2e;
+  min-height: 60px; /* Good touch target */
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  padding: 12px 15px;
+  text-align: center;
+}
+
+.sequence-item.missing {
+  background: rgba(102, 126, 234, 0.3);
+  border: 2px dashed rgba(102, 126, 234, 0.6);
+  font-size: 32px;
+  color: #667eea;
+}
+
+/* For higher levels with more numbers */
+.sequence-display.large {
+  grid-template-columns: repeat(6, 1fr); /* 6 columns */
+  gap: 10px;
+}
+
+.sequence-display.large .sequence-item {
+  font-size: 20px;
+  min-height: 50px;
+}
+
+/* Answer input area */
+.answer-section {
+  margin-top: 24px;
+  width: 100%;
+  max-width: 400px;
+  padding: 0 16px;
+}
+
+.answer-input {
+  width: 100%;
+  padding: 16px;
+  font-size: 24px;
+  text-align: center;
+  border: 3px solid #667eea;
+  border-radius: 12px;
+  font-weight: 700;
+}
+
+.submit-btn {
+  width: 100%;
+  padding: 16px;
+  margin-top: 16px;
+  font-size: 20px;
+  font-weight: 700;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
+  border-radius: 12px;
+  cursor: pointer;
+  touch-action: manipulation;
 }
 
 .game-instructions, .game-complete {
@@ -55,6 +177,7 @@
   transition: all 0.2s;
   font-weight: bold;
   margin: 10px;
+  touch-action: manipulation;
 }
 
 .start-btn:hover, .next-level-btn:hover {
@@ -67,86 +190,20 @@
 }
 
 .exit-btn {
-  position: absolute;
-  top: 20px;
-  right: 20px;
-  background: white;
-  border: 2px solid #ddd;
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  font-size: 1.5em;
+  background: rgba(255, 255, 255, 0.2);
+  border: none;
+  color: #ffffff; /* White text */
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: 600;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all 0.3s ease;
 }
 
 .exit-btn:hover {
-  background: #ff6b6b;
-  color: white;
-  transform: rotate(90deg);
-}
-
-.game-header {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  background: rgba(255, 255, 255, 0.95);
-  padding: 20px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
-  z-index: 1000;
-}
-
-.game-info {
-  display: flex;
-  justify-content: space-around;
-  max-width: 600px;
-  margin: 0 auto;
-  font-weight: bold;
-  font-size: 1.1em;
-}
-
-.game-arena {
-  margin-top: 100px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 40px;
-}
-
-.instruction-text {
-  font-size: 1.5em;
-  font-weight: bold;
-  color: white;
-  margin-bottom: 30px;
-  text-align: center;
-}
-
-.sequence-display {
-  display: flex;
-  gap: 15px;
-  margin: 40px 0;
-  justify-content: center;
-  flex-wrap: wrap;
-  max-width: 600px;
-}
-
-.sequence-item {
-  background: rgba(255, 255, 255, 0.95);
-  padding: 25px 30px;
-  font-size: 2.5em;
-  font-weight: bold;
-  border-radius: 15px;
-  min-width: 80px;
-  text-align: center;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
-  color: #667eea;
-}
-
-.sequence-item.missing {
-  background: rgba(255, 107, 107, 0.2);
-  color: white;
-  border: 3px dashed white;
+  background: rgba(255, 255, 255, 0.3);
+  box-shadow: 0 0 20px rgba(255, 255, 255, 0.2);
 }
 
 .options-grid {

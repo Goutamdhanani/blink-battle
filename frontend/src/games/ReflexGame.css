@@ -5,6 +5,57 @@
   background: linear-gradient(180deg, #0a0a1f 0%, #1a0f3d 50%, #2d1b4e 100%);
   padding: var(--space-lg); /* Changed from 20px */
   position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.reflex-game .game-header {
+  background: #667eea; /* Visible gradient background */
+  padding: 16px 20px;
+  border-radius: var(--radius-md);
+  color: #ffffff; /* White text */
+  width: 100%;
+  max-width: 500px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-md);
+  margin-bottom: var(--space-lg);
+  position: relative;
+  z-index: var(--z-elevated);
+}
+
+.reflex-game .exit-btn {
+  background: rgba(255, 255, 255, 0.2);
+  border: none;
+  color: #ffffff; /* White text */
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.reflex-game .exit-btn:hover {
+  background: rgba(255, 255, 255, 0.3);
+  box-shadow: 0 0 20px rgba(255, 255, 255, 0.2);
+}
+
+.reflex-game .level-badge {
+  background: rgba(255, 255, 255, 0.2);
+  color: #ffffff; /* White text */
+  padding: 8px 16px;
+  border-radius: 20px;
+  font-weight: 600;
+  font-size: 16px;
+}
+
+.reflex-game .game-info {
+  display: flex;
+  gap: var(--space-md);
+  align-items: center;
 }
 
 .reflex-arena {
@@ -97,13 +148,9 @@
 }
 
 .trial-counter {
-  background: rgba(255, 255, 255, 0.05);
-  backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  padding: 8px 16px;
-  border-radius: 20px;
-  font-size: 14px;
-  color: rgba(255, 255, 255, 0.9);
+  color: #ffffff; /* White text */
+  font-weight: 600;
+  font-size: 16px;
 }
 
 .trials-progress {
