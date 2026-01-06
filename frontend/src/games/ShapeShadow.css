@@ -23,15 +23,21 @@
 .game-instructions h2, .game-complete h2 {
   font-size: 2.5em;
   margin: 0 0 10px 0;
-  /* Dark text as fallback for white background */
-  color: #1a1a2e !important;
-  /* Gradient text for supporting browsers */
+  /* Dark text fallback - visible on white background in all browsers */
+  color: #d946a5 !important; /* Vibrant pink as fallback (good contrast on white) */
+  /* Gradient text for supporting browsers - pink/purple gradient visible on white */
   background: linear-gradient(135deg, #f093fb, #f5576c);
   background-clip: text;
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
-  /* Add subtle shadow for gradient text visibility */
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+/* For browsers that don't support background-clip: text, ensure fallback color is visible */
+@supports not (background-clip: text) or not (-webkit-background-clip: text) {
+  .game-instructions h2, .game-complete h2 {
+    color: #d946a5 !important;
+    background: none;
+  }
 }
 
 .exit-btn {
