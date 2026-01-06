@@ -39,16 +39,8 @@ export const MiniKitProvider: React.FC<MiniKitProviderProps> = ({ children }) =>
     
     if (installed) {
       console.log('✅ MiniKit is installed');
-      // Initialize MiniKit with app ID
-      const appId = import.meta.env.VITE_APP_ID;
-      if (appId && appId !== 'app_staging_your_app_id') {
-        try {
-          MiniKit.install(appId);
-          console.log('✅ MiniKit initialized with app ID:', appId);
-        } catch (error) {
-          console.warn('⚠️ MiniKit initialization error:', error);
-        }
-      }
+      // MiniKit is already initialized in main.tsx, no need to install again
+      console.log('ℹ️ MiniKit was initialized in main.tsx');
     } else {
       console.log('ℹ️ MiniKit not installed - running in browser mode');
     }
@@ -82,6 +74,8 @@ export const MiniKitProvider: React.FC<MiniKitProviderProps> = ({ children }) =>
       crypto.getRandomValues(nonceArray);
       const nonce = Array.from(nonceArray, byte => byte.toString(16).padStart(2, '0')).join('');
       
+      console.log('🔐 Generated nonce:', nonce.substring(0, 10) + '...');
+      
       // Request wallet address from MiniKit with 1 hour expiration (security best practice)
       const { finalPayload } = await MiniKit.commandsAsync.walletAuth({
         nonce,
@@ -90,6 +84,8 @@ export const MiniKitProvider: React.FC<MiniKitProviderProps> = ({ children }) =>
         notBefore: new Date(),
         statement: 'Sign in to Blink Battle Brain Training',
       });
+
+      console.log('🔐 Authentication response status:', finalPayload?.status);
 
       if (finalPayload.status === 'success') {
         const authenticatedUser: User = {
@@ -102,7 +98,7 @@ export const MiniKitProvider: React.FC<MiniKitProviderProps> = ({ children }) =>
         setUser(authenticatedUser);
         setIsAuthenticated(true);
         localStorage.setItem('minikit_user', JSON.stringify(authenticatedUser));
-        console.log('✅ Authentication successful');
+        console.log('✅ Authentication successful for:', finalPayload.address?.substring(0, 10) + '...');
       } else {
         console.error('❌ Authentication failed:', finalPayload);
         throw new Error('Authentication failed');
@@ -126,6 +122,8 @@ export const MiniKitProvider: React.FC<MiniKitProviderProps> = ({ children }) =>
       }
 
       console.log('🌐 Initiating World ID verification...');
+      console.log('🌐 Action:', WORLD_ID_ACTION);
+      console.log('🌐 Signal (user ID):', user.id);
 
       // Verify with World ID using MiniKit
       const { finalPayload } = await MiniKit.commandsAsync.verify({
@@ -134,13 +132,18 @@ export const MiniKitProvider: React.FC<MiniKitProviderProps> = ({ children }) =>
         verification_level: VerificationLevel.Orb, // Require orb verification for highest security
       });
 
+      console.log('🌐 Verification response status:', finalPayload?.status);
+
       if (finalPayload.status === 'success') {
         const verificationResult = finalPayload as ISuccessResult;
         
         console.log('✅ World ID proof generated, verifying with backend...');
+        console.log('🌐 Nullifier hash:', verificationResult.nullifier_hash?.substring(0, 10) + '...');
 
         // Send proof to backend for verification
-        const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001';
+        const backendUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+        console.log('🌐 Backend URL:', backendUrl);
+        
         const response = await fetch(`${backendUrl}/api/verify-worldcoin`, {
           method: 'POST',
           headers: { 
@@ -160,6 +163,7 @@ export const MiniKitProvider: React.FC<MiniKitProviderProps> = ({ children }) =>
         });
 
         const verifyData = await response.json();
+        console.log('🌐 Backend response:', { success: verifyData.success, hasError: !!verifyData.error });
 
         if (!response.ok || !verifyData.success) {
           console.error('❌ Backend verification failed:', verifyData);

@@ -99,25 +99,55 @@
   font-weight: 700;
   border: none;
   border-radius: 16px;
-  color: white;
   cursor: pointer;
   touch-action: manipulation;
   min-height: 70px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
   transition: transform 0.1s ease;
-  background: white;
-  border: 3px solid #667eea;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  
+  /* Default: white text with text shadow */
+  color: #ffffff !important;
+  text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+/* Individual color backgrounds with gradients */
+.color-btn-red {
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+}
+
+.color-btn-blue {
+  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+}
+
+.color-btn-green {
+  background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+}
+
+.color-btn-yellow {
+  background: linear-gradient(135deg, #eab308 0%, #ca8a04 100%);
+  color: #1a1a2e !important; /* DARK text for yellow */
+  text-shadow: none;
+}
+
+.color-btn-purple {
+  background: linear-gradient(135deg, #a855f7 0%, #9333ea 100%);
+}
+
+.color-btn-orange {
+  background: linear-gradient(135deg, #f97316 0%, #ea580c 100%);
 }
 
 .color-option:active {
   transform: scale(0.95);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 }
 
-.color-option:hover {
-  background: linear-gradient(135deg, #667eea, #764ba2);
-  color: white;
-  transform: translateY(-3px);
-  box-shadow: 0 10px 25px rgba(102, 126, 234, 0.4);
+/* Disabled state */
+.color-option:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .game-instructions, .game-complete {

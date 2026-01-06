@@ -190,7 +190,7 @@ const ColorSwap: React.FC<ColorSwapProps> = ({ onGameComplete, onExit }) => {
             {COLORS.map((color) => (
               <button
                 key={color.name}
-                className="color-option"
+                className={`color-option color-btn-${color.name.toLowerCase()}`}
                 onClick={() => handleAnswer(color.name)}
               >
                 {color.name}
