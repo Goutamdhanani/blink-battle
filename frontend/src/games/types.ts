@@ -154,3 +154,148 @@ export interface ReflexTrial {
   isFalseStart: boolean;
   timestamp: number;
 }
+
+// Premium Features - Adaptive Difficulty
+export interface AdaptiveDifficultyState {
+  gameType: GameType;
+  currentDifficulty: number;
+  baseLevel: number;
+  performanceHistory: PerformanceSnapshot[];
+  lastAdjustment: number;
+  consecutiveSuccesses: number;
+  consecutiveFailures: number;
+  adaptiveParams: {
+    speedMultiplier: number;
+    complexityLevel: number;
+    timeWindow: number;
+    distractorCount: number;
+  };
+}
+
+export interface PerformanceSnapshot {
+  timestamp: number;
+  accuracy: number;
+  reactionTimeMs?: number;
+  score: number;
+  level: number;
+}
+
+// Enhanced Game Score with detailed metrics
+export interface EnhancedGameScore extends GameScore {
+  enhancedMetrics?: {
+    consistency?: number; // Standard deviation across trials
+    anticipationRate?: number; // False starts / total trials
+    fatigueIndex?: number; // Performance decay over time
+    percentileRank?: number;
+    improvement?: number; // vs previous session
+    speedAccuracyTradeoff?: number;
+    reactionTimeDistribution?: number[];
+    firstHalfPerformance?: number;
+    secondHalfPerformance?: number;
+  };
+}
+
+// Cognitive Profile
+export interface CognitiveProfile {
+  userId: string;
+  lastUpdated: number;
+  gamesAnalyzed: number;
+  
+  // Core Indices (0-100 scale)
+  processingSpeedIndex: number;
+  memoryIndex: number;
+  attentionIndex: number;
+  consistencyScore: number;
+  
+  // Detailed breakdown
+  indices: {
+    visualMemory: number;
+    verbalMemory: number;
+    spatialMemory: number;
+    selectiveAttention: number;
+    sustainedAttention: number;
+    reactionSpeed: number;
+    decisionSpeed: number;
+  };
+  
+  // Strengths and weaknesses
+  topStrengths: string[];
+  areasForImprovement: string[];
+  
+  // Time-of-day performance
+  timeOfDayPerformance: {
+    morning: number;   // 6am-12pm
+    afternoon: number; // 12pm-6pm
+    evening: number;   // 6pm-12am
+    night: number;     // 12am-6am
+  };
+}
+
+// Session Intelligence
+export interface SessionMetrics {
+  sessionId: string;
+  startTime: number;
+  endTime?: number;
+  gamesPlayed: number;
+  isWarmUp: boolean;
+  fatigueDetected: boolean;
+  performanceTrend: 'improving' | 'stable' | 'declining';
+  averagePerformance: number;
+  timeOfDay: 'morning' | 'afternoon' | 'evening' | 'night';
+}
+
+// Performance Insights
+export interface PerformanceInsight {
+  id: string;
+  type: 'strength' | 'weakness' | 'recommendation' | 'achievement';
+  category: 'speed' | 'memory' | 'attention' | 'consistency' | 'general';
+  title: string;
+  message: string;
+  confidence: number; // 0-1
+  actionable: boolean;
+  suggestedGames?: GameType[];
+  timestamp: number;
+}
+
+// Weekly Report
+export interface WeeklyReport {
+  weekStart: string; // ISO date
+  weekEnd: string;
+  totalGames: number;
+  totalDaysPlayed: number;
+  averageDailyGames: number;
+  
+  performance: {
+    strongest: {
+      area: string;
+      score: number;
+      percentile: number;
+    };
+    mostImproved: {
+      area: string;
+      improvement: number;
+    };
+    needsWork: {
+      area: string;
+      score: number;
+    };
+  };
+  
+  insights: PerformanceInsight[];
+  streakInfo: {
+    current: number;
+    longest: number;
+  };
+}
+
+// Percentile Data
+export interface PercentileData {
+  gameType: GameType;
+  metric: 'score' | 'accuracy' | 'speed' | 'level';
+  value: number;
+  percentile: number;
+  rank: number;
+  totalUsers: number;
+  ageGroup?: string;
+  label: string; // e.g., "Faster than 82% of users"
+}
