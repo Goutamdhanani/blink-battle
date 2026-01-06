@@ -3,7 +3,7 @@
 .reflex-game {
   min-height: 100vh;
   background: linear-gradient(180deg, #0a0a1f 0%, #1a0f3d 50%, #2d1b4e 100%);
-  padding: 20px;
+  padding: var(--space-lg); /* Changed from 20px */
   position: relative;
 }
 
@@ -11,13 +11,13 @@
   position: relative;
   height: calc(100vh - 220px);
   min-height: 500px;
-  border-radius: 24px;
+  border-radius: var(--radius-xl); /* Changed from 24px */
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
   transition: all 0.3s ease;
-  margin: 20px 0;
+  margin: var(--space-lg) 0; /* Changed from 20px */
   border: 3px solid rgba(255, 255, 255, 0.1);
   overflow: hidden;
 }

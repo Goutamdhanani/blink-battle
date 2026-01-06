@@ -3,8 +3,8 @@
 .attention-game {
   min-height: 100vh;
   background: linear-gradient(180deg, #0a0a1f 0%, #1a0f3d 50%, #2d1b4e 100%);
-  padding: 20px;
-  padding-bottom: max(20px, env(safe-area-inset-bottom));
+  padding: var(--space-lg); /* Changed from 20px */
+  padding-bottom: max(var(--space-lg), env(safe-area-inset-bottom));
   position: relative;
 }
 
@@ -23,8 +23,8 @@
 .game-stats-bar {
   display: flex;
   justify-content: center;
-  gap: 24px;
-  margin: 20px 0;
+  gap: var(--space-lg); /* Changed from 24px */
+  margin: var(--space-lg) 0; /* Changed from 20px */
   position: relative;
   z-index: var(--z-content);
 }
@@ -33,12 +33,12 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 4px;
+  gap: var(--space-xs); /* Changed from 4px */
   background: rgba(255, 255, 255, 0.05);
   backdrop-filter: blur(10px);
   border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 12px;
-  padding: 12px 20px;
+  border-radius: var(--radius-md); /* Changed from 12px */
+  padding: var(--space-md) var(--space-lg); /* Changed from 12px 20px */
 }
 
 .stat-icon {
@@ -62,7 +62,7 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 16px;
+  gap: var(--space-md); /* Changed from 16px */
   z-index: var(--z-modal);
   animation: fadeIn 0.3s ease-out;
   pointer-events: auto;

@@ -3,7 +3,7 @@
 .memory-game {
   min-height: 100vh;
   background: linear-gradient(180deg, #0a0a1f 0%, #1a0f3d 50%, #2d1b4e 100%);
-  padding: 20px;
+  padding: var(--space-lg); /* Changed from 20px */
   position: relative;
 }
 
@@ -23,7 +23,7 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 24px;
+  margin-bottom: var(--space-lg); /* Changed from 24px */
   position: relative;
   z-index: var(--z-content);
 }
@@ -32,9 +32,9 @@
   background: rgba(255, 255, 255, 0.05);
   border: 1px solid rgba(255, 255, 255, 0.1);
   color: #fff;
-  padding: 10px 16px;
-  border-radius: 12px;
-  font-size: 14px;
+  padding: var(--space-sm) var(--space-md); /* Changed from 10px 16px */
+  border-radius: var(--radius-md); /* Changed from 12px */
+  font-size: var(--text-sm); /* Changed from 14px */
   cursor: pointer;
   transition: all 0.3s ease;
   backdrop-filter: blur(10px);
@@ -48,15 +48,15 @@
 
 .game-info {
   display: flex;
-  gap: 16px;
+  gap: var(--space-md); /* Changed from 16px */
   align-items: center;
 }
 
 .level-badge {
   background: linear-gradient(135deg, #00ffff 0%, #ff00ff 100%);
-  padding: 8px 16px;
-  border-radius: 20px;
-  font-size: 14px;
+  padding: var(--space-sm) var(--space-md); /* Changed from 8px 16px */
+  border-radius: var(--radius-lg); /* Changed from 20px */
+  font-size: var(--text-sm); /* Changed from 14px */
   font-weight: 700; /* Increased from 600 for better visibility */
   color: #000; /* Changed to black for better contrast against bright gradient */
   box-shadow: 0 4px 20px rgba(0, 255, 255, 0.3);
@@ -67,21 +67,21 @@
   background: rgba(255, 255, 255, 0.08); /* Slightly increased opacity */
   backdrop-filter: blur(10px);
   border: 1px solid rgba(255, 255, 255, 0.2); /* Increased border opacity */
-  padding: 8px 16px;
-  border-radius: 20px;
-  font-size: 14px;
+  padding: var(--space-sm) var(--space-md); /* Changed from 8px 16px */
+  border-radius: var(--radius-lg); /* Changed from 20px */
+  font-size: var(--text-sm); /* Changed from 14px */
   font-weight: 600;
   color: rgba(255, 255, 255, 0.95); /* Improved contrast from 0.9 */
 }
 
 .cards-grid {
   display: grid;
-  gap: 12px;
+  gap: var(--space-md); /* Changed from 12px */
   max-width: 400px;
   margin: 0 auto;
   position: relative;
   z-index: var(--z-content);
-  padding: 20px;
+  padding: var(--space-lg); /* Changed from 20px */
 }
 
 .memory-card {
