@@ -12,6 +12,7 @@
     "migrate:phase2": "ts-node src/config/migrate-phase2.ts",
     "migrate:columns": "ts-node src/config/migrations.ts",
     "migrate:production": "ts-node src/config/productionMigrations.ts up",
+    "migrate:worldcoin": "ts-node src/config/productionMigrations.ts up",
     "migrate:rollback": "ts-node src/config/productionMigrations.ts down",
     "lint": "eslint src --ext .ts",
     "test": "jest"

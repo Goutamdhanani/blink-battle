@@ -116,6 +116,7 @@
   margin: 0 auto;
   font-weight: bold;
   font-size: 1.1em;
+  color: #1a1a2e; /* Dark text for visibility on white background */
 }
 
 .game-arena {
@@ -270,6 +271,25 @@
 }
 
 @media (max-width: 768px) {
+  .focus_filter-game {
+    padding: 10px;
+  }
+
+  .game-instructions, .game-complete {
+    padding: 24px;
+    max-width: 100%;
+    margin: 0 10px;
+  }
+
+  .game-header {
+    padding: 12px;
+  }
+
+  .game-info {
+    font-size: 0.9em;
+    gap: 8px;
+  }
+
   .items-container {
     height: 300px;
   }
@@ -288,6 +308,24 @@
 }
 
 @media (max-width: 480px) {
+  .game-instructions, .game-complete {
+    padding: 20px;
+    margin: 0 8px;
+  }
+
+  .game-instructions h2, .game-complete h2 {
+    font-size: 24px;
+  }
+
+  .instructions-content p {
+    font-size: 14px;
+  }
+
+  .start-btn, .next-level-btn, .menu-btn {
+    padding: 14px 32px;
+    font-size: 16px;
+  }
+
   .items-container {
     height: 250px;
   }
