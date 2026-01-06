@@ -25,16 +25,14 @@ export function createTouchHandler<T = void>(
   let touchMoved = false;
 
   return {
-    onTouchStart: (e: React.TouchEvent) => {
+    onTouchStart: (_e: React.TouchEvent) => {
       console.log('[TouchUtils] Touch started');
       touchStarted = true;
       touchMoved = false;
-      e.currentTarget; // Use e to avoid unused var warning
     },
     
-    onTouchMove: (e: React.TouchEvent) => {
+    onTouchMove: (_e: React.TouchEvent) => {
       touchMoved = true;
-      e.currentTarget; // Use e to avoid unused var warning
     },
     
     onTouchEnd: (e: React.TouchEvent) => {

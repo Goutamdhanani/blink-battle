@@ -5,6 +5,22 @@ import pool from '../config/database';
 // Debug logging flag
 const DEBUG = process.env.DEBUG_WORLDCOIN === 'true';
 
+// Interface for error response from World ID verification
+interface IWorldIdErrorResponse {
+  success: false;
+  detail?: string;
+  code?: string;
+  attribute?: string | null;
+}
+
+// Extended Request interface with authenticated user
+interface AuthenticatedRequest extends Request {
+  user?: {
+    userId: number;
+    walletAddress?: string;
+  };
+}
+
 /**
  * Verify World ID proof from MiniKit
  * This endpoint receives the proof from the frontend and verifies it with Worldcoin
@@ -14,7 +30,7 @@ export class WorldcoinController {
    * Verify World ID proof
    * POST /api/verify-worldcoin
    */
-  static async verifyWorldId(req: Request, res: Response): Promise<void> {
+  static async verifyWorldId(req: AuthenticatedRequest, res: Response): Promise<void> {
     try {
       const { proof, merkle_root, nullifier_hash, verification_level, signal } = req.body;
 
@@ -67,12 +83,13 @@ export class WorldcoinController {
       }
 
       if (!verifyRes.success) {
-        console.warn('[WorldID] Verification failed:', verifyRes);
+        const errorResponse = verifyRes as unknown as IWorldIdErrorResponse;
+        console.warn('[WorldID] Verification failed:', errorResponse);
         res.status(400).json({ 
           success: false, 
           error: 'World ID verification failed',
-          detail: (verifyRes as any).detail || 'Invalid proof',
-          code: (verifyRes as any).code,
+          detail: errorResponse.detail || 'Invalid proof',
+          code: errorResponse.code,
         });
         return;
       }
@@ -96,7 +113,7 @@ export class WorldcoinController {
       // Store the verified World ID data
       // Note: This assumes user is already authenticated via wallet
       // You might need to adjust this based on your auth flow
-      const userId = (req as any).user?.userId;
+      const userId = req.user?.userId;
 
       if (userId) {
         // Update existing user with World ID verification

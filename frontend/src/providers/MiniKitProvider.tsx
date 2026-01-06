@@ -120,12 +120,17 @@ export const MiniKitProvider: React.FC<MiniKitProviderProps> = ({ children }) =>
         throw new Error('World ID verification requires World App. Please open this app in World App to verify.');
       }
 
+      if (!user || !user.id) {
+        console.error('❌ No authenticated user found');
+        throw new Error('Please sign in first before verifying with World ID');
+      }
+
       console.log('🌐 Initiating World ID verification...');
 
       // Verify with World ID using MiniKit
       const { finalPayload } = await MiniKit.commandsAsync.verify({
         action: WORLD_ID_ACTION, // Action ID from environment or default
-        signal: user?.id || '', // User identifier to prevent multiple verifications
+        signal: user.id, // User identifier to prevent multiple verifications
         verification_level: VerificationLevel.Orb, // Require orb verification for highest security
       });
 
