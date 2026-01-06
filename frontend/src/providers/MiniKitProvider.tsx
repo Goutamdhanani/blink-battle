@@ -140,11 +140,6 @@ export const MiniKitProvider: React.FC<MiniKitProviderProps> = ({ children }) =>
       }
 
       console.log('🌐 Initiating World ID verification...');
-      
-      // Generate unique nonce for this verification
-      const nonceArray = new Uint8Array(16);
-      crypto.getRandomValues(nonceArray);
-      const nonce = Array.from(nonceArray, byte => byte.toString(16).padStart(2, '0')).join('');
 
       // Verify with World ID using MiniKit
       const { finalPayload } = await MiniKit.commandsAsync.verify({

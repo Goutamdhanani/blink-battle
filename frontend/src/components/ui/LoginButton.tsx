@@ -85,7 +85,7 @@ const LoginButton: React.FC = () => {
         {!user.worldIdVerified && (
           <div className="worldid-prompt">
             <p className="worldid-prompt-text">
-              🌐 Verify with World ID to prove you're a unique human
+              🌐 Verify with World ID to prove you&apos;re a unique human
             </p>
             <button 
               className="worldid-verify-button" 
