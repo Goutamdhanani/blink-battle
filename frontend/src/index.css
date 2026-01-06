@@ -30,8 +30,8 @@
   
   /* Text Colors */
   --text: #ffffff;
-  --text-secondary: #b0b0c0;
-  --text-dim: #707080;
+  --text-secondary: #d0d0e0; /* Improved from #b0b0c0 for better contrast */
+  --text-dim: #9090a0; /* Improved from #707080 for better contrast */
   
   /* Status Colors */
   --success: var(--neon-green);

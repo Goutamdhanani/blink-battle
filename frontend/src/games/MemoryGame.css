@@ -57,19 +57,21 @@
   padding: 8px 16px;
   border-radius: 20px;
   font-size: 14px;
-  font-weight: 600;
-  color: #fff;
+  font-weight: 700; /* Increased from 600 for better visibility */
+  color: #000; /* Changed to black for better contrast against bright gradient */
   box-shadow: 0 4px 20px rgba(0, 255, 255, 0.3);
+  text-shadow: none; /* Remove any text shadow for clarity */
 }
 
 .moves-counter {
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(255, 255, 255, 0.08); /* Slightly increased opacity */
   backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2); /* Increased border opacity */
   padding: 8px 16px;
   border-radius: 20px;
   font-size: 14px;
-  color: rgba(255, 255, 255, 0.9);
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.95); /* Improved contrast from 0.9 */
 }
 
 .cards-grid {
