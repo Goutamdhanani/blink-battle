@@ -23,10 +23,13 @@
 .game-instructions h2, .game-complete h2 {
   font-size: 2.5em;
   margin: 0 0 10px 0;
+  /* Vibrant pink fallback - visible on white background in all browsers */
+  color: #d946a5 !important;
+  /* Gradient text for supporting browsers - pink/purple gradient visible on white */
   background: linear-gradient(135deg, #f093fb, #f5576c);
+  background-clip: text;
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
-  background-clip: text;
 }
 
 .exit-btn {
@@ -250,7 +253,7 @@
 }
 
 .stat-label {
-  color: #666;
+  color: #666 !important;
   margin-top: 5px;
 }
 
@@ -261,7 +264,7 @@
 }
 
 .game-subtitle {
-  color: #666;
+  color: #666 !important;
   font-size: 1.2em;
   margin-bottom: 30px;
 }
