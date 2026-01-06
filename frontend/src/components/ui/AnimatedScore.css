@@ -1,0 +1,20 @@
+.animated-score {
+  display: inline-block;
+  font-variant-numeric: tabular-nums;
+  transition: color 0.3s ease;
+}
+
+.animated-score.highlight {
+  color: #4A90E2;
+  text-shadow: 0 0 10px rgba(74, 144, 226, 0.5);
+}
+
+.animated-score.success {
+  color: #7ED321;
+  text-shadow: 0 0 10px rgba(126, 211, 33, 0.5);
+}
+
+.animated-score.error {
+  color: #FF6B6B;
+  text-shadow: 0 0 10px rgba(255, 107, 107, 0.5);
+}
