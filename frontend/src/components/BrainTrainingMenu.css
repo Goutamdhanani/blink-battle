@@ -799,6 +799,15 @@
   transform: translateX(4px);
 }
 
+.action-card-dashboard {
+  border-color: rgba(255, 0, 255, 0.3);
+}
+
+.action-card-dashboard:hover {
+  border-color: rgba(255, 0, 255, 0.5);
+  box-shadow: 0 8px 32px rgba(255, 0, 255, 0.2);
+}
+
 .action-card-games {
   border-color: rgba(0, 255, 255, 0.3);
 }
