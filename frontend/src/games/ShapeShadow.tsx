@@ -30,7 +30,13 @@ const ShapeShadow: React.FC<ShapeShadowProps> = ({ onGameComplete, onExit }) => 
   const [feedback, setFeedback] = useState<'correct' | 'wrong' | null>(null);
 
   const TOTAL_ROUNDS = 10;
-  const optionCount = Math.min(3 + level, 6);
+  
+  // Increase number of shapes based on level: start with 6, increase by 2 per level, max 16
+  const getShapesForLevel = (currentLevel: number) => {
+    return Math.min(6 + (currentLevel - 1) * 2, 16);
+  };
+  
+  const optionCount = getShapesForLevel(level);
 
   useEffect(() => {
     if (gamePhase === 'playing' && round < TOTAL_ROUNDS) {
@@ -178,7 +184,7 @@ const ShapeShadow: React.FC<ShapeShadowProps> = ({ onGameComplete, onExit }) => 
           <div className={`shadow-shape ${feedback || ''}`}>{shadowShape}</div>
         </div>
 
-        <div className="shape-options">
+        <div className={`shape-options ${optionCount > 6 ? 'many-shapes' : ''}`}>
           {options.map((shape, index) => (
             <button
               key={index}

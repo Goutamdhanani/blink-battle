@@ -9,12 +9,12 @@ interface ColorSwapProps {
 }
 
 const COLORS = [
-  { name: 'RED', hex: '#ff4444' },
-  { name: 'BLUE', hex: '#4444ff' },
-  { name: 'GREEN', hex: '#44ff44' },
-  { name: 'YELLOW', hex: '#ffff44' },
-  { name: 'PURPLE', hex: '#ff44ff' },
-  { name: 'ORANGE', hex: '#ff8844' },
+  { name: 'RED', hex: '#ef4444' },
+  { name: 'BLUE', hex: '#3b82f6' },
+  { name: 'GREEN', hex: '#22c55e' },
+  { name: 'YELLOW', hex: '#eab308' },
+  { name: 'PURPLE', hex: '#a855f7' },
+  { name: 'ORANGE', hex: '#f97316' },
 ];
 
 const ColorSwap: React.FC<ColorSwapProps> = ({ onGameComplete, onExit }) => {
@@ -41,14 +41,24 @@ const ColorSwap: React.FC<ColorSwapProps> = ({ onGameComplete, onExit }) => {
   }, [round, gamePhase]);
 
   const presentQuestion = () => {
+    // Randomly select the word to display
     const wordColor = COLORS[Math.floor(Math.random() * COLORS.length)];
-    const displayColor = COLORS[Math.floor(Math.random() * COLORS.length)];
+    
+    // Randomly select a different color for displaying the word
+    let displayColor = COLORS[Math.floor(Math.random() * COLORS.length)];
+    
+    // Ensure color and word are different for difficulty
+    while (displayColor.name === wordColor.name) {
+      displayColor = COLORS[Math.floor(Math.random() * COLORS.length)];
+    }
+    
+    // Randomly ask for word meaning or text color
     const askAbout = Math.random() > 0.5 ? 'word' : 'color';
 
     setWordText(wordColor.name);
     setWordColor(displayColor.hex);
     setQuestionType(askAbout);
-    setCorrectAnswer(askAbout === 'word' ? wordColor.name : displayColor.hex);
+    setCorrectAnswer(askAbout === 'word' ? wordColor.name : displayColor.name);
     setFeedback(null);
   };
 
@@ -81,13 +91,7 @@ const ColorSwap: React.FC<ColorSwapProps> = ({ onGameComplete, onExit }) => {
   const handleAnswer = (colorName: string) => {
     if (feedback) return;
 
-    let isCorrect = false;
-    if (questionType === 'word') {
-      isCorrect = wordText === colorName;
-    } else {
-      const selectedColor = COLORS.find(c => c.name === colorName);
-      isCorrect = selectedColor?.hex === correctAnswer;
-    }
+    const isCorrect = colorName === correctAnswer;
 
     if (isCorrect) {
       setCorrectAnswers(prev => prev + 1);
@@ -99,7 +103,7 @@ const ColorSwap: React.FC<ColorSwapProps> = ({ onGameComplete, onExit }) => {
 
     setTimeout(() => {
       setRound(prev => prev + 1);
-    }, 1000);
+    }, 800);
   };
 
   if (gamePhase === 'instructions') {

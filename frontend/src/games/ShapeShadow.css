@@ -113,26 +113,13 @@
   75% { transform: translateX(10px); }
 }
 
-.shape-options {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
-  gap: 15px;
-  max-width: 600px;
-}
-
-.shape-option {
-  background: white;
-  border: 3px solid #f093fb;
-  padding: 30px;
-  font-size: 3em;
-  border-radius: 15px;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
 .shape-option:hover:not(:disabled) {
-  transform: translateY(-5px);
+  transform: scale(1.05);
   box-shadow: 0 10px 30px rgba(240, 147, 251, 0.4);
+}
+
+.shape-option:active {
+  transform: scale(0.95);
 }
 
 .shape-option.correct-answer {
@@ -156,11 +143,13 @@
 }
 
 .progress-bar {
-  width: 400px;
+  width: 100%;
+  max-width: 100%;
   height: 10px;
   background: rgba(255, 255, 255, 0.3);
   border-radius: 10px;
   overflow: hidden;
+  margin-top: 20px;
 }
 
 .progress-fill {

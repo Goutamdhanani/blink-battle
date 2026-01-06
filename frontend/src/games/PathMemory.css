@@ -1,11 +1,118 @@
 .path_memory-game {
+  width: 100vw;
   min-height: 100vh;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 20px;
+  padding: 16px;
   font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  overflow-y: auto;
+}
+
+.game-header {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  background: #667eea; /* Visible gradient background */
+  padding: 16px 20px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+  z-index: 1000;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.game-info {
+  display: flex;
+  justify-content: space-around;
+  max-width: 600px;
+  margin: 0 auto;
+  font-weight: bold;
+  font-size: 18px; /* Readable on mobile */
+  color: #ffffff; /* White text */
+  gap: 12px;
+}
+
+.game-arena {
+  margin-top: 100px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 16px;
+  width: 100%;
+}
+
+.instruction-text {
+  font-size: 1.5em;
+  font-weight: bold;
+  color: white;
+  margin-bottom: 24px;
+  text-align: center;
+}
+
+.grid-container {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr); /* 4x4 grid */
+  gap: 16px; /* Larger gap for mobile */
+  width: 100%;
+  max-width: 360px; /* Good size for mobile */
+  margin: 24px auto;
+  padding: 20px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 20px;
+}
+
+.grid-cell {
+  aspect-ratio: 1;
+  width: 100%;
+  min-width: 60px; /* LARGER dots for mobile */
+  min-height: 60px;
+  background: rgba(255, 255, 255, 0.2);
+  border: 3px solid rgba(255, 255, 255, 0.4);
+  border-radius: 50%;
+  cursor: pointer;
+  touch-action: manipulation; /* Optimize for touch */
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5em;
+  font-weight: bold;
+  color: #667eea;
+  position: relative;
+}
+
+.grid-cell:hover {
+  background: rgba(255, 255, 255, 0.3);
+  transform: scale(1.05);
+}
+
+.grid-cell.highlighted {
+  background: #667eea;
+  border-color: #764ba2;
+  transform: scale(1.1); /* Visual feedback */
+  box-shadow: 0 0 20px rgba(102, 126, 234, 0.6);
+  animation: pulse 0.5s;
+  color: white;
+}
+
+.grid-cell.selected {
+  background: #48bb78; /* Green */
+  border-color: #2f9e44;
+  color: white;
+}
+
+/* Increase grid size for higher levels */
+.grid-container.level-high {
+  grid-template-columns: repeat(5, 1fr); /* 5x5 for harder levels */
+  max-width: 400px;
+}
+
+.grid-container.level-high .grid-cell {
+  min-width: 50px;
+  min-height: 50px;
 }
 
 .game-instructions, .game-complete {
@@ -55,6 +162,7 @@
   transition: all 0.2s;
   font-weight: bold;
   margin: 10px;
+  touch-action: manipulation;
 }
 
 .start-btn:hover, .next-level-btn:hover {
@@ -67,104 +175,20 @@
 }
 
 .exit-btn {
-  position: absolute;
-  top: 20px;
-  right: 20px;
-  background: white;
-  border: 2px solid #ddd;
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  font-size: 1.5em;
+  background: rgba(255, 255, 255, 0.2);
+  border: none;
+  color: #ffffff; /* White text */
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: 600;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all 0.3s ease;
 }
 
 .exit-btn:hover {
-  background: #ff6b6b;
-  color: white;
-  transform: rotate(90deg);
-}
-
-.game-header {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  background: rgba(255, 255, 255, 0.95);
-  padding: 20px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
-  z-index: 1000;
-}
-
-.game-info {
-  display: flex;
-  justify-content: space-around;
-  max-width: 600px;
-  margin: 0 auto;
-  font-weight: bold;
-  font-size: 1.1em;
-}
-
-.game-arena {
-  margin-top: 100px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 40px;
-}
-
-.instruction-text {
-  font-size: 1.5em;
-  font-weight: bold;
-  color: white;
-  margin-bottom: 30px;
-  text-align: center;
-}
-
-.grid-container {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 15px;
-  max-width: 400px;
-  margin: 30px auto;
-  padding: 20px;
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 20px;
-}
-
-.grid-cell {
-  aspect-ratio: 1;
-  background: rgba(255, 255, 255, 0.9);
-  border: 3px solid transparent;
-  border-radius: 10px;
-  cursor: pointer;
-  transition: all 0.3s;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 1.5em;
-  font-weight: bold;
-  color: #667eea;
-  position: relative;
-}
-
-.grid-cell:hover {
-  background: rgba(255, 255, 255, 1);
-  transform: scale(1.05);
-}
-
-.grid-cell.highlighted {
-  background: linear-gradient(135deg, #51cf66, #40c057);
-  border-color: #2f9e44;
-  animation: pulse 0.5s;
-  color: white;
-}
-
-.grid-cell.selected {
-  background: linear-gradient(135deg, #667eea, #764ba2);
-  border-color: #5f3dc4;
-  color: white;
+  background: rgba(255, 255, 255, 0.3);
+  box-shadow: 0 0 20px rgba(255, 255, 255, 0.2);
 }
 
 .path-number {
