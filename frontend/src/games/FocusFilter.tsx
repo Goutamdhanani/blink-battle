@@ -92,12 +92,17 @@ const FocusFilter: React.FC<FocusFilterProps> = ({ onGameComplete, onExit }) => 
       e.preventDefault();
       e.stopPropagation();
     }
-    console.log('[FocusFilter] Game starting...');
+    console.log('[FocusFilter] Game starting...'); // Debug log as per requirements
     setGamePhase('playing');
     setScore(0);
     setRound(0);
     setCorrectAnswers(0);
     setWrongClicks(0);
+  };
+
+  const handleStartTouch = (e: React.TouchEvent) => {
+    e.preventDefault();
+    startGame(e);
   };
 
   const handleItemClick = (item: Item) => {
@@ -140,7 +145,7 @@ const FocusFilter: React.FC<FocusFilterProps> = ({ onGameComplete, onExit }) => 
           <button 
             className="start-btn" 
             onClick={startGame}
-            onTouchEnd={(e) => { e.preventDefault(); startGame(e); }}
+            onTouchEnd={handleStartTouch}
           >
             Start Level {level}
           </button>
