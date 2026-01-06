@@ -24,6 +24,9 @@ interface MiniKitProviderProps {
   children: ReactNode;
 }
 
+// World ID verification action ID - configure in Worldcoin Developer Portal
+const WORLD_ID_ACTION = import.meta.env.VITE_WORLD_ID_ACTION || 'verify-unique-human';
+
 export const MiniKitProvider: React.FC<MiniKitProviderProps> = ({ children }) => {
   const [isInstalled, setIsInstalled] = useState(false);
   const [user, setUser] = useState<User | null>(null);
@@ -124,13 +127,16 @@ export const MiniKitProvider: React.FC<MiniKitProviderProps> = ({ children }) =>
     try {
       if (!isInstalled) {
         console.log('ℹ️ MiniKit not installed, simulating World ID verification');
-        // Demo mode - simulate verification
+        // Demo mode - simulate verification with secure random nullifier
         if (user) {
+          // Generate a more secure demo nullifier using crypto.randomUUID or random values
+          const demoNullifier = crypto.randomUUID?.() || `demo_nullifier_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+          
           const verifiedUser: User = {
             ...user,
             worldIdVerified: true,
             verificationLevel: 'orb',
-            nullifierHash: `demo_nullifier_${Date.now()}`,
+            nullifierHash: demoNullifier,
           };
           setUser(verifiedUser);
           localStorage.setItem('minikit_user', JSON.stringify(verifiedUser));
@@ -143,7 +149,7 @@ export const MiniKitProvider: React.FC<MiniKitProviderProps> = ({ children }) =>
 
       // Verify with World ID using MiniKit
       const { finalPayload } = await MiniKit.commandsAsync.verify({
-        action: 'verify-unique-human', // Action ID - should match your Worldcoin Developer Portal configuration
+        action: WORLD_ID_ACTION, // Action ID from environment or default
         signal: user?.id || '', // User identifier to prevent multiple verifications
         verification_level: VerificationLevel.Orb, // Require orb verification for highest security
       });
