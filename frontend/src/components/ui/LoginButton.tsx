@@ -149,8 +149,8 @@ const LoginButton: React.FC = () => {
         )}
       </button>
       {!isInstalled && (
-        <p className="login-hint">
-          Running in demo mode - open in World App for full authentication
+        <p className="login-hint login-warning">
+          ⚠️ Please open this app in World App for authentication
         </p>
       )}
       {error && <p className="login-error">{error}</p>}

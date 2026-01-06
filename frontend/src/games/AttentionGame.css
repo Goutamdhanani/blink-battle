@@ -193,10 +193,18 @@
   animation: targetAppear 0.2s ease-out;
   transition: transform 0.1s ease;
   z-index: var(--z-elevated);
+  /* Ensure touch events work */
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
 }
 
 .attention-target:hover {
   transform: scale(1.1);
+}
+
+.attention-target:active {
+  transform: scale(0.9);
 }
 
 .target-valid {

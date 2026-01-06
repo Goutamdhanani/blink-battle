@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { GameType as GameTypeEnum, Achievement } from '../games/types';
 import { useBrainTrainingData } from '../hooks/useBrainTrainingData';
 import { useMiniKit } from '../providers/MiniKitProvider';
+import { createTouchHandler } from '../lib/touchUtils';
 import MemoryGame from '../games/MemoryGame';
 import AttentionGame from '../games/AttentionGame';
 import ReflexGame from '../games/ReflexGame';
@@ -64,6 +65,22 @@ const BrainTrainingMenu: React.FC = () => {
   const handleGameSelect = (game: GameTypeEnum) => {
     setCurrentGame(game);
   };
+
+  // Create touch handlers for menu navigation
+  const navigateToGames = createTouchHandler(() => {
+    console.log('[Menu] Navigating to games');
+    setCurrentGame('games');
+  });
+
+  const navigateToProfile = createTouchHandler(() => {
+    console.log('[Menu] Navigating to profile');
+    setCurrentGame('profile');
+  });
+
+  const navigateToStats = createTouchHandler(() => {
+    console.log('[Menu] Navigating to stats');
+    setCurrentGame('stats');
+  });
 
   if (showWelcome) {
     return (
@@ -269,7 +286,7 @@ const BrainTrainingMenu: React.FC = () => {
         <div className="quick-actions-section">
           <h2 className="section-title">Quick Actions</h2>
           <div className="action-cards">
-            <button className="action-card action-card-games" onClick={() => setCurrentGame('games')}>
+            <button className="action-card action-card-games" {...navigateToGames}>
               <div className="action-icon">🎮</div>
               <div className="action-info">
                 <h3 className="action-title">Play Games</h3>
@@ -278,7 +295,7 @@ const BrainTrainingMenu: React.FC = () => {
               <div className="action-arrow">→</div>
             </button>
 
-            <button className="action-card action-card-profile" onClick={() => setCurrentGame('profile')}>
+            <button className="action-card action-card-profile" {...navigateToProfile}>
               <div className="action-icon">👤</div>
               <div className="action-info">
                 <h3 className="action-title">Brain Profile</h3>
@@ -287,7 +304,7 @@ const BrainTrainingMenu: React.FC = () => {
               <div className="action-arrow">→</div>
             </button>
 
-            <button className="action-card action-card-stats" onClick={() => setCurrentGame('stats')}>
+            <button className="action-card action-card-stats" {...navigateToStats}>
               <div className="action-icon">📊</div>
               <div className="action-info">
                 <h3 className="action-title">Statistics</h3>
@@ -311,15 +328,15 @@ const BrainTrainingMenu: React.FC = () => {
           <span className="nav-icon">🏠</span>
           <span className="nav-label">Home</span>
         </button>
-        <button className="nav-item" onClick={() => setCurrentGame('games')}>
+        <button className="nav-item" {...navigateToGames}>
           <span className="nav-icon">🎮</span>
           <span className="nav-label">Games</span>
         </button>
-        <button className="nav-item" onClick={() => setCurrentGame('profile')}>
+        <button className="nav-item" {...navigateToProfile}>
           <span className="nav-icon">👤</span>
           <span className="nav-label">Profile</span>
         </button>
-        <button className="nav-item" onClick={() => setCurrentGame('stats')}>
+        <button className="nav-item" {...navigateToStats}>
           <span className="nav-icon">📊</span>
           <span className="nav-label">Stats</span>
         </button>

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { saveGameScoreWithSync as saveGameScore } from '../lib/indexedDB';
 import { GameScore, AttentionTarget } from './types';
+import { createTouchHandler } from '../lib/touchUtils';
 import './AttentionGame.css';
 
 interface AttentionGameProps {
@@ -155,10 +156,31 @@ const AttentionGame: React.FC<AttentionGameProps> = ({ onGameComplete, onExit })
     setCountdown(3);
   };
 
+  // Create touch handlers for better mobile support
+  const exitHandler = createTouchHandler(() => {
+    console.log('[AttentionGame] Exiting game');
+    onExit();
+  });
+
+  const createTargetHandler = (target: AttentionTarget) => createTouchHandler(() => {
+    console.log('[AttentionGame] Target clicked:', target.id);
+    handleTargetClick(target);
+  });
+
+  const nextLevelHandler = createTouchHandler(() => {
+    console.log('[AttentionGame] Next level');
+    handleNextLevel();
+  });
+
+  const restartHandler = createTouchHandler(() => {
+    console.log('[AttentionGame] Restart level');
+    handleRestart();
+  });
+
   return (
     <div className="attention-game">
       <div className="game-header">
-        <button className="exit-btn" onClick={onExit}>← Exit</button>
+        <button className="exit-btn" {...exitHandler}>← Exit</button>
         <div className="game-info">
           <span className="level-badge">Level {level}</span>
           <span className="score-display">Score: {score}</span>
@@ -206,7 +228,7 @@ const AttentionGame: React.FC<AttentionGameProps> = ({ onGameComplete, onExit })
                   left: `${target.x}px`,
                   top: `${target.y}px`,
                 }}
-                onClick={() => handleTargetClick(target)}
+                {...createTargetHandler(target)}
               >
                 {target.isTarget ? '🎯' : '🔴'}
               </div>
@@ -222,13 +244,13 @@ const AttentionGame: React.FC<AttentionGameProps> = ({ onGameComplete, onExit })
             <p>Accuracy: {((score / 10) / Math.max(1, score / 10 + missed) * 100).toFixed(1)}%</p>
           </div>
           <div className="completion-actions">
-            <button className="btn-primary" onClick={handleNextLevel}>
+            <button className="btn-primary" {...nextLevelHandler}>
               Next Level →
             </button>
-            <button className="btn-secondary" onClick={handleRestart}>
+            <button className="btn-secondary" {...restartHandler}>
               Retry Level
             </button>
-            <button className="btn-ghost" onClick={onExit}>
+            <button className="btn-ghost" {...exitHandler}>
               Exit to Menu
             </button>
           </div>
