@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { GameType as GameTypeEnum, Achievement } from '../games/types';
 import { useBrainTrainingData } from '../hooks/useBrainTrainingData';
+import { useMiniKit } from '../providers/MiniKitProvider';
 import MemoryGame from '../games/MemoryGame';
 import AttentionGame from '../games/AttentionGame';
 import ReflexGame from '../games/ReflexGame';
@@ -17,6 +18,8 @@ import WordPairMatch from '../games/WordPairMatch';
 import BrainStats from './BrainStats';
 import EnhancedProfile from './EnhancedProfile';
 import GamesPage from './GamesPage';
+import LoginButton from './ui/LoginButton';
+import Tutorial from './ui/Tutorial';
 import { GameScore } from '../games/types';
 import './BrainTrainingMenu.css';
 
@@ -25,6 +28,10 @@ type GameType = GameTypeEnum | 'stats' | 'profile' | 'games' | null;
 const BrainTrainingMenu: React.FC = () => {
   const [currentGame, setCurrentGame] = useState<GameType>(null);
   const [showWelcome, setShowWelcome] = useState(true);
+  const [showTutorial, setShowTutorial] = useState(false);
+  
+  // Get MiniKit authentication state
+  const { isAuthenticated } = useMiniKit();
   
   // Get token from localStorage if user is authenticated (from PvP auth)
   const token = localStorage.getItem('token');
@@ -33,7 +40,14 @@ const BrainTrainingMenu: React.FC = () => {
   const { profile, refresh } = useBrainTrainingData(token);
 
   useEffect(() => {
-    const timer = setTimeout(() => setShowWelcome(false), 3000);
+    const timer = setTimeout(() => {
+      setShowWelcome(false);
+      // Check if user has seen the app tutorial
+      const hasSeenTutorial = localStorage.getItem('tutorial_app_intro');
+      if (!hasSeenTutorial) {
+        setShowTutorial(true);
+      }
+    }, 3000);
     return () => clearTimeout(timer);
   }, []);
 
@@ -45,18 +59,6 @@ const BrainTrainingMenu: React.FC = () => {
   const handleGameExit = () => {
     setCurrentGame(null);
     refresh(); // Refresh stats when exiting
-  };
-
-  const handleLogout = () => {
-    // Clear only application-specific keys to avoid interfering with other apps
-    const keysToRemove = ['token', 'userId', 'username'];
-    keysToRemove.forEach(key => {
-      localStorage.removeItem(key);
-      sessionStorage.removeItem(key);
-    });
-    
-    // Reload the page to reset the app state
-    window.location.reload();
   };
 
   const handleGameSelect = (game: GameTypeEnum) => {
@@ -144,8 +146,42 @@ const BrainTrainingMenu: React.FC = () => {
     return <GamesPage onBack={handleGameExit} onGameSelect={handleGameSelect} profile={profile} />;
   }
 
+  // Tutorial steps for first-time users
+  const tutorialSteps = [
+    {
+      title: 'Welcome to Blink Battle',
+      description: 'Train your brain with 13 engaging cognitive games designed to improve memory, attention, and reflexes.',
+      icon: '🧠',
+    },
+    {
+      title: 'Track Your Progress',
+      description: 'Monitor your performance with detailed statistics, achievements, and cognitive insights.',
+      icon: '📊',
+    },
+    {
+      title: 'Personalized Experience',
+      description: 'Login with MiniKit to save your progress and compete on global leaderboards.',
+      icon: '🌐',
+    },
+    {
+      title: 'Ready to Start?',
+      description: 'Choose a game from the menu and begin your brain training journey!',
+      icon: '🎮',
+    },
+  ];
+
   return (
     <div className="brain-training-menu">
+      {/* Tutorial Overlay */}
+      {showTutorial && (
+        <Tutorial
+          steps={tutorialSteps}
+          onComplete={() => setShowTutorial(false)}
+          onSkip={() => setShowTutorial(false)}
+          storageKey="app_intro"
+        />
+      )}
+
       <div className="menu-container">
         {/* Header */}
         <header className="menu-header">
@@ -156,16 +192,20 @@ const BrainTrainingMenu: React.FC = () => {
               <p className="app-tagline">Brain Training</p>
             </div>
           </div>
-          {token && (
-            <button 
-              className="logout-btn" 
-              onClick={handleLogout}
-              title="Logout"
-            >
-              🚪
-            </button>
-          )}
         </header>
+
+        {/* Login Section */}
+        {!isAuthenticated && (
+          <div className="login-section">
+            <LoginButton />
+          </div>
+        )}
+
+        {isAuthenticated && (
+          <div className="auth-status-section">
+            <LoginButton />
+          </div>
+        )}
 
         {/* Dashboard Overview */}
         <div className="dashboard-section">
