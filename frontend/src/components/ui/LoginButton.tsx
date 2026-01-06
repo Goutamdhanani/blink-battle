@@ -22,6 +22,7 @@ const LoginButton: React.FC = () => {
   };
 
   const handleVerifyWorldId = async () => {
+    // Keep for backend compatibility - MiniKit provider may still need this
     setError(null);
     try {
       await verifyWithWorldId();
@@ -30,6 +31,9 @@ const LoginButton: React.FC = () => {
       console.error('World ID verification error:', err);
     }
   };
+  
+  // Prevent unused variable warning - function kept for backend compatibility
+  void handleVerifyWorldId;
 
   const handleLogoutClick = () => {
     setShowLogoutConfirm(true);

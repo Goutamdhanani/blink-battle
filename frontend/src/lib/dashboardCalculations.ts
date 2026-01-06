@@ -451,7 +451,7 @@ export function smoothCIHistory(ciHistory: number[], windowSize: number = 3): nu
   return smoothed;
 }
 
-export function calculateCIHistory(sessions: GameScore[], intervalDays: number = 1): { date: string; ci: number }[] {
+export function calculateCIHistory(sessions: GameScore[]): { date: string; ci: number }[] {
   if (sessions.length === 0) return [];
 
   const sessionsByDate: Record<string, GameScore[]> = {};

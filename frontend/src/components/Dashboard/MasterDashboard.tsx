@@ -9,7 +9,6 @@ import {
   generateCoachInsights,
   calculateStreakDays,
   calculateCIHistory,
-  PillarScores,
 } from '../../lib/dashboardCalculations';
 import IdentityHeader from './IdentityHeader';
 import ProgressChart from './ProgressChart';
