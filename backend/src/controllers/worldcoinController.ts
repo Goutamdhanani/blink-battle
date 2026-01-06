@@ -52,8 +52,18 @@ export class WorldcoinController {
         return;
       }
 
+      // Validate signal field
+      if (!signal) {
+        console.error('[WorldID] Missing signal field');
+        res.status(400).json({ 
+          success: false, 
+          error: 'Missing required field: signal' 
+        });
+        return;
+      }
+
       const appId = process.env.APP_ID;
-      const action = process.env.WORLD_ID_ACTION || 'verify-unique-human';
+      const action = process.env.WORLD_ID_ACTION || process.env.WORLDCOIN_ACTION || 'verify-unique-human';
 
       console.log('[WorldID] Configuration:', { 
         appId: appId?.substring(0, 15) + '...', 
@@ -77,7 +87,7 @@ export class WorldcoinController {
         proof,
         appId as `app_${string}`,
         action,
-        nullifier_hash
+        signal
       );
 
       console.log('[WorldID] Verification response:', {
