@@ -190,19 +190,13 @@ const AttentionGame: React.FC<AttentionGameProps> = ({ onGameComplete, onExit })
           </div>
 
           <div className="game-area" ref={gameAreaRef}>
-            <div className="game-instructions">
-              <p className="instruction-text">
-                {isGameActive ? (
-                  <>
-                    <span className="target-emoji">🎯</span> Tap <strong>blue targets</strong>
-                    <br />
-                    <span className="distractor-emoji">🔴</span> Avoid <strong>red distractors</strong>
-                  </>
-                ) : (
-                  "Focus and react quickly!"
-                )}
-              </p>
-            </div>
+            {!isGameActive && (
+              <div className="game-instructions">
+                <p className="instruction-text">
+                  Focus and react quickly!
+                </p>
+              </div>
+            )}
 
             {targets.map(target => (
               <div

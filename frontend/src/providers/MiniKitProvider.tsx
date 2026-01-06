@@ -1,10 +1,12 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { MiniKit } from '@worldcoin/minikit-js';
+import { MiniKit, VerificationLevel, ISuccessResult } from '@worldcoin/minikit-js';
 
 interface User {
   id: string;
   walletAddress?: string;
   verificationLevel?: string;
+  worldIdVerified?: boolean;
+  nullifierHash?: string;
 }
 
 interface MiniKitContextType {
@@ -13,6 +15,7 @@ interface MiniKitContextType {
   isAuthenticated: boolean;
   login: () => Promise<void>;
   logout: () => void;
+  verifyWithWorldId: () => Promise<void>;
 }
 
 const MiniKitContext = createContext<MiniKitContextType | undefined>(undefined);
@@ -20,6 +23,9 @@ const MiniKitContext = createContext<MiniKitContextType | undefined>(undefined);
 interface MiniKitProviderProps {
   children: ReactNode;
 }
+
+// World ID verification action ID - configure in Worldcoin Developer Portal
+const WORLD_ID_ACTION = import.meta.env.VITE_WORLD_ID_ACTION || 'verify-unique-human';
 
 export const MiniKitProvider: React.FC<MiniKitProviderProps> = ({ children }) => {
   const [isInstalled, setIsInstalled] = useState(false);
@@ -70,6 +76,7 @@ export const MiniKitProvider: React.FC<MiniKitProviderProps> = ({ children }) =>
           id: `demo_${Date.now()}`,
           walletAddress: '0x0000000000000000000000000000000000000000',
           verificationLevel: 'orb',
+          worldIdVerified: false,
         };
         setUser(demoUser);
         setIsAuthenticated(true);
@@ -99,6 +106,7 @@ export const MiniKitProvider: React.FC<MiniKitProviderProps> = ({ children }) =>
           id: finalPayload.address || `user_${Date.now()}`,
           walletAddress: finalPayload.address,
           verificationLevel: 'verified',
+          worldIdVerified: false,
         };
         
         setUser(authenticatedUser);
@@ -111,6 +119,61 @@ export const MiniKitProvider: React.FC<MiniKitProviderProps> = ({ children }) =>
       }
     } catch (error) {
       console.error('❌ Login error:', error);
+      throw error;
+    }
+  };
+
+  const verifyWithWorldId = async () => {
+    try {
+      if (!isInstalled) {
+        console.log('ℹ️ MiniKit not installed, simulating World ID verification');
+        // Demo mode - simulate verification with secure random nullifier
+        if (user) {
+          // Generate a more secure demo nullifier using crypto.randomUUID or random values
+          const demoNullifier = crypto.randomUUID?.() || `demo_nullifier_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+          
+          const verifiedUser: User = {
+            ...user,
+            worldIdVerified: true,
+            verificationLevel: 'orb',
+            nullifierHash: demoNullifier,
+          };
+          setUser(verifiedUser);
+          localStorage.setItem('minikit_user', JSON.stringify(verifiedUser));
+          console.log('✅ Demo World ID verification successful');
+        }
+        return;
+      }
+
+      console.log('🌐 Initiating World ID verification...');
+
+      // Verify with World ID using MiniKit
+      const { finalPayload } = await MiniKit.commandsAsync.verify({
+        action: WORLD_ID_ACTION, // Action ID from environment or default
+        signal: user?.id || '', // User identifier to prevent multiple verifications
+        verification_level: VerificationLevel.Orb, // Require orb verification for highest security
+      });
+
+      if (finalPayload.status === 'success') {
+        const verificationResult = finalPayload as ISuccessResult;
+        
+        const verifiedUser: User = {
+          ...user!,
+          worldIdVerified: true,
+          verificationLevel: 'orb',
+          nullifierHash: verificationResult.nullifier_hash,
+        };
+        
+        setUser(verifiedUser);
+        localStorage.setItem('minikit_user', JSON.stringify(verifiedUser));
+        console.log('✅ World ID verification successful');
+        console.log('Nullifier hash:', verificationResult.nullifier_hash);
+      } else {
+        console.error('❌ World ID verification failed:', finalPayload);
+        throw new Error('World ID verification failed');
+      }
+    } catch (error) {
+      console.error('❌ World ID verification error:', error);
       throw error;
     }
   };
@@ -130,6 +193,7 @@ export const MiniKitProvider: React.FC<MiniKitProviderProps> = ({ children }) =>
         isAuthenticated,
         login,
         logout,
+        verifyWithWorldId,
       }}
     >
       {children}

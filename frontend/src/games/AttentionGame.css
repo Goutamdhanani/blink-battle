@@ -20,6 +20,51 @@
   z-index: var(--z-background);
 }
 
+.attention-game .game-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--space-lg);
+  position: relative;
+  z-index: var(--z-content);
+  gap: var(--space-md);
+}
+
+.attention-game .exit-btn {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #fff;
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  cursor: pointer;
+  transition: all 0.3s ease;
+  backdrop-filter: blur(10px);
+}
+
+.attention-game .exit-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 0, 0, 0.3);
+  box-shadow: 0 0 20px rgba(255, 0, 0, 0.2);
+}
+
+.attention-game .game-info {
+  display: flex;
+  gap: var(--space-md);
+  align-items: center;
+}
+
+.attention-game .level-badge {
+  background: linear-gradient(135deg, #00ffff 0%, #ff00ff 100%);
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-lg);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--text-on-gradient);
+  box-shadow: 0 4px 20px rgba(0, 255, 255, 0.3);
+  text-shadow: none;
+}
+
 .game-stats-bar {
   display: flex;
   justify-content: center;
@@ -103,12 +148,18 @@
 
 .game-instructions {
   position: absolute;
-  top: 50%;
+  bottom: var(--space-lg);
   left: 50%;
-  transform: translate(-50%, -50%);
+  transform: translateX(-50%);
   text-align: center;
   z-index: var(--z-base);
   pointer-events: none;
+  background: rgba(0, 0, 0, 0.8);
+  backdrop-filter: blur(10px);
+  padding: var(--space-md) var(--space-lg);
+  border-radius: var(--radius-lg);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  max-width: 90%;
 }
 
 .instruction-text {
@@ -184,14 +235,14 @@
 }
 
 .score-display {
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(255, 255, 255, 0.08);
   backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  padding: 8px 16px;
-  border-radius: 20px;
-  font-size: 14px;
-  color: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-lg);
+  font-size: var(--text-sm);
   font-weight: 600;
+  color: rgba(255, 255, 255, 0.95);
 }
 
 @media (max-width: 380px) {
