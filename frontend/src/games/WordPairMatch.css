@@ -22,6 +22,7 @@
 .game-instructions h2, .game-complete h2 {
   font-size: 2.5em;
   margin: 0 0 10px 0;
+  color: #1a1a2e; /* Dark text on white background */
 }
 
 .game-subtitle {
@@ -70,8 +71,9 @@
   position: absolute;
   top: 20px;
   right: 20px;
-  background: white;
-  border: 2px solid #ddd;
+  background: rgba(255, 255, 255, 0.2);
+  border: none;
+  color: #1a1a2e; /* Dark text */
   width: 40px;
   height: 40px;
   border-radius: 50%;
@@ -81,8 +83,8 @@
 }
 
 .exit-btn:hover {
-  background: #ff6b6b;
-  color: white;
+  background: rgba(255, 255, 255, 0.3);
+  box-shadow: 0 0 20px rgba(255, 255, 255, 0.2);
   transform: rotate(90deg);
 }
 
@@ -91,7 +93,7 @@
   top: 0;
   left: 0;
   right: 0;
-  background: rgba(255, 255, 255, 0.95);
+  background: #667eea; /* Visible gradient background */
   padding: 20px;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
   z-index: var(--z-elevated);
@@ -104,6 +106,7 @@
   margin: 0 auto;
   font-weight: bold;
   font-size: 1.1em;
+  color: #ffffff; /* White text on colored background */
 }
 
 .game-arena {
