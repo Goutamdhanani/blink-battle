@@ -58,7 +58,7 @@
   border-radius: var(--radius-lg); /* Changed from 20px */
   font-size: var(--text-sm); /* Changed from 14px */
   font-weight: 700; /* Increased from 600 for better visibility */
-  color: #000; /* Changed to black for better contrast against bright gradient */
+  color: var(--text-on-gradient); /* Using CSS variable for better maintainability */
   box-shadow: 0 4px 20px rgba(0, 255, 255, 0.3);
   text-shadow: none; /* Remove any text shadow for clarity */
 }

@@ -6,6 +6,7 @@ const LoginButton: React.FC = () => {
   const { isAuthenticated, user, login, logout, isInstalled } = useMiniKit();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
   const handleLogin = async () => {
     setIsLoading(true);
@@ -20,28 +21,55 @@ const LoginButton: React.FC = () => {
     }
   };
 
-  const handleLogout = () => {
-    if (window.confirm('Are you sure you want to logout?')) {
-      logout();
-    }
+  const handleLogoutClick = () => {
+    setShowLogoutConfirm(true);
+  };
+
+  const handleLogoutConfirm = () => {
+    logout();
+    setShowLogoutConfirm(false);
+  };
+
+  const handleLogoutCancel = () => {
+    setShowLogoutConfirm(false);
   };
 
   if (isAuthenticated && user) {
     return (
-      <div className="login-status">
-        <div className="user-badge">
-          <span className="user-icon">👤</span>
-          <span className="user-id">{user.id.substring(0, 8)}...</span>
-          {user.verificationLevel && (
-            <span className="verification-badge" title={`Verified with ${user.verificationLevel}`}>
-              ✓
-            </span>
-          )}
+      <>
+        <div className="login-status">
+          <div className="user-badge">
+            <span className="user-icon">👤</span>
+            <span className="user-id">{user.id.substring(0, 8)}...</span>
+            {user.verificationLevel && (
+              <span className="verification-badge" title={`Verified with ${user.verificationLevel}`}>
+                ✓
+              </span>
+            )}
+          </div>
+          <button className="logout-btn-small" onClick={handleLogoutClick} title="Logout">
+            🚪
+          </button>
         </div>
-        <button className="logout-btn-small" onClick={handleLogout} title="Logout">
-          🚪
-        </button>
-      </div>
+        
+        {/* Logout Confirmation Modal */}
+        {showLogoutConfirm && (
+          <div className="logout-modal-overlay" onClick={handleLogoutCancel}>
+            <div className="logout-modal" onClick={(e) => e.stopPropagation()}>
+              <h3 className="logout-modal-title">Confirm Logout</h3>
+              <p className="logout-modal-text">Are you sure you want to logout?</p>
+              <div className="logout-modal-buttons">
+                <button className="logout-modal-btn logout-cancel-btn" onClick={handleLogoutCancel}>
+                  Cancel
+                </button>
+                <button className="logout-modal-btn logout-confirm-btn" onClick={handleLogoutConfirm}>
+                  Logout
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </>
     );
   }
 

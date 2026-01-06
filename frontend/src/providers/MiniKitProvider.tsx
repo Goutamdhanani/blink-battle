@@ -80,11 +80,16 @@ export const MiniKitProvider: React.FC<MiniKitProviderProps> = ({ children }) =>
       // Use MiniKit for actual authentication
       console.log('🔐 Initiating MiniKit authentication...');
       
-      // Request wallet address from MiniKit
+      // Generate cryptographically secure nonce
+      const nonceArray = new Uint8Array(16);
+      crypto.getRandomValues(nonceArray);
+      const nonce = Array.from(nonceArray, byte => byte.toString(16).padStart(2, '0')).join('');
+      
+      // Request wallet address from MiniKit with 1 hour expiration (security best practice)
       const { finalPayload } = await MiniKit.commandsAsync.walletAuth({
-        nonce: Math.random().toString(36).substring(7),
+        nonce,
         requestId: `auth_${Date.now()}`,
-        expirationTime: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days
+        expirationTime: new Date(Date.now() + 60 * 60 * 1000), // 1 hour instead of 7 days
         notBefore: new Date(),
         statement: 'Sign in to Blink Battle Brain Training',
       });
