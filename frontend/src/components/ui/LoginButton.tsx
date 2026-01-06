@@ -3,8 +3,9 @@ import { useMiniKit } from '../../providers/MiniKitProvider';
 import './LoginButton.css';
 
 const LoginButton: React.FC = () => {
-  const { isAuthenticated, user, login, logout, isInstalled } = useMiniKit();
+  const { isAuthenticated, user, login, logout, isInstalled, verifyWithWorldId } = useMiniKit();
   const [isLoading, setIsLoading] = useState(false);
+  const [isVerifying, setIsVerifying] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
@@ -18,6 +19,19 @@ const LoginButton: React.FC = () => {
       console.error('Login error:', err);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleVerifyWorldId = async () => {
+    setIsVerifying(true);
+    setError(null);
+    try {
+      await verifyWithWorldId();
+    } catch (err) {
+      setError('World ID verification failed. Please try again.');
+      console.error('World ID verification error:', err);
+    } finally {
+      setIsVerifying(false);
     }
   };
 
@@ -41,16 +55,56 @@ const LoginButton: React.FC = () => {
           <div className="user-badge">
             <span className="user-icon">👤</span>
             <span className="user-id">{user.id.substring(0, 8)}...</span>
-            {user.verificationLevel && (
+            {user.worldIdVerified && (
+              <span className="verification-badge worldid-verified" title="Verified with World ID">
+                🌐✓
+              </span>
+            )}
+            {!user.worldIdVerified && user.verificationLevel && (
               <span className="verification-badge" title={`Verified with ${user.verificationLevel}`}>
                 ✓
               </span>
             )}
           </div>
+          {!user.worldIdVerified && (
+            <button 
+              className="verify-worldid-btn" 
+              onClick={handleVerifyWorldId}
+              disabled={isVerifying}
+              title="Verify with World ID"
+            >
+              {isVerifying ? '⏳' : '🌐'}
+            </button>
+          )}
           <button className="logout-btn-small" onClick={handleLogoutClick} title="Logout">
             🚪
           </button>
         </div>
+        
+        {/* World ID Verification Prompt */}
+        {!user.worldIdVerified && (
+          <div className="worldid-prompt">
+            <p className="worldid-prompt-text">
+              🌐 Verify with World ID to prove you're a unique human
+            </p>
+            <button 
+              className="worldid-verify-button" 
+              onClick={handleVerifyWorldId}
+              disabled={isVerifying}
+            >
+              {isVerifying ? (
+                <>
+                  <span className="login-spinner"></span>
+                  <span>Verifying...</span>
+                </>
+              ) : (
+                <>
+                  <span>Verify with World ID</span>
+                </>
+              )}
+            </button>
+          </div>
+        )}
         
         {/* Logout Confirmation Modal */}
         {showLogoutConfirm && (
@@ -69,6 +123,8 @@ const LoginButton: React.FC = () => {
             </div>
           </div>
         )}
+        
+        {error && <p className="login-error">{error}</p>}
       </>
     );
   }
@@ -88,7 +144,7 @@ const LoginButton: React.FC = () => {
         ) : (
           <>
             <span className="login-icon">🌐</span>
-            <span>Login with MiniKit</span>
+            <span>Sign in with World ID</span>
           </>
         )}
       </button>
