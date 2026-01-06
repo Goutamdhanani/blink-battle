@@ -91,14 +91,16 @@
 }
 
 .game-instructions, .game-complete {
-  background: white; /* WHITE background for high contrast */
+  background: rgba(26, 15, 61, 0.95) !important; /* DARK PURPLE - HIGH CONTRAST */
+  backdrop-filter: blur(20px);
   border-radius: 20px;
   padding: 32px;
   max-width: 500px;
   width: 100%;
   text-align: center;
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
   position: relative;
+  border: 1px solid rgba(255, 255, 255, 0.2);
 }
 
 .exit-btn {
@@ -119,13 +121,14 @@
 }
 
 .game-instructions h2, .game-complete h2 {
-  color: #1a1a2e !important; /* Dark text on white background */
+  color: #ffffff !important; /* WHITE TEXT - ALWAYS VISIBLE */
   font-size: 28px;
   margin: 0 0 8px 0;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
 }
 
 .game-subtitle {
-  color: #667eea !important; /* Accent color for visibility */
+  color: #00ffff !important; /* Bright cyan for visibility */
   font-size: 16px;
   margin-bottom: 24px;
 }
@@ -133,7 +136,7 @@
 .instructions-content {
   text-align: left;
   margin: 24px 0;
-  background: rgba(102, 126, 234, 0.05); /* Light accent background */
+  background: rgba(255, 255, 255, 0.1);
   padding: 20px;
   border-radius: 12px;
 }
@@ -141,7 +144,7 @@
 .instructions-content p {
   margin: 12px 0;
   font-size: 16px;
-  color: #2d3748; /* Dark gray text for readability */
+  color: rgba(255, 255, 255, 0.95) !important;
   line-height: 1.6;
 }
 
@@ -210,7 +213,7 @@
 
 .stat-item {
   flex: 1;
-  background: rgba(0, 0, 0, 0.05);
+  background: rgba(255, 255, 255, 0.1);
   padding: 20px;
   border-radius: 15px;
 }
@@ -218,11 +221,11 @@
 .stat-value {
   font-size: 2.5em;
   font-weight: bold;
-  color: #667eea;
+  color: #00ffff !important; /* Bright cyan for numbers */
 }
 
 .stat-label {
-  color: #666 !important;
+  color: rgba(255, 255, 255, 0.9) !important;
   margin-top: 5px;
 }
 
