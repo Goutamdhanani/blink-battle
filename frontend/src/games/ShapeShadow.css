@@ -23,10 +23,15 @@
 .game-instructions h2, .game-complete h2 {
   font-size: 2.5em;
   margin: 0 0 10px 0;
+  /* Dark text as fallback for white background */
+  color: #1a1a2e !important;
+  /* Gradient text for supporting browsers */
   background: linear-gradient(135deg, #f093fb, #f5576c);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
+  /* Add subtle shadow for gradient text visibility */
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
 }
 
 .exit-btn {
@@ -250,7 +255,7 @@
 }
 
 .stat-label {
-  color: #666;
+  color: #666 !important;
   margin-top: 5px;
 }
 
@@ -261,7 +266,7 @@
 }
 
 .game-subtitle {
-  color: #666;
+  color: #666 !important;
   font-size: 1.2em;
   margin-bottom: 30px;
 }

@@ -59,11 +59,11 @@
 .game-instructions h2, .game-complete h2 {
   font-size: 2.5em;
   margin: 0 0 10px 0;
-  color: #1a1a2e; /* Dark text on white background */
+  color: #1a1a2e !important; /* Dark text on white background */
 }
 
 .game-subtitle {
-  color: #666;
+  color: #666 !important;
   font-size: 1.2em;
   margin-bottom: 30px;
 }
@@ -227,7 +227,7 @@
 }
 
 .stat-label {
-  color: #666;
+  color: #666 !important;
   margin-top: 5px;
 }
 
