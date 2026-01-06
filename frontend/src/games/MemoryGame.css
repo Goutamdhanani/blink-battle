@@ -92,10 +92,18 @@
   perspective: 1000px;
   cursor: pointer;
   transition: transform 0.3s ease;
+  /* Ensure touch events work */
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: rgba(138, 43, 226, 0.2);
+  user-select: none;
 }
 
 .memory-card:hover {
   transform: scale(1.05);
+}
+
+.memory-card:active {
+  transform: scale(0.95);
 }
 
 .memory-card.matched {

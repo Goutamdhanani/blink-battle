@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { saveGameScoreWithSync as saveGameScore } from '../lib/indexedDB';
 import { GameScore, MemoryCard } from './types';
+import { createTouchHandler } from '../lib/touchUtils';
 import './MemoryGame.css';
 
 const EMOJI_SETS = [
@@ -131,12 +132,33 @@ const MemoryGame: React.FC<MemoryGameProps> = ({ onGameComplete, onExit }) => {
     return matchedIndices.includes(index);
   };
 
+  // Create touch handlers for better mobile support
+  const exitHandler = createTouchHandler(() => {
+    console.log('[MemoryGame] Exiting game');
+    onExit();
+  });
+
+  const createCardHandler = (index: number) => createTouchHandler(() => {
+    console.log('[MemoryGame] Card clicked:', index);
+    handleCardClick(index);
+  });
+
+  const nextLevelHandler = createTouchHandler(() => {
+    console.log('[MemoryGame] Next level');
+    handleNextLevel();
+  });
+
+  const restartHandler = createTouchHandler(() => {
+    console.log('[MemoryGame] Restart level');
+    handleRestart();
+  });
+
   const gridCols = cards.length <= 8 ? 4 : cards.length <= 12 ? 4 : 4;
 
   return (
     <div className="memory-game">
       <div className="game-header">
-        <button className="exit-btn" onClick={onExit}>← Exit</button>
+        <button className="exit-btn" {...exitHandler}>← Exit</button>
         <div className="game-info">
           <span className="level-badge">Level {level}</span>
           <span className="moves-counter">Moves: {moves}</span>
@@ -149,7 +171,7 @@ const MemoryGame: React.FC<MemoryGameProps> = ({ onGameComplete, onExit }) => {
             <div
               key={card.id}
               className={`memory-card ${isFlipped(index) ? 'flipped' : ''} ${isMatched(index) ? 'matched' : ''}`}
-              onClick={() => handleCardClick(index)}
+              {...createCardHandler(index)}
             >
               <div className="card-inner">
                 <div className="card-front">?</div>
@@ -166,13 +188,13 @@ const MemoryGame: React.FC<MemoryGameProps> = ({ onGameComplete, onExit }) => {
             <p>Time: {((Date.now() - startTime) / 1000).toFixed(1)}s</p>
           </div>
           <div className="completion-actions">
-            <button className="btn-primary" onClick={handleNextLevel}>
+            <button className="btn-primary" {...nextLevelHandler}>
               Next Level →
             </button>
-            <button className="btn-secondary" onClick={handleRestart}>
+            <button className="btn-secondary" {...restartHandler}>
               Retry Level
             </button>
-            <button className="btn-ghost" onClick={onExit}>
+            <button className="btn-ghost" {...exitHandler}>
               Exit to Menu
             </button>
           </div>
