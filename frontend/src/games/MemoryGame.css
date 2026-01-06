@@ -27,9 +27,9 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: var(--space-lg);
+  margin-bottom: var(--space-xl); /* Increased spacing before cards */
   position: relative;
-  z-index: var(--z-content);
+  z-index: var(--z-elevated); /* Higher z-index to stay above cards */
   gap: var(--space-md);
   width: 100%;
   max-width: 500px;
@@ -86,10 +86,10 @@
   gap: var(--space-md);
   max-width: 500px;
   width: 100%;
-  margin-top: var(--space-lg);
+  margin-top: var(--space-xl); /* Increased spacing from header */
   position: relative; /* NOT absolute */
   top: 0; /* NOT negative */
-  z-index: var(--z-content);
+  z-index: var(--z-base);
   padding: 0;
   justify-items: center;
   align-items: center;
