@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import MiniKit from '@worldcoin/minikit-js';
+import { MiniKit } from '@worldcoin/minikit-js';
 
 interface User {
   id: string;
