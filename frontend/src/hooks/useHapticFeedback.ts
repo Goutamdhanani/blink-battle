@@ -23,7 +23,7 @@ export function useHapticFeedback() {
    * Check if haptic feedback is supported
    */
   const isSupported = useCallback((): boolean => {
-    return 'vibrate' in navigator || 'Vibration' in window;
+    return 'vibrate' in navigator;
   }, []);
 
   /**

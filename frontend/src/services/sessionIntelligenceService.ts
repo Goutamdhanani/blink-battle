@@ -16,6 +16,7 @@ interface SessionData {
   currentSession: SessionMetrics | null;
   sessionHistory: SessionMetrics[];
   lastGameTime: number;
+  sessionScores: number[]; // Track scores within current session for trend calculation
 }
 
 class SessionIntelligenceService {
@@ -23,6 +24,7 @@ class SessionIntelligenceService {
     currentSession: null,
     sessionHistory: [],
     lastGameTime: 0,
+    sessionScores: [],
   };
 
   constructor() {
@@ -109,6 +111,9 @@ class SessionIntelligenceService {
       averagePerformance: 0,
       timeOfDay,
     };
+    
+    // Reset session scores
+    this.data.sessionScores = [];
   }
 
   /**
@@ -130,6 +135,9 @@ class SessionIntelligenceService {
    * Update performance metrics for session
    */
   private updatePerformanceMetrics(session: SessionMetrics, score: GameScore): void {
+    // Track individual scores for trend calculation
+    this.data.sessionScores.push(score.accuracy);
+    
     // Simple moving average
     const currentAvg = session.averagePerformance;
     const newScore = score.accuracy;
@@ -139,21 +147,34 @@ class SessionIntelligenceService {
         ? newScore 
         : (currentAvg * (session.gamesPlayed - 1) + newScore) / session.gamesPlayed;
 
-    // Determine performance trend (needs at least 3 games)
-    if (session.gamesPlayed >= 3) {
-      session.performanceTrend = this.calculateTrend(session);
+    // Determine performance trend (needs at least 4 games)
+    if (session.gamesPlayed >= 4) {
+      session.performanceTrend = this.calculateTrend();
     }
   }
 
   /**
-   * Calculate performance trend
+   * Calculate performance trend based on score progression
    */
-  private calculateTrend(_session: SessionMetrics): 'improving' | 'stable' | 'declining' {
-    // This is a simplified version - in practice, we'd track individual game scores
-    // For now, we'll use the average performance as a proxy
+  private calculateTrend(): 'improving' | 'stable' | 'declining' {
+    const scores = this.data.sessionScores;
+    if (scores.length < 4) {
+      return 'stable';
+    }
     
-    // Store the trend based on recent performance changes
-    // This would ideally compare first half vs second half of session
+    // Compare first half vs second half of session
+    const midPoint = Math.floor(scores.length / 2);
+    const firstHalf = scores.slice(0, midPoint);
+    const secondHalf = scores.slice(midPoint);
+    
+    const avgFirst = firstHalf.reduce((sum, s) => sum + s, 0) / firstHalf.length;
+    const avgSecond = secondHalf.reduce((sum, s) => sum + s, 0) / secondHalf.length;
+    
+    const difference = avgSecond - avgFirst;
+    
+    // Threshold of 5% change
+    if (difference > 5) return 'improving';
+    if (difference < -5) return 'declining';
     return 'stable';
   }
 
@@ -308,6 +329,7 @@ class SessionIntelligenceService {
       currentSession: null,
       sessionHistory: [],
       lastGameTime: 0,
+      sessionScores: [],
     };
     this.saveToStorage();
   }

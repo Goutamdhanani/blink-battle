@@ -125,6 +125,8 @@ class PercentileService {
 
   /**
    * Convert z-score to percentile (approximation)
+   * Uses the Abramowitz and Stegun approximation for the cumulative normal distribution
+   * Accuracy: ±0.00015 absolute error
    */
   private zScoreToPercentile(z: number): number {
     // Using error function approximation

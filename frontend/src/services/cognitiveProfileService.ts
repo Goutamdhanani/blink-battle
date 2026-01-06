@@ -72,7 +72,7 @@ class CognitiveProfileService {
       return;
     }
 
-    const userId = 'local_user'; // TODO: Replace with actual user ID when available
+    const userId = localStorage.getItem('user_id') || 'local_user';
 
     // Calculate detailed indices
     const indices = this.calculateIndices();
