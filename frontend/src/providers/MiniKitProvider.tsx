@@ -25,7 +25,11 @@ interface MiniKitProviderProps {
 }
 
 // World ID verification action ID - configure in Worldcoin Developer Portal
-const WORLD_ID_ACTION = import.meta.env.VITE_WORLD_ID_ACTION || 'verify-unique-human';
+// Try multiple environment variable names for compatibility
+const WORLD_ID_ACTION = import.meta.env.VITE_WORLD_ID_ACTION || import.meta.env.VITE_WORLDCOIN_ACTION || 'verify-unique-human';
+
+// Log the action being used for debugging
+console.log('🌐 [MiniKitProvider] World ID Action:', WORLD_ID_ACTION);
 
 export const MiniKitProvider: React.FC<MiniKitProviderProps> = ({ children }) => {
   const [isInstalled, setIsInstalled] = useState(false);

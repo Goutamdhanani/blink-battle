@@ -18,11 +18,14 @@ if (typeof window !== 'undefined') {
   
   if (worldcoinAppId && worldcoinAppId !== 'app_staging_your_app_id') {
     try {
+      // Install MiniKit first, then check if it's properly installed
+      MiniKit.install(worldcoinAppId);
+      console.log('✅ [MiniKit] Initialized with App ID:', worldcoinAppId);
+      
       if (MiniKit.isInstalled()) {
-        MiniKit.install(worldcoinAppId);
-        console.log('✅ [MiniKit] Initialized successfully with App ID:', worldcoinAppId);
+        console.log('✅ [MiniKit] Running inside World App');
       } else {
-        console.log('ℹ️ [MiniKit] Not installed - running in browser mode');
+        console.log('ℹ️ [MiniKit] Not in World App - some features may be limited');
       }
     } catch (error) {
       console.error('❌ [MiniKit] Initialization error:', error);
@@ -51,6 +54,11 @@ const validateEnv = () => {
   const worldcoinAppId = import.meta.env.VITE_WORLDCOIN_APP_ID || import.meta.env.VITE_APP_ID;
   if (!worldcoinAppId || worldcoinAppId === 'app_staging_your_app_id') {
     errors.push('VITE_WORLDCOIN_APP_ID or VITE_APP_ID is not set. Please configure it in your .env file.');
+  }
+  
+  const worldIdAction = import.meta.env.VITE_WORLD_ID_ACTION || import.meta.env.VITE_WORLDCOIN_ACTION;
+  if (!worldIdAction) {
+    errors.push('VITE_WORLD_ID_ACTION or VITE_WORLDCOIN_ACTION is not set. World ID verification will use default action.');
   }
   
   if (!import.meta.env.VITE_PLATFORM_WALLET_ADDRESS) {
