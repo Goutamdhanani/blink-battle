@@ -4,7 +4,7 @@
  * React hook for tracking session metrics and detecting patterns.
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useCallback } from 'react';
 import { SessionMetrics, GameScore } from '../games/types';
 import { sessionIntelligenceService } from '../services/sessionIntelligenceService';
 

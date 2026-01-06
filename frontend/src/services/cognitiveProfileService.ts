@@ -5,7 +5,7 @@
  * Generates insights into user strengths, weaknesses, and cognitive patterns.
  */
 
-import { GameType, CognitiveProfile, GameScore } from '../games/types';
+import { CognitiveProfile, GameScore } from '../games/types';
 
 const STORAGE_KEY = 'blink_battle_cognitive_profile';
 const MIN_GAMES_FOR_PROFILE = 10;

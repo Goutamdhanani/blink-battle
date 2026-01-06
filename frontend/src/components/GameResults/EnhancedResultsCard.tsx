@@ -5,7 +5,7 @@
  */
 
 import React from 'react';
-import { GameScore, PercentileData } from '../../games/types';
+import { GameScore } from '../../games/types';
 import { AnimatedScore } from '../ui/AnimatedScore';
 import { usePercentile } from '../../hooks/usePercentile';
 import './EnhancedResultsCard.css';

@@ -148,7 +148,7 @@ class SessionIntelligenceService {
   /**
    * Calculate performance trend
    */
-  private calculateTrend(session: SessionMetrics): 'improving' | 'stable' | 'declining' {
+  private calculateTrend(_session: SessionMetrics): 'improving' | 'stable' | 'declining' {
     // This is a simplified version - in practice, we'd track individual game scores
     // For now, we'll use the average performance as a proxy
     

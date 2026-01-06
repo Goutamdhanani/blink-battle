@@ -1,6 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { saveGameScoreWithSync as saveGameScore } from '../lib/indexedDB';
 import { GameScore, ReflexTrial } from './types';
+import { useAdaptiveDifficulty } from '../hooks/useAdaptiveDifficulty';
+import { useCognitiveProfile } from '../hooks/useCognitiveProfile';
+import { useSessionIntelligence } from '../hooks/useSessionIntelligence';
+import { useHapticFeedback } from '../hooks/useHapticFeedback';
+import { EnhancedResultsCard } from '../components/GameResults/EnhancedResultsCard';
+import { ParticleEffects } from '../components/ui/ParticleEffects';
 import './ReflexGame.css';
 
 interface ReflexGameProps {
@@ -17,8 +23,19 @@ const ReflexGame: React.FC<ReflexGameProps> = ({ onGameComplete, onExit }) => {
   const [greenLightTime, setGreenLightTime] = useState(0);
   const [reactionTime, setReactionTime] = useState<number | null>(null);
   const [isGameComplete, setIsGameComplete] = useState(false);
+  const [showEnhancedResults, setShowEnhancedResults] = useState(false);
+  const [finalScore, setFinalScore] = useState<GameScore | null>(null);
+  const [showParticles, setShowParticles] = useState(false);
+  const [previousBest, setPreviousBest] = useState<number | null>(null);
+  
   const totalTrials = 5;
   const delayTimerRef = useRef<NodeJS.Timeout>();
+
+  // Premium hooks
+  const { difficultyState, recordPerformance, getPerformanceTrend } = useAdaptiveDifficulty('reflex');
+  const { recordGameScore: recordCognitiveScore } = useCognitiveProfile();
+  const { recordGame: recordSession, isWarmUp } = useSessionIntelligence();
+  const haptic = useHapticFeedback();
 
   useEffect(() => {
     if (currentTrial < totalTrials && gameState === 'waiting') {
@@ -32,12 +49,19 @@ const ReflexGame: React.FC<ReflexGameProps> = ({ onGameComplete, onExit }) => {
     setGameState('ready');
     setReactionTime(null);
 
-    const delay = 2000 + Math.random() * 3000; // 2-5 seconds
+    // Use adaptive difficulty for timing windows
+    const baseDelay = difficultyState.adaptiveParams.timeWindow || 3000;
+    const minDelay = Math.max(1500, baseDelay - 1000);
+    const maxDelay = baseDelay + 1000;
+    const delay = minDelay + Math.random() * (maxDelay - minDelay);
     
     delayTimerRef.current = setTimeout(() => {
       const glTime = Date.now();
       setGreenLightTime(glTime);
       setGameState('go');
+      
+      // Light haptic when green appears
+      haptic.trigger('light');
     }, delay);
   };
 
@@ -60,7 +84,10 @@ const ReflexGame: React.FC<ReflexGameProps> = ({ onGameComplete, onExit }) => {
 
       setTrials(prev => [...prev, trial]);
       setGameState('result');
-      setReactionTime(-1); // Indicate false start
+      setReactionTime(-1);
+      
+      // Error haptic for false start
+      haptic.error();
 
       setTimeout(() => {
         setCurrentTrial(prev => prev + 1);
@@ -81,6 +108,13 @@ const ReflexGame: React.FC<ReflexGameProps> = ({ onGameComplete, onExit }) => {
       };
 
       setTrials(prev => [...prev, trial]);
+      
+      // Haptic feedback based on reaction time
+      if (reaction < 200) {
+        haptic.success(); // Excellent reaction
+      } else {
+        haptic.trigger('light');
+      }
 
       setTimeout(() => {
         setCurrentTrial(prev => prev + 1);
@@ -102,6 +136,23 @@ const ReflexGame: React.FC<ReflexGameProps> = ({ onGameComplete, onExit }) => {
       (validTrials.length * 1000) - avgReaction + (level * 500)
     ));
 
+    // Calculate enhanced metrics (for future use in analytics)
+    // const reactionTimes = validTrials.map(t => t.reactionMs || 0);
+    // const anticipationRate = trials.filter(t => t.isFalseStart).length / totalTrials;
+    // const consistency = calculateConsistency(reactionTimes);
+    // const fatigueIndex = calculateFatigueIndex(trials);
+    
+    // Check for personal best
+    const storedBest = localStorage.getItem('reflex_best_score');
+    const previousBestScore = storedBest ? parseInt(storedBest) : 0;
+    const isPersonalBest = score > previousBestScore;
+    
+    if (isPersonalBest) {
+      localStorage.setItem('reflex_best_score', score.toString());
+      setShowParticles(true);
+      setPreviousBest(previousBestScore);
+    }
+
     const gameScore: GameScore = {
       gameType: 'reflex',
       score,
@@ -111,9 +162,43 @@ const ReflexGame: React.FC<ReflexGameProps> = ({ onGameComplete, onExit }) => {
       timestamp: Date.now(),
     };
 
+    // Record with services
+    recordPerformance(accuracy, score, level, avgReaction);
+    recordCognitiveScore(gameScore);
+    recordSession(gameScore);
+
     await saveGameScore(gameScore);
-    onGameComplete(gameScore);
+    
+    setFinalScore(gameScore);
+    setShowEnhancedResults(true);
   };
+
+  // Calculate consistency (lower standard deviation = more consistent) - for future use
+  /*
+  const calculateConsistency = (times: number[]): number => {
+    if (times.length < 2) return 100;
+    const mean = times.reduce((sum, t) => sum + t, 0) / times.length;
+    const variance = times.reduce((sum, t) => sum + Math.pow(t - mean, 2), 0) / times.length;
+    const stdDev = Math.sqrt(variance);
+    return Math.max(0, 100 - (stdDev / 2));
+  };
+  */
+
+  // Calculate fatigue index (performance decay over time) - for future use
+  /*
+  const calculateFatigueIndex = (allTrials: ReflexTrial[]): number => {
+    const valid = allTrials.filter(t => !t.isFalseStart && t.reactionMs);
+    if (valid.length < 3) return 0;
+    
+    const firstHalf = valid.slice(0, Math.floor(valid.length / 2));
+    const secondHalf = valid.slice(Math.floor(valid.length / 2));
+    
+    const avgFirst = firstHalf.reduce((sum, t) => sum + (t.reactionMs || 0), 0) / firstHalf.length;
+    const avgSecond = secondHalf.reduce((sum, t) => sum + (t.reactionMs || 0), 0) / secondHalf.length;
+    
+    return avgSecond > avgFirst ? Math.round(((avgSecond - avgFirst) / avgFirst) * 100) : 0;
+  };
+  */
 
   const handleNextLevel = () => {
     setLevel(prev => prev + 1);
@@ -129,7 +214,17 @@ const ReflexGame: React.FC<ReflexGameProps> = ({ onGameComplete, onExit }) => {
     setCurrentTrial(0);
     setGameState('waiting');
     setIsGameComplete(false);
+    setShowEnhancedResults(false);
+    setFinalScore(null);
+    setShowParticles(false);
     setStartTime(Date.now());
+  };
+
+  const handleCloseResults = () => {
+    if (finalScore) {
+      onGameComplete(finalScore);
+    }
+    setShowEnhancedResults(false);
   };
 
   const getBackgroundColor = () => {
@@ -201,11 +296,25 @@ const ReflexGame: React.FC<ReflexGameProps> = ({ onGameComplete, onExit }) => {
 
   return (
     <div className="reflex-game">
+      {/* Particle effects for personal bests */}
+      <ParticleEffects trigger={showParticles} type="confetti" />
+      
+      {/* Enhanced results modal */}
+      {showEnhancedResults && finalScore && (
+        <EnhancedResultsCard
+          score={finalScore}
+          previousBest={previousBest || undefined}
+          trend={getPerformanceTrend()}
+          onClose={handleCloseResults}
+        />
+      )}
+      
       <div className="game-header">
         <button className="exit-btn" onClick={onExit}>← Exit</button>
         <div className="game-info">
           <span className="level-badge">Level {level}</span>
           <span className="trial-counter">Trial {currentTrial + 1}/{totalTrials}</span>
+          {isWarmUp && <span className="warmup-badge">🔥 Warm-up</span>}
         </div>
       </div>
 

@@ -4,7 +4,7 @@
  * React hook for accessing and managing cognitive profile data.
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useCallback } from 'react';
 import { CognitiveProfile, GameScore } from '../games/types';
 import { cognitiveProfileService } from '../services/cognitiveProfileService';
 

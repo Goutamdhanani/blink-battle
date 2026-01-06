@@ -211,7 +211,7 @@ class InsightsService {
   /**
    * Get time of day insights
    */
-  private getTimeOfDayInsights(profile: CognitiveProfile): PerformanceInsight[] {
+  private getTimeOfDayInsights(_profile: CognitiveProfile): PerformanceInsight[] {
     const insights: PerformanceInsight[] = [];
     const bestTime = cognitiveProfileService.getBestTimeOfDay();
 

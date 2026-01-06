@@ -153,6 +153,16 @@
   font-size: 16px;
 }
 
+.warmup-badge {
+  background: rgba(255, 165, 0, 0.3);
+  color: #FFA500;
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 600;
+  border: 1px solid rgba(255, 165, 0, 0.5);
+}
+
 .trials-progress {
   display: flex;
   justify-content: center;
