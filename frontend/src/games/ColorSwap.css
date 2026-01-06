@@ -106,36 +106,38 @@
   transition: transform 0.1s ease;
   text-transform: uppercase;
   letter-spacing: 1px;
-  
-  /* Default: white text with text shadow */
-  color: #ffffff !important;
+}
+
+/* Default: white text with text shadow */
+.color-options .color-option {
+  color: #ffffff;
   text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.3);
 }
 
 /* Individual color backgrounds with gradients */
-.color-btn-red {
+.color-options .color-btn-red {
   background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
 }
 
-.color-btn-blue {
+.color-options .color-btn-blue {
   background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
 }
 
-.color-btn-green {
+.color-options .color-btn-green {
   background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
 }
 
-.color-btn-yellow {
+.color-options .color-btn-yellow {
   background: linear-gradient(135deg, #eab308 0%, #ca8a04 100%);
-  color: #1a1a2e !important; /* DARK text for yellow */
+  color: #1a1a2e; /* DARK text for yellow */
   text-shadow: none;
 }
 
-.color-btn-purple {
+.color-options .color-btn-purple {
   background: linear-gradient(135deg, #a855f7 0%, #9333ea 100%);
 }
 
-.color-btn-orange {
+.color-options .color-btn-orange {
   background: linear-gradient(135deg, #f97316 0%, #ea580c 100%);
 }
 
