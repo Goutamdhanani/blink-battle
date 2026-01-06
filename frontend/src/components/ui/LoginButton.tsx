@@ -3,7 +3,7 @@ import { useMiniKit } from '../../providers/MiniKitProvider';
 import './LoginButton.css';
 
 const LoginButton: React.FC = () => {
-  const { isAuthenticated, user, login, logout, isInstalled, verifyWithWorldId } = useMiniKit();
+  const { isAuthenticated, user, login, logout, isInstalled } = useMiniKit();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
@@ -20,20 +20,6 @@ const LoginButton: React.FC = () => {
       setIsLoading(false);
     }
   };
-
-  const handleVerifyWorldId = async () => {
-    // Keep for backend compatibility - MiniKit provider may still need this
-    setError(null);
-    try {
-      await verifyWithWorldId();
-    } catch (err) {
-      setError('World ID verification failed. Please try again.');
-      console.error('World ID verification error:', err);
-    }
-  };
-  
-  // Prevent unused variable warning - function kept for backend compatibility
-  void handleVerifyWorldId;
 
   const handleLogoutClick = () => {
     setShowLogoutConfirm(true);
