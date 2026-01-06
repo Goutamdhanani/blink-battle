@@ -1,65 +1,77 @@
 .focus_filter-game {
+  display: flex;
+  justify-content: center;
+  align-items: center;
   min-height: 100vh;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  display: flex;
-  align-items: center;
-  justify-content: center;
   padding: 20px;
   font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
 }
 
 .game-instructions, .game-complete {
-  background: rgba(255, 255, 255, 0.95);
+  background: white; /* WHITE background for high contrast */
   border-radius: 20px;
-  padding: 40px;
+  padding: 32px;
   max-width: 500px;
   width: 100%;
   text-align: center;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
   position: relative;
 }
 
 .game-instructions h2, .game-complete h2 {
-  font-size: 2.5em;
-  margin: 0 0 10px 0;
+  color: #1a1a2e; /* Dark text on white background */
+  font-size: 28px;
+  margin: 0 0 8px 0;
 }
 
 .game-subtitle {
-  color: #666;
-  font-size: 1.2em;
-  margin-bottom: 30px;
+  color: #667eea; /* Accent color for visibility */
+  font-size: 16px;
+  margin-bottom: 24px;
 }
 
 .instructions-content {
   text-align: left;
-  margin: 30px 0;
-  background: rgba(0, 0, 0, 0.05);
+  margin: 24px 0;
+  background: rgba(102, 126, 234, 0.05); /* Light accent background */
   padding: 20px;
-  border-radius: 10px;
+  border-radius: 12px;
 }
 
 .instructions-content p {
-  margin: 15px 0;
-  font-size: 1.1em;
-  color: #333;
+  margin: 12px 0;
+  font-size: 16px;
+  color: #2d3748; /* Dark gray text for readability */
+  line-height: 1.6;
 }
 
 .start-btn, .next-level-btn, .menu-btn {
-  background: linear-gradient(135deg, #667eea, #764ba2);
-  color: white;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white; /* WHITE text on gradient background */
   border: none;
-  padding: 15px 40px;
-  font-size: 1.2em;
-  border-radius: 50px;
+  padding: 16px 48px;
+  font-size: 18px;
+  font-weight: 600;
+  border-radius: 12px;
   cursor: pointer;
-  transition: all 0.2s;
-  font-weight: bold;
+  transition: all 0.3s ease;
   margin: 10px;
+  width: 100%;
+  max-width: 100%;
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+  position: relative;
+  z-index: 10; /* Ensure clickable */
+  pointer-events: all; /* ENSURE clickable */
 }
 
 .start-btn:hover, .next-level-btn:hover {
   transform: translateY(-2px);
-  box-shadow: 0 10px 30px rgba(102, 126, 234, 0.4);
+  box-shadow: 0 6px 16px rgba(102, 126, 234, 0.6);
+}
+
+.start-btn:active, .next-level-btn:active {
+  transform: translateY(0);
 }
 
 .menu-btn {
@@ -68,16 +80,16 @@
 
 .exit-btn {
   position: absolute;
-  top: 20px;
-  right: 20px;
-  background: white;
-  border: 2px solid #ddd;
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  font-size: 1.5em;
+  top: 16px;
+  right: 16px;
+  background: transparent;
+  border: none;
+  color: #718096; /* Visible gray */
+  font-size: 24px;
   cursor: pointer;
+  padding: 8px;
   transition: all 0.2s;
+  z-index: 20; /* Above other elements */
 }
 
 .exit-btn:hover {
@@ -104,6 +116,7 @@
   margin: 0 auto;
   font-weight: bold;
   font-size: 1.1em;
+  color: #1a1a2e; /* Dark text for visibility on white background */
 }
 
 .game-arena {
@@ -258,6 +271,25 @@
 }
 
 @media (max-width: 768px) {
+  .focus_filter-game {
+    padding: 10px;
+  }
+
+  .game-instructions, .game-complete {
+    padding: 24px;
+    max-width: 100%;
+    margin: 0 10px;
+  }
+
+  .game-header {
+    padding: 12px;
+  }
+
+  .game-info {
+    font-size: 0.9em;
+    gap: 8px;
+  }
+
   .items-container {
     height: 300px;
   }
@@ -276,6 +308,24 @@
 }
 
 @media (max-width: 480px) {
+  .game-instructions, .game-complete {
+    padding: 20px;
+    margin: 0 8px;
+  }
+
+  .game-instructions h2, .game-complete h2 {
+    font-size: 24px;
+  }
+
+  .instructions-content p {
+    font-size: 14px;
+  }
+
+  .start-btn, .next-level-btn, .menu-btn {
+    padding: 14px 32px;
+    font-size: 16px;
+  }
+
   .items-container {
     height: 250px;
   }
