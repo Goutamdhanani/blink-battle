@@ -126,6 +126,7 @@
 .menu-header {
   margin-bottom: 24px;
   animation: fadeInDown 0.6s ease-out;
+  position: relative;
 }
 
 .app-logo {
@@ -173,6 +174,31 @@
   text-transform: uppercase;
   letter-spacing: 1px;
   font-weight: 500;
+}
+
+.logout-btn {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  padding: 8px 12px;
+  font-size: 20px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  backdrop-filter: blur(12px);
+}
+
+.logout-btn:hover {
+  background: rgba(255, 107, 107, 0.2);
+  border-color: rgba(255, 107, 107, 0.5);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 16px rgba(255, 107, 107, 0.3);
+}
+
+.logout-btn:active {
+  transform: translateY(0);
 }
 
 /* Quick Stats */

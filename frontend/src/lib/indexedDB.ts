@@ -3,14 +3,23 @@
  */
 
 import { GameScore, PlayerProfile, GameStats, GameType, Achievement } from '../games/types';
+import { 
+  calculateLevelFromXP, 
+  calculateRankFromXP,
+  getUnlockedThemes as getUnlockedThemesHelper
+} from './progressionConstants';
 
 const DB_NAME = 'BlinkBattleBrainTraining';
 const DB_VERSION = 1;
 const SCORES_STORE = 'gameScores';
 const PROFILE_STORE = 'playerProfile';
 
-// XP and leveling constants
-const XP_BASE_MULTIPLIER = 100;
+// Reaction time constants (in milliseconds) - exported for use in games
+export const MIN_VALID_REACTION_TIME = 80;      // Below this is likely cheating
+export const AVG_REACTION_TIME = 225;           // Average human reaction
+export const GOOD_REACTION_TIME = 175;          // Good reaction
+export const EXCELLENT_REACTION_TIME = 125;     // Excellent reaction
+export const PROFESSIONAL_REACTION_TIME = 100;  // Professional level
 
 let dbInstance: IDBDatabase | null = null;
 
@@ -48,6 +57,49 @@ export async function initDB(): Promise<IDBDatabase> {
       }
     };
   });
+}
+
+/**
+ * Calculate XP earned for a game based on performance
+ * - Deterministic calculation based on accuracy
+ * - Bonus for high accuracy (90%+)
+ * - Minimum XP ensures progress even on poor performance
+ */
+function calculateGameXP(accuracy: number, level: number): number {
+  // Base XP: deterministic based on accuracy brackets
+  let xp = 0;
+  
+  if (accuracy >= 95) {
+    xp = 50; // Perfect/near-perfect
+  } else if (accuracy >= 90) {
+    xp = 45; // Excellent
+  } else if (accuracy >= 80) {
+    xp = 35; // Very good
+  } else if (accuracy >= 70) {
+    xp = 25; // Good
+  } else if (accuracy >= 60) {
+    xp = 20; // Above average
+  } else if (accuracy >= 50) {
+    xp = 15; // Average
+  } else if (accuracy >= 30) {
+    xp = 10; // Below average
+  } else {
+    xp = 5; // Participation reward
+  }
+  
+  // Small level bonus (max +10 XP at level 100+)
+  const levelBonus = Math.min(10, Math.floor(level / 10));
+  xp += levelBonus;
+  
+  return xp;
+}
+
+/**
+ * Validate reaction time to prevent cheating
+ * Exported for use in reflex games
+ */
+export function isValidReactionTime(reactionMs: number): boolean {
+  return reactionMs >= MIN_VALID_REACTION_TIME && reactionMs < 10000;
 }
 
 /**
@@ -184,9 +236,19 @@ export async function getPlayerProfile(): Promise<PlayerProfile> {
   
   const lastActive = allScores.length > 0 ? Math.max(...allScores.map(s => s.timestamp)) : Date.now();
   
-  // Calculate XP based on total scores
-  const xp = allScores.reduce((sum, s) => sum + s.score, 0);
-  const level = Math.floor(Math.sqrt(xp / XP_BASE_MULTIPLIER)) + 1;
+  // Calculate XP using realistic progression system
+  // Each game awards XP based on performance (5-50 XP per game)
+  let totalXP = 0;
+  for (const gameScore of allScores) {
+    const gameXP = calculateGameXP(gameScore.accuracy, gameScore.level);
+    totalXP += gameXP;
+  }
+  
+  // Calculate level from XP using exponential curve
+  const level = calculateLevelFromXP(totalXP);
+  
+  // Calculate rank badge from total XP (not level)
+  const rankBadge = calculateRankFromXP(totalXP);
   
   // Calculate cognitive index (0-100 scale)
   const avgAccuracy = allScores.length > 0 
@@ -194,17 +256,11 @@ export async function getPlayerProfile(): Promise<PlayerProfile> {
     : 0;
   const cognitiveIndex = Math.round(avgAccuracy);
   
-  // Calculate rank badge based on level
-  let rankBadge = 'Rookie';
-  if (level >= 10) rankBadge = 'Legend';
-  else if (level >= 7) rankBadge = 'Elite';
-  else if (level >= 4) rankBadge = 'Experienced';
-  
   // Generate achievements
   const achievements = calculateAchievements(gameStats, totalGamesPlayed, cognitiveIndex);
   
   return {
-    xp,
+    xp: totalXP,
     level,
     rankBadge,
     totalGamesPlayed,
@@ -216,23 +272,12 @@ export async function getPlayerProfile(): Promise<PlayerProfile> {
     overallAccuracy: Math.round(avgAccuracy),
     gameStats,
     achievements,
-    unlockedThemes: getUnlockedThemes(level),
-    currentTheme: 'Rookie',
+    unlockedThemes: getUnlockedThemesHelper(level),
+    currentTheme: 'Bronze',
     createdAt: Date.now(),
     lastActive,
     joinDate: Date.now(),
   };
-}
-
-/**
- * Get unlocked themes based on level
- */
-function getUnlockedThemes(level: number): string[] {
-  const themes = ['Rookie'];
-  if (level >= 4) themes.push('Experienced');
-  if (level >= 7) themes.push('Elite');
-  if (level >= 10) themes.push('Hacker Mode');
-  return themes;
 }
 
 /**

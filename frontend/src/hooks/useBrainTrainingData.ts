@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { getPlayerProfile } from '../lib/indexedDB';
 import { PlayerProfile, GameStats } from '../games/types';
 import { brainTrainingService } from '../services/brainTrainingService';
+import { calculateLevelFromXP, calculateRankFromXP, getUnlockedThemes } from '../lib/progressionConstants';
 
 interface UseBrainTrainingDataResult {
   profile: PlayerProfile | null;
@@ -33,15 +34,21 @@ export function useBrainTrainingData(token?: string | null): UseBrainTrainingDat
           const streaks = await brainTrainingService.getStreaks(token);
           const cognitive = await brainTrainingService.getCognitiveComparison(token);
           
-          // Calculate total score and level once
-          const totalScore = backendProfile.memory.averageScore + backendProfile.attention.averageScore + backendProfile.reflex.averageScore;
-          const level = Math.floor(Math.sqrt(totalScore / 100)) + 1;
+          // Calculate realistic XP: estimate 30 XP average per game
+          const totalGames = backendProfile.totalGames;
+          const estimatedXP = totalGames * 30;
+          
+          // Calculate level from XP using realistic system
+          const level = calculateLevelFromXP(estimatedXP);
+          
+          // Calculate rank from XP (not level)
+          const rankBadge = calculateRankFromXP(estimatedXP);
           
           // Transform backend data to PlayerProfile format
           const transformedProfile: PlayerProfile = {
-            xp: totalScore,
+            xp: estimatedXP,
             level,
-            rankBadge: calculateRankBadge(level),
+            rankBadge,
             totalGamesPlayed: backendProfile.totalGames,
             totalSessions: backendProfile.totalGames,
             currentStreak: streaks.currentStreak,
@@ -65,8 +72,8 @@ export function useBrainTrainingData(token?: string | null): UseBrainTrainingDat
               word_pair_match: (backendProfile.word_pair_match || createEmptyGameStats('word_pair_match')) as GameStats,
             },
             achievements: [], // TODO: Calculate from backend data
-            unlockedThemes: calculateUnlockedThemes(level),
-            currentTheme: 'Rookie',
+            unlockedThemes: getUnlockedThemes(level),
+            currentTheme: 'Bronze',
             createdAt: Date.now(),
             lastActive: Date.now(),
             joinDate: Date.now(),
@@ -105,21 +112,6 @@ export function useBrainTrainingData(token?: string | null): UseBrainTrainingDat
     error,
     refresh: loadProfile,
   };
-}
-
-function calculateRankBadge(level: number): string {
-  if (level >= 10) return 'Legend';
-  if (level >= 7) return 'Elite';
-  if (level >= 4) return 'Experienced';
-  return 'Rookie';
-}
-
-function calculateUnlockedThemes(level: number): string[] {
-  const themes = ['Rookie'];
-  if (level >= 4) themes.push('Experienced');
-  if (level >= 7) themes.push('Elite');
-  if (level >= 10) themes.push('Hacker Mode');
-  return themes;
 }
 
 function createEmptyGameStats(gameType: string): GameStats {
