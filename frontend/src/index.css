@@ -285,8 +285,12 @@ button {
     overflow-x: hidden;
   }
 
-  /* Ensure all containers are mobile-friendly */
-  * {
+  /* Ensure main containers are mobile-friendly */
+  .glass-card,
+  .neon-button,
+  button,
+  div[class*="game"],
+  div[class*="container"] {
     max-width: 100vw;
   }
 }
