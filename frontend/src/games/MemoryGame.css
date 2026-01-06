@@ -4,11 +4,12 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: flex-start;
+  justify-content: center;
   min-height: 100vh;
   background: linear-gradient(180deg, #0a0a1f 0%, #1a0f3d 50%, #2d1b4e 100%);
-  padding: var(--space-lg); /* Changed from 20px */
+  padding: var(--space-md);
   position: relative;
+  gap: var(--space-lg);
 }
 
 .memory-game::before {
@@ -27,12 +28,13 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: var(--space-xl); /* Increased spacing before cards */
+  margin-bottom: 0;
   position: relative;
-  z-index: var(--z-elevated); /* Higher z-index to stay above cards */
+  z-index: var(--z-elevated);
   gap: var(--space-md);
   width: 100%;
   max-width: 500px;
+  flex-shrink: 0;
 }
 
 .exit-btn {
@@ -84,11 +86,11 @@
 .cards-grid {
   display: grid;
   gap: var(--space-md);
-  max-width: 500px;
+  max-width: 90vw;
   width: 100%;
-  margin-top: var(--space-xl); /* Increased spacing from header */
-  position: relative; /* NOT absolute */
-  top: 0; /* NOT negative */
+  margin: 0;
+  position: relative;
+  top: 0;
   z-index: var(--z-base);
   padding: 0;
   justify-items: center;
@@ -100,10 +102,11 @@
   perspective: 1000px;
   cursor: pointer;
   transition: transform 0.3s ease;
-  /* Ensure touch events work */
   touch-action: manipulation;
   -webkit-tap-highlight-color: rgba(138, 43, 226, 0.2);
   user-select: none;
+  width: 100%;
+  max-width: 20vw;
 }
 
 .memory-card:hover {
@@ -282,16 +285,46 @@
   }
 }
 
+@media (max-width: 768px) {
+  .memory-game {
+    padding: var(--space-sm);
+    gap: var(--space-md);
+  }
+
+  .cards-grid {
+    gap: var(--space-sm);
+    max-width: 95vw;
+  }
+
+  .memory-card {
+    max-width: 22vw;
+  }
+
+  .game-header {
+    margin-bottom: 0;
+  }
+
+  .card-front,
+  .card-back {
+    font-size: 36px;
+    border-radius: 12px;
+  }
+}
+
 @media (max-width: 380px) {
   .cards-grid {
-    gap: 8px;
-    padding: 12px;
+    gap: var(--space-xs);
+    max-width: 96vw;
+  }
+
+  .memory-card {
+    max-width: 23vw;
   }
 
   .card-front,
   .card-back {
     font-size: 32px;
-    border-radius: 12px;
+    border-radius: 10px;
   }
 
   .game-complete h2 {
