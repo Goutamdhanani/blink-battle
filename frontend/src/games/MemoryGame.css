@@ -197,12 +197,15 @@
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
+  filter: drop-shadow(0 0 8px rgba(0, 255, 255, 0.6)) 
+          drop-shadow(0 0 12px rgba(255, 0, 255, 0.4))
+          drop-shadow(0 2px 4px rgba(0, 0, 0, 0.8));
 }
 
 .completion-stats {
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(255, 255, 255, 0.12);
   backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
   border-radius: var(--radius-lg);
   padding: var(--space-lg) var(--space-xl);
   display: flex;
