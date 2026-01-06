@@ -19,12 +19,13 @@ import WordPairMatch from '../games/WordPairMatch';
 import BrainStats from './BrainStats';
 import EnhancedProfile from './EnhancedProfile';
 import GamesPage from './GamesPage';
+import MasterDashboard from './Dashboard/MasterDashboard';
 import LoginButton from './ui/LoginButton';
 import Tutorial from './ui/Tutorial';
 import { GameScore } from '../games/types';
 import './BrainTrainingMenu.css';
 
-type GameType = GameTypeEnum | 'stats' | 'profile' | 'games' | null;
+type GameType = GameTypeEnum | 'stats' | 'profile' | 'games' | 'dashboard' | null;
 
 const BrainTrainingMenu: React.FC = () => {
   const [currentGame, setCurrentGame] = useState<GameType>(null);
@@ -80,6 +81,11 @@ const BrainTrainingMenu: React.FC = () => {
   const navigateToStats = createTouchHandler(() => {
     console.log('[Menu] Navigating to stats');
     setCurrentGame('stats');
+  });
+
+  const navigateToDashboard = createTouchHandler(() => {
+    console.log('[Menu] Navigating to dashboard');
+    setCurrentGame('dashboard');
   });
 
   if (showWelcome) {
@@ -161,6 +167,19 @@ const BrainTrainingMenu: React.FC = () => {
 
   if (currentGame === 'games') {
     return <GamesPage onBack={handleGameExit} onGameSelect={handleGameSelect} profile={profile} />;
+  }
+
+  if (currentGame === 'dashboard') {
+    return (
+      <MasterDashboard 
+        onBack={handleGameExit}
+        onGameSelect={handleGameSelect}
+        username={profile?.username}
+        level={profile?.level || 1}
+        xp={profile?.xp || 0}
+        gameStats={profile?.gameStats || {}}
+      />
+    );
   }
 
   // Tutorial steps for first-time users
@@ -286,6 +305,15 @@ const BrainTrainingMenu: React.FC = () => {
         <div className="quick-actions-section">
           <h2 className="section-title">Quick Actions</h2>
           <div className="action-cards">
+            <button className="action-card action-card-dashboard" {...navigateToDashboard}>
+              <div className="action-icon">📊</div>
+              <div className="action-info">
+                <h3 className="action-title">Master Dashboard</h3>
+                <p className="action-description">Complete cognitive analysis</p>
+              </div>
+              <div className="action-arrow">→</div>
+            </button>
+
             <button className="action-card action-card-games" {...navigateToGames}>
               <div className="action-icon">🎮</div>
               <div className="action-info">
@@ -305,7 +333,7 @@ const BrainTrainingMenu: React.FC = () => {
             </button>
 
             <button className="action-card action-card-stats" {...navigateToStats}>
-              <div className="action-icon">📊</div>
+              <div className="action-icon">📈</div>
               <div className="action-info">
                 <h3 className="action-title">Statistics</h3>
                 <p className="action-description">Track your progress</p>
