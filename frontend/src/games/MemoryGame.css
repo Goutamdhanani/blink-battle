@@ -106,7 +106,7 @@
   -webkit-tap-highlight-color: rgba(138, 43, 226, 0.2);
   user-select: none;
   width: 100%;
-  max-width: 20vw;
+  max-width: min(20vw, 100px);
 }
 
 .memory-card:hover {
@@ -297,7 +297,7 @@
   }
 
   .memory-card {
-    max-width: 22vw;
+    max-width: min(21vw, 85px);
   }
 
   .game-header {
@@ -318,7 +318,7 @@
   }
 
   .memory-card {
-    max-width: 23vw;
+    max-width: min(21vw, 75px);
   }
 
   .card-front,
