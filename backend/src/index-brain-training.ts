@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import { AuthController } from './controllers/authController';
+import { WorldcoinController } from './controllers/worldcoinController';
 import { BrainTrainingLeaderboardController } from './controllers/brainTrainingLeaderboardController';
 import { UserStatsController } from './controllers/userStatsController';
 import { authenticate } from './middleware/auth';
@@ -68,6 +69,10 @@ app.get('/health', (req, res) => {
 app.get('/api/auth/nonce', AuthController.getNonce);
 app.post('/api/auth/verify-siwe', AuthController.verifySiwe);
 app.get('/api/auth/me', authenticate, AuthController.getUser);
+
+// World ID verification routes
+app.post('/api/verify-worldcoin', WorldcoinController.verifyWorldId);
+app.get('/api/verify-worldcoin/check/:nullifier', WorldcoinController.checkNullifier);
 
 // Game score routes
 app.post('/api/games/score', authenticate, async (req, res): Promise<void> => {

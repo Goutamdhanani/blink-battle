@@ -70,18 +70,8 @@ export const MiniKitProvider: React.FC<MiniKitProviderProps> = ({ children }) =>
   const login = async () => {
     try {
       if (!isInstalled) {
-        console.log('ℹ️ MiniKit not installed, using demo authentication');
-        // Demo mode for browser testing
-        const demoUser: User = {
-          id: `demo_${Date.now()}`,
-          walletAddress: '0x0000000000000000000000000000000000000000',
-          verificationLevel: 'orb',
-          worldIdVerified: false,
-        };
-        setUser(demoUser);
-        setIsAuthenticated(true);
-        localStorage.setItem('minikit_user', JSON.stringify(demoUser));
-        return;
+        console.log('⚠️ MiniKit not installed - Please open in World App for authentication');
+        throw new Error('Authentication requires World App. Please open this app in World App.');
       }
 
       // Use MiniKit for actual authentication
@@ -126,23 +116,8 @@ export const MiniKitProvider: React.FC<MiniKitProviderProps> = ({ children }) =>
   const verifyWithWorldId = async () => {
     try {
       if (!isInstalled) {
-        console.log('ℹ️ MiniKit not installed, simulating World ID verification');
-        // Demo mode - simulate verification with secure random nullifier
-        if (user) {
-          // Generate a more secure demo nullifier using crypto.randomUUID or random values
-          const demoNullifier = crypto.randomUUID?.() || `demo_nullifier_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-          
-          const verifiedUser: User = {
-            ...user,
-            worldIdVerified: true,
-            verificationLevel: 'orb',
-            nullifierHash: demoNullifier,
-          };
-          setUser(verifiedUser);
-          localStorage.setItem('minikit_user', JSON.stringify(verifiedUser));
-          console.log('✅ Demo World ID verification successful');
-        }
-        return;
+        console.log('ℹ️ MiniKit not installed - World ID verification requires World App');
+        throw new Error('World ID verification requires World App. Please open this app in World App to verify.');
       }
 
       console.log('🌐 Initiating World ID verification...');
@@ -157,17 +132,47 @@ export const MiniKitProvider: React.FC<MiniKitProviderProps> = ({ children }) =>
       if (finalPayload.status === 'success') {
         const verificationResult = finalPayload as ISuccessResult;
         
+        console.log('✅ World ID proof generated, verifying with backend...');
+
+        // Send proof to backend for verification
+        const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001';
+        const response = await fetch(`${backendUrl}/api/verify-worldcoin`, {
+          method: 'POST',
+          headers: { 
+            'Content-Type': 'application/json',
+            // Include auth token if available
+            ...(localStorage.getItem('token') ? {
+              'Authorization': `Bearer ${localStorage.getItem('token')}`
+            } : {})
+          },
+          body: JSON.stringify({
+            proof: verificationResult.proof,
+            merkle_root: verificationResult.merkle_root,
+            nullifier_hash: verificationResult.nullifier_hash,
+            verification_level: verificationResult.verification_level,
+            signal: user?.id || '',
+          }),
+        });
+
+        const verifyData = await response.json();
+
+        if (!response.ok || !verifyData.success) {
+          console.error('❌ Backend verification failed:', verifyData);
+          throw new Error(verifyData.error || 'Verification failed on server');
+        }
+
+        console.log('✅ Backend verification successful');
+
         const verifiedUser: User = {
           ...user!,
           worldIdVerified: true,
-          verificationLevel: 'orb',
+          verificationLevel: verificationResult.verification_level,
           nullifierHash: verificationResult.nullifier_hash,
         };
         
         setUser(verifiedUser);
         localStorage.setItem('minikit_user', JSON.stringify(verifiedUser));
-        console.log('✅ World ID verification successful');
-        console.log('Nullifier hash:', verificationResult.nullifier_hash);
+        console.log('✅ World ID verification complete');
       } else {
         console.error('❌ World ID verification failed:', finalPayload);
         throw new Error('World ID verification failed');

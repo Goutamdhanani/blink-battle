@@ -1,5 +1,6 @@
 import React from 'react';
 import { PlayerProfile, GameType as GameTypeEnum } from '../games/types';
+import { createTouchHandler } from '../lib/touchUtils';
 import './GamesPage.css';
 
 interface GamesPageProps {
@@ -9,12 +10,24 @@ interface GamesPageProps {
 }
 
 const GamesPage: React.FC<GamesPageProps> = ({ onBack, onGameSelect, profile }) => {
+  // Create touch handlers for better mobile support
+  const handleBack = createTouchHandler(() => {
+    console.log('[GamesPage] Back button pressed');
+    onBack();
+  });
+
+  const createGameHandler = (gameType: GameTypeEnum, gameName: string) => 
+    createTouchHandler(() => {
+      console.log(`[GamesPage] Selecting ${gameName} game`);
+      onGameSelect(gameType);
+    });
+
   return (
     <div className="games-page">
       <div className="games-page-container">
         {/* Header */}
         <header className="games-page-header">
-          <button className="back-btn" onClick={onBack}>←</button>
+          <button className="back-btn" {...handleBack}>←</button>
           <div className="header-title">
             <h1>Brain Training Games</h1>
           </div>
@@ -48,10 +61,7 @@ const GamesPage: React.FC<GamesPageProps> = ({ onBack, onGameSelect, profile }) 
           
           <div className="game-cards">
             {/* Original 3 Games */}
-            <div className="game-card game-card-memory" onClick={() => {
-              console.log('[GamesPage] Selecting Memory Match game');
-              onGameSelect('memory');
-            }}>
+            <div className="game-card game-card-memory" {...createGameHandler('memory', 'Memory Match')}>
               <div className="game-card-glow"></div>
               <div className="game-card-content">
                 <div className="game-icon">🧠</div>
@@ -64,10 +74,7 @@ const GamesPage: React.FC<GamesPageProps> = ({ onBack, onGameSelect, profile }) 
               </div>
             </div>
 
-            <div className="game-card game-card-attention" onClick={() => {
-              console.log('[GamesPage] Selecting Focus Test game');
-              onGameSelect('attention');
-            }}>
+            <div className="game-card game-card-attention" {...createGameHandler('attention', 'Focus Test')}>
               <div className="game-card-glow"></div>
               <div className="game-card-content">
                 <div className="game-icon">👁️</div>
@@ -80,7 +87,7 @@ const GamesPage: React.FC<GamesPageProps> = ({ onBack, onGameSelect, profile }) 
               </div>
             </div>
 
-            <div className="game-card game-card-reflex" onClick={() => onGameSelect('reflex')}>
+            <div className="game-card game-card-reflex" {...createGameHandler('reflex', 'Reflex Rush')}>
               <div className="game-card-glow"></div>
               <div className="game-card-content">
                 <div className="game-icon">⚡</div>
@@ -94,7 +101,7 @@ const GamesPage: React.FC<GamesPageProps> = ({ onBack, onGameSelect, profile }) 
             </div>
 
             {/* Phase 2 Games */}
-            <div className="game-card game-card-word" onClick={() => onGameSelect('word_flash')}>
+            <div className="game-card game-card-word" {...createGameHandler('word_flash', 'Word Flash')}>
               <div className="game-card-glow"></div>
               <div className="game-card-content">
                 <div className="game-icon">⚡</div>
@@ -107,7 +114,7 @@ const GamesPage: React.FC<GamesPageProps> = ({ onBack, onGameSelect, profile }) 
               </div>
             </div>
 
-            <div className="game-card game-card-shape" onClick={() => onGameSelect('shape_shadow')}>
+            <div className="game-card game-card-shape" {...createGameHandler('shape_shadow', 'Shape Shadow')}>
               <div className="game-card-glow"></div>
               <div className="game-card-content">
                 <div className="game-icon">🔲</div>
@@ -120,7 +127,7 @@ const GamesPage: React.FC<GamesPageProps> = ({ onBack, onGameSelect, profile }) 
               </div>
             </div>
 
-            <div className="game-card game-card-sequence" onClick={() => onGameSelect('sequence_builder')}>
+            <div className="game-card game-card-sequence" {...createGameHandler('sequence_builder', 'Sequence Builder')}>
               <div className="game-card-glow"></div>
               <div className="game-card-content">
                 <div className="game-icon">🔢</div>
@@ -133,7 +140,7 @@ const GamesPage: React.FC<GamesPageProps> = ({ onBack, onGameSelect, profile }) 
               </div>
             </div>
 
-            <div className="game-card game-card-filter" onClick={() => onGameSelect('focus_filter')}>
+            <div className="game-card game-card-filter" {...createGameHandler('focus_filter', 'Focus Filter')}>
               <div className="game-card-glow"></div>
               <div className="game-card-content">
                 <div className="game-icon">🎯</div>
@@ -146,7 +153,7 @@ const GamesPage: React.FC<GamesPageProps> = ({ onBack, onGameSelect, profile }) 
               </div>
             </div>
 
-            <div className="game-card game-card-path" onClick={() => onGameSelect('path_memory')}>
+            <div className="game-card game-card-path" {...createGameHandler('path_memory', 'Path Memory')}>
               <div className="game-card-glow"></div>
               <div className="game-card-content">
                 <div className="game-icon">🗺️</div>
@@ -159,7 +166,7 @@ const GamesPage: React.FC<GamesPageProps> = ({ onBack, onGameSelect, profile }) 
               </div>
             </div>
 
-            <div className="game-card game-card-number" onClick={() => onGameSelect('missing_number')}>
+            <div className="game-card game-card-number" {...createGameHandler('missing_number', 'Missing Number')}>
               <div className="game-card-glow"></div>
               <div className="game-card-content">
                 <div className="game-icon">🔢</div>
@@ -172,7 +179,7 @@ const GamesPage: React.FC<GamesPageProps> = ({ onBack, onGameSelect, profile }) 
               </div>
             </div>
 
-            <div className="game-card game-card-color" onClick={() => onGameSelect('color_swap')}>
+            <div className="game-card game-card-color" {...createGameHandler('color_swap', 'Color Swap')}>
               <div className="game-card-glow"></div>
               <div className="game-card-content">
                 <div className="game-icon">🎨</div>
@@ -185,7 +192,7 @@ const GamesPage: React.FC<GamesPageProps> = ({ onBack, onGameSelect, profile }) 
               </div>
             </div>
 
-            <div className="game-card game-card-reverse" onClick={() => onGameSelect('reverse_recall')}>
+            <div className="game-card game-card-reverse" {...createGameHandler('reverse_recall', 'Reverse Recall')}>
               <div className="game-card-glow"></div>
               <div className="game-card-content">
                 <div className="game-icon">⏮️</div>
@@ -198,7 +205,7 @@ const GamesPage: React.FC<GamesPageProps> = ({ onBack, onGameSelect, profile }) 
               </div>
             </div>
 
-            <div className="game-card game-card-blink" onClick={() => onGameSelect('blink_count')}>
+            <div className="game-card game-card-blink" {...createGameHandler('blink_count', 'Blink Count')}>
               <div className="game-card-glow"></div>
               <div className="game-card-content">
                 <div className="game-icon">👁️</div>
@@ -211,7 +218,7 @@ const GamesPage: React.FC<GamesPageProps> = ({ onBack, onGameSelect, profile }) 
               </div>
             </div>
 
-            <div className="game-card game-card-pairs" onClick={() => onGameSelect('word_pair_match')}>
+            <div className="game-card game-card-pairs" {...createGameHandler('word_pair_match', 'Word Pair Match')}>
               <div className="game-card-glow"></div>
               <div className="game-card-content">
                 <div className="game-icon">📝</div>

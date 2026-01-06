@@ -139,6 +139,8 @@
   grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
   gap: var(--space-md);
   justify-items: center;
+  align-items: center;
+  place-items: center;
 }
 
 @media (max-width: 768px) {
@@ -160,8 +162,13 @@
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: center;
   text-align: center;
   width: 100%;
+  /* Ensure touch events work */
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: rgba(0, 255, 255, 0.2);
+  user-select: none;
 }
 
 .game-card::before {
@@ -174,10 +181,17 @@
   background: linear-gradient(135deg, rgba(0, 255, 255, 0.1) 0%, rgba(255, 0, 255, 0.1) 100%);
   opacity: 0;
   transition: opacity 0.3s ease;
+  /* Ensure overlay doesn't block clicks */
+  pointer-events: none;
 }
 
 .game-card:hover::before {
   opacity: 1;
+}
+
+.game-card:active {
+  transform: translateY(-2px) scale(0.98);
+  border-color: rgba(0, 255, 255, 0.5);
 }
 
 .game-card:hover {
@@ -216,12 +230,17 @@
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: center;
+  /* Ensure content doesn't block clicks on parent */
+  pointer-events: none;
 }
 
 .game-icon {
   font-size: 48px;
   margin-bottom: var(--space-md);
   filter: drop-shadow(0 0 10px rgba(255, 255, 255, 0.3));
+  /* Icons should not block clicks */
+  pointer-events: none;
 }
 
 .game-title {
